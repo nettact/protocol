@@ -15,9 +15,29 @@ type DesiredState struct {
 
 // ProbeTarget is one monitoring target pushed to the agent.
 type ProbeTarget struct {
-	Kind   string `json:"kind"`   // "icmp" (M2); "dns" / "http" added in M3
-	Target string `json:"target"` // "1.1.1.1", "example.com", "https://…"
-	Tier   string `json:"tier"`   // "base" | "regular"
+	Kind   string      `json:"kind"`   // "icmp" (M2); "dns" / "http" added in M3
+	Target string      `json:"target"` // "1.1.1.1", "example.com", "https://…"
+	Tier   string      `json:"tier"`   // "base" | "regular"
+	Params ProbeParams `json:"params"` // per-protocol probe settings (zero = collector defaults)
+}
+
+// ProbeParams carries per-target, per-protocol probe settings. Zero values mean
+// "use the collector default", so an unconfigured target behaves as before.
+type ProbeParams struct {
+	// Common — applies to every protocol.
+	IntervalSeconds int `json:"interval_seconds,omitempty"` // per-target check interval; 0 = fall back to tier default
+	TimeoutMs       int `json:"timeout_ms,omitempty"`       // per-probe timeout
+
+	// ICMP.
+	PacketSize int `json:"packet_size,omitempty"` // ICMP echo payload bytes
+	Retries    int `json:"retries,omitempty"`     // extra echoes per cycle beyond the first (count = retries+1)
+
+	// DNS.
+	RecordType string `json:"record_type,omitempty"` // A | AAAA | … (default A)
+
+	// HTTP.
+	Method         string `json:"method,omitempty"`          // GET | HEAD | … (default GET)
+	ExpectedStatus int    `json:"expected_status,omitempty"` // 0 = any 2xx counts as ok
 }
 
 // Intervals controls the agent scheduler tiers (seconds).
