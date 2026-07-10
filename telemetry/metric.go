@@ -29,12 +29,19 @@ const (
 	HTTPLat    MetricKind = "probe.http.latency_ms"
 	HTTPOK     MetricKind = "probe.http.ok"
 	IfaceUp    MetricKind = "iface.up"
+
+	// Agent self-status (heartbeat), so status is reported outbound without the
+	// agent exposing any endpoint.
+	AgentUptime     MetricKind = "agent.uptime_s"
+	AgentWALPending MetricKind = "agent.wal_pending"
 )
 
 // Units for Metric.Value.
 const (
-	UnitMs   = "ms"
-	UnitPct  = "pct"
-	UnitBool = "bool"
-	UnitCode = "code"
+	UnitMs    = "ms"
+	UnitPct   = "pct"
+	UnitBool  = "bool"
+	UnitCode  = "code"
+	UnitCount = "count"
+	UnitSec   = "s"
 )
