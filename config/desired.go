@@ -30,29 +30,46 @@ type SnapshotRequest struct {
 
 // ProbeTarget is one monitoring target pushed to the agent.
 type ProbeTarget struct {
-	Kind   string      `json:"kind"`   // "icmp" (M2); "dns" / "http" added in M3
-	Target string      `json:"target"` // "1.1.1.1", "example.com", "https://…"
-	Tier   string      `json:"tier"`   // "base" | "regular"
-	Params ProbeParams `json:"params"` // per-protocol probe settings (zero = collector defaults)
+	Kind   string      `json:"kind"`           // "icmp" | "dns" | "http" | "tcp" (host is server-side only)
+	Name   string      `json:"name,omitempty"` // human-friendly display name; optional
+	Target string      `json:"target"`         // "1.1.1.1", "example.com", "https://…"
+	Params ProbeParams `json:"params"`         // per-protocol probe settings (zero = collector defaults)
 }
 
 // ProbeParams carries per-target, per-protocol probe settings. Zero values mean
 // "use the collector default", so an unconfigured target behaves as before.
 type ProbeParams struct {
 	// Common — applies to every protocol.
-	IntervalSeconds int `json:"interval_seconds,omitempty"` // per-target check interval; 0 = fall back to tier default
+	IntervalSeconds int `json:"interval_seconds,omitempty"` // per-target check interval; 0 = fall back to the collector default
 	TimeoutMs       int `json:"timeout_ms,omitempty"`       // per-probe timeout
 
-	// ICMP.
-	PacketSize int `json:"packet_size,omitempty"` // ICMP echo payload bytes
-	Retries    int `json:"retries,omitempty"`     // extra echoes per cycle beyond the first (count = retries+1)
+	// ICMP / Ping.
+	PacketSize      int `json:"packet_size,omitempty"`       // ICMP echo payload bytes
+	Retries         int `json:"retries,omitempty"`           // extra echoes per cycle beyond the first (count = retries+1); superseded by PacketCount
+	PacketCount     int `json:"packet_count,omitempty"`      // total echoes per cycle; 0 = fall back to Retries+1
+	GlobalTimeoutMs int `json:"global_timeout_ms,omitempty"` // overall deadline across all echoes in one cycle
 
 	// DNS.
-	RecordType string `json:"record_type,omitempty"` // A | AAAA | … (default A)
+	RecordType       string `json:"record_type,omitempty"`       // A | AAAA | CNAME | MX | TXT | NS (default A/AAAA)
+	ResolverServer   string `json:"resolver_server,omitempty"`   // resolver IP/host override, or DoH URL (default: system resolver)
+	ResolverPort     int    `json:"resolver_port,omitempty"`     // resolver port (default 53, or 853 for DoT)
+	ResolverProtocol string `json:"resolver_protocol,omitempty"` // "" | udp | tcp | dot | doh (default plain UDP/system)
 
 	// HTTP.
-	Method         string `json:"method,omitempty"`          // GET | HEAD | … (default GET)
-	ExpectedStatus int    `json:"expected_status,omitempty"` // 0 = any 2xx counts as ok
+	Method           string            `json:"method,omitempty"`            // GET | HEAD | POST | … (default GET)
+	ExpectedStatus   int               `json:"expected_status,omitempty"`   // legacy single status; 0 = any 2xx (kept for back-compat)
+	AcceptedStatuses string            `json:"accepted_statuses,omitempty"` // ranges/CSV e.g. "200-299,301"; overrides ExpectedStatus when set
+	Keyword          string            `json:"keyword,omitempty"`           // body keyword; ok requires presence (or absence when KeywordInvert)
+	KeywordInvert    bool              `json:"keyword_invert,omitempty"`    // invert keyword match (fail when keyword present)
+	Headers          map[string]string `json:"headers,omitempty"`           // request headers
+	Body             string            `json:"body,omitempty"`              // request body (sent for non-GET/HEAD)
+	MaxRedirects     int               `json:"max_redirects,omitempty"`     // max redirects to follow; <0 disables following
+	IgnoreTLS        bool              `json:"ignore_tls,omitempty"`        // skip TLS certificate verification
+	MaxResponseBytes int               `json:"max_response_bytes,omitempty"` // cap on body bytes read for keyword match (default 1 KiB)
+
+	// TCP.
+	Port int  `json:"port,omitempty"` // TCP port to connect to
+	TLS  bool `json:"tls,omitempty"`  // perform a TLS handshake after connect
 }
 
 // Intervals controls the agent scheduler tiers (seconds).

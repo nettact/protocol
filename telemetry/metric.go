@@ -28,6 +28,8 @@ const (
 	HTTPStatus MetricKind = "probe.http.status"
 	HTTPLat    MetricKind = "probe.http.latency_ms"
 	HTTPOK     MetricKind = "probe.http.ok"
+	TCPOK        MetricKind = "probe.tcp.ok"
+	TCPConnectMs MetricKind = "probe.tcp.connect_ms"
 	IfaceUp    MetricKind = "iface.up"
 
 	// Agent self-status (heartbeat), so status is reported outbound without the

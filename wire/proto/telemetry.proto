@@ -128,12 +128,15 @@ message SnapshotRequest {
   bool want_connections = 3;
 }
 
-// ProbeTarget mirrors config.ProbeTarget.
+// ProbeTarget mirrors config.ProbeTarget. Field 3 (tier) was removed and is
+// reserved so the number/name can never be silently reused by a future field.
 message ProbeTarget {
+  reserved 3;
+  reserved "tier";
   string kind = 1;
   string target = 2;
-  string tier = 3;
   ProbeParams params = 4;
+  string name = 5;
 }
 
 // ProbeParams mirrors config.ProbeParams (zero == collector default).
@@ -145,6 +148,22 @@ message ProbeParams {
   string record_type = 5;
   string method = 6;
   int32 expected_status = 7;
+  // Appended fields (never renumber the above).
+  string keyword = 8;
+  bool keyword_invert = 9;
+  string accepted_statuses = 10;
+  map<string, string> headers = 11;
+  string body = 12;
+  int32 max_redirects = 13;
+  bool ignore_tls = 14;
+  int32 max_response_bytes = 15;
+  int32 port = 16;
+  bool tls = 17;
+  int32 packet_count = 18;
+  int32 global_timeout_ms = 19;
+  string resolver_server = 20;
+  int32 resolver_port = 21;
+  string resolver_protocol = 22;
 }
 
 // Intervals mirrors config.Intervals.

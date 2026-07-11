@@ -958,13 +958,14 @@ func (x *SnapshotRequest) GetWantConnections() bool {
 	return false
 }
 
-// ProbeTarget mirrors config.ProbeTarget.
+// ProbeTarget mirrors config.ProbeTarget. Field 3 (tier) was removed and is
+// reserved so the number/name can never be silently reused by a future field.
 type ProbeTarget struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
 	Target        string                 `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
-	Tier          string                 `protobuf:"bytes,3,opt,name=tier,proto3" json:"tier,omitempty"`
 	Params        *ProbeParams           `protobuf:"bytes,4,opt,name=params,proto3" json:"params,omitempty"`
+	Name          string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1013,18 +1014,18 @@ func (x *ProbeTarget) GetTarget() string {
 	return ""
 }
 
-func (x *ProbeTarget) GetTier() string {
-	if x != nil {
-		return x.Tier
-	}
-	return ""
-}
-
 func (x *ProbeTarget) GetParams() *ProbeParams {
 	if x != nil {
 		return x.Params
 	}
 	return nil
+}
+
+func (x *ProbeTarget) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
 }
 
 // ProbeParams mirrors config.ProbeParams (zero == collector default).
@@ -1037,8 +1038,24 @@ type ProbeParams struct {
 	RecordType      string                 `protobuf:"bytes,5,opt,name=record_type,json=recordType,proto3" json:"record_type,omitempty"`
 	Method          string                 `protobuf:"bytes,6,opt,name=method,proto3" json:"method,omitempty"`
 	ExpectedStatus  int32                  `protobuf:"varint,7,opt,name=expected_status,json=expectedStatus,proto3" json:"expected_status,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Appended fields (never renumber the above).
+	Keyword          string            `protobuf:"bytes,8,opt,name=keyword,proto3" json:"keyword,omitempty"`
+	KeywordInvert    bool              `protobuf:"varint,9,opt,name=keyword_invert,json=keywordInvert,proto3" json:"keyword_invert,omitempty"`
+	AcceptedStatuses string            `protobuf:"bytes,10,opt,name=accepted_statuses,json=acceptedStatuses,proto3" json:"accepted_statuses,omitempty"`
+	Headers          map[string]string `protobuf:"bytes,11,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Body             string            `protobuf:"bytes,12,opt,name=body,proto3" json:"body,omitempty"`
+	MaxRedirects     int32             `protobuf:"varint,13,opt,name=max_redirects,json=maxRedirects,proto3" json:"max_redirects,omitempty"`
+	IgnoreTls        bool              `protobuf:"varint,14,opt,name=ignore_tls,json=ignoreTls,proto3" json:"ignore_tls,omitempty"`
+	MaxResponseBytes int32             `protobuf:"varint,15,opt,name=max_response_bytes,json=maxResponseBytes,proto3" json:"max_response_bytes,omitempty"`
+	Port             int32             `protobuf:"varint,16,opt,name=port,proto3" json:"port,omitempty"`
+	Tls              bool              `protobuf:"varint,17,opt,name=tls,proto3" json:"tls,omitempty"`
+	PacketCount      int32             `protobuf:"varint,18,opt,name=packet_count,json=packetCount,proto3" json:"packet_count,omitempty"`
+	GlobalTimeoutMs  int32             `protobuf:"varint,19,opt,name=global_timeout_ms,json=globalTimeoutMs,proto3" json:"global_timeout_ms,omitempty"`
+	ResolverServer   string            `protobuf:"bytes,20,opt,name=resolver_server,json=resolverServer,proto3" json:"resolver_server,omitempty"`
+	ResolverPort     int32             `protobuf:"varint,21,opt,name=resolver_port,json=resolverPort,proto3" json:"resolver_port,omitempty"`
+	ResolverProtocol string            `protobuf:"bytes,22,opt,name=resolver_protocol,json=resolverProtocol,proto3" json:"resolver_protocol,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ProbeParams) Reset() {
@@ -1118,6 +1135,111 @@ func (x *ProbeParams) GetExpectedStatus() int32 {
 		return x.ExpectedStatus
 	}
 	return 0
+}
+
+func (x *ProbeParams) GetKeyword() string {
+	if x != nil {
+		return x.Keyword
+	}
+	return ""
+}
+
+func (x *ProbeParams) GetKeywordInvert() bool {
+	if x != nil {
+		return x.KeywordInvert
+	}
+	return false
+}
+
+func (x *ProbeParams) GetAcceptedStatuses() string {
+	if x != nil {
+		return x.AcceptedStatuses
+	}
+	return ""
+}
+
+func (x *ProbeParams) GetHeaders() map[string]string {
+	if x != nil {
+		return x.Headers
+	}
+	return nil
+}
+
+func (x *ProbeParams) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+func (x *ProbeParams) GetMaxRedirects() int32 {
+	if x != nil {
+		return x.MaxRedirects
+	}
+	return 0
+}
+
+func (x *ProbeParams) GetIgnoreTls() bool {
+	if x != nil {
+		return x.IgnoreTls
+	}
+	return false
+}
+
+func (x *ProbeParams) GetMaxResponseBytes() int32 {
+	if x != nil {
+		return x.MaxResponseBytes
+	}
+	return 0
+}
+
+func (x *ProbeParams) GetPort() int32 {
+	if x != nil {
+		return x.Port
+	}
+	return 0
+}
+
+func (x *ProbeParams) GetTls() bool {
+	if x != nil {
+		return x.Tls
+	}
+	return false
+}
+
+func (x *ProbeParams) GetPacketCount() int32 {
+	if x != nil {
+		return x.PacketCount
+	}
+	return 0
+}
+
+func (x *ProbeParams) GetGlobalTimeoutMs() int32 {
+	if x != nil {
+		return x.GlobalTimeoutMs
+	}
+	return 0
+}
+
+func (x *ProbeParams) GetResolverServer() string {
+	if x != nil {
+		return x.ResolverServer
+	}
+	return ""
+}
+
+func (x *ProbeParams) GetResolverPort() int32 {
+	if x != nil {
+		return x.ResolverPort
+	}
+	return 0
+}
+
+func (x *ProbeParams) GetResolverProtocol() string {
+	if x != nil {
+		return x.ResolverProtocol
+	}
+	return ""
 }
 
 // Intervals mirrors config.Intervals.
@@ -1272,12 +1394,12 @@ const file_telemetry_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12%\n" +
 	"\x0ewant_processes\x18\x02 \x01(\bR\rwantProcesses\x12)\n" +
-	"\x10want_connections\x18\x03 \x01(\bR\x0fwantConnections\"\x83\x01\n" +
+	"\x10want_connections\x18\x03 \x01(\bR\x0fwantConnections\"\x8f\x01\n" +
 	"\vProbeTarget\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x16\n" +
-	"\x06target\x18\x02 \x01(\tR\x06target\x12\x12\n" +
-	"\x04tier\x18\x03 \x01(\tR\x04tier\x124\n" +
-	"\x06params\x18\x04 \x01(\v2\x1c.nettact.wire.v1.ProbeParamsR\x06params\"\xf4\x01\n" +
+	"\x06target\x18\x02 \x01(\tR\x06target\x124\n" +
+	"\x06params\x18\x04 \x01(\v2\x1c.nettact.wire.v1.ProbeParamsR\x06params\x12\x12\n" +
+	"\x04name\x18\x05 \x01(\tR\x04nameJ\x04\b\x03\x10\x04R\x04tier\"\xd9\x06\n" +
 	"\vProbeParams\x12)\n" +
 	"\x10interval_seconds\x18\x01 \x01(\x05R\x0fintervalSeconds\x12\x1d\n" +
 	"\n" +
@@ -1288,7 +1410,27 @@ const file_telemetry_proto_rawDesc = "" +
 	"\vrecord_type\x18\x05 \x01(\tR\n" +
 	"recordType\x12\x16\n" +
 	"\x06method\x18\x06 \x01(\tR\x06method\x12'\n" +
-	"\x0fexpected_status\x18\a \x01(\x05R\x0eexpectedStatus\"W\n" +
+	"\x0fexpected_status\x18\a \x01(\x05R\x0eexpectedStatus\x12\x18\n" +
+	"\akeyword\x18\b \x01(\tR\akeyword\x12%\n" +
+	"\x0ekeyword_invert\x18\t \x01(\bR\rkeywordInvert\x12+\n" +
+	"\x11accepted_statuses\x18\n" +
+	" \x01(\tR\x10acceptedStatuses\x12C\n" +
+	"\aheaders\x18\v \x03(\v2).nettact.wire.v1.ProbeParams.HeadersEntryR\aheaders\x12\x12\n" +
+	"\x04body\x18\f \x01(\tR\x04body\x12#\n" +
+	"\rmax_redirects\x18\r \x01(\x05R\fmaxRedirects\x12\x1d\n" +
+	"\n" +
+	"ignore_tls\x18\x0e \x01(\bR\tignoreTls\x12,\n" +
+	"\x12max_response_bytes\x18\x0f \x01(\x05R\x10maxResponseBytes\x12\x12\n" +
+	"\x04port\x18\x10 \x01(\x05R\x04port\x12\x10\n" +
+	"\x03tls\x18\x11 \x01(\bR\x03tls\x12!\n" +
+	"\fpacket_count\x18\x12 \x01(\x05R\vpacketCount\x12*\n" +
+	"\x11global_timeout_ms\x18\x13 \x01(\x05R\x0fglobalTimeoutMs\x12'\n" +
+	"\x0fresolver_server\x18\x14 \x01(\tR\x0eresolverServer\x12#\n" +
+	"\rresolver_port\x18\x15 \x01(\x05R\fresolverPort\x12+\n" +
+	"\x11resolver_protocol\x18\x16 \x01(\tR\x10resolverProtocol\x1a:\n" +
+	"\fHeadersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"W\n" +
 	"\tIntervals\x12!\n" +
 	"\fbase_seconds\x18\x01 \x01(\x05R\vbaseSeconds\x12'\n" +
 	"\x0fregular_seconds\x18\x02 \x01(\x05R\x0eregularSecondsB(Z&github.com/nettact/protocol/wire/pb;pbb\x06proto3"
@@ -1305,7 +1447,7 @@ func file_telemetry_proto_rawDescGZIP() []byte {
 	return file_telemetry_proto_rawDescData
 }
 
-var file_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_telemetry_proto_goTypes = []any{
 	(*Packet)(nil),                // 0: nettact.wire.v1.Packet
 	(*Metric)(nil),                // 1: nettact.wire.v1.Metric
@@ -1322,33 +1464,35 @@ var file_telemetry_proto_goTypes = []any{
 	(*Intervals)(nil),             // 12: nettact.wire.v1.Intervals
 	nil,                           // 13: nettact.wire.v1.Metric.LabelsEntry
 	nil,                           // 14: nettact.wire.v1.Event.AttrsEntry
-	(*timestamppb.Timestamp)(nil), // 15: google.protobuf.Timestamp
+	nil,                           // 15: nettact.wire.v1.ProbeParams.HeadersEntry
+	(*timestamppb.Timestamp)(nil), // 16: google.protobuf.Timestamp
 }
 var file_telemetry_proto_depIdxs = []int32{
-	15, // 0: nettact.wire.v1.Packet.sent_at:type_name -> google.protobuf.Timestamp
+	16, // 0: nettact.wire.v1.Packet.sent_at:type_name -> google.protobuf.Timestamp
 	1,  // 1: nettact.wire.v1.Packet.metrics:type_name -> nettact.wire.v1.Metric
 	2,  // 2: nettact.wire.v1.Packet.events:type_name -> nettact.wire.v1.Event
 	3,  // 3: nettact.wire.v1.Packet.inventory_delta:type_name -> nettact.wire.v1.InventoryItem
 	4,  // 4: nettact.wire.v1.Packet.host_snapshot:type_name -> nettact.wire.v1.HostSnapshot
-	15, // 5: nettact.wire.v1.Metric.ts:type_name -> google.protobuf.Timestamp
+	16, // 5: nettact.wire.v1.Metric.ts:type_name -> google.protobuf.Timestamp
 	13, // 6: nettact.wire.v1.Metric.labels:type_name -> nettact.wire.v1.Metric.LabelsEntry
-	15, // 7: nettact.wire.v1.Event.ts:type_name -> google.protobuf.Timestamp
+	16, // 7: nettact.wire.v1.Event.ts:type_name -> google.protobuf.Timestamp
 	14, // 8: nettact.wire.v1.Event.attrs:type_name -> nettact.wire.v1.Event.AttrsEntry
-	15, // 9: nettact.wire.v1.InventoryItem.last_seen:type_name -> google.protobuf.Timestamp
-	15, // 10: nettact.wire.v1.HostSnapshot.ts:type_name -> google.protobuf.Timestamp
+	16, // 9: nettact.wire.v1.InventoryItem.last_seen:type_name -> google.protobuf.Timestamp
+	16, // 10: nettact.wire.v1.HostSnapshot.ts:type_name -> google.protobuf.Timestamp
 	5,  // 11: nettact.wire.v1.HostSnapshot.processes:type_name -> nettact.wire.v1.ProcessInfo
 	6,  // 12: nettact.wire.v1.HostSnapshot.connections:type_name -> nettact.wire.v1.ConnectionInfo
-	15, // 13: nettact.wire.v1.TelemetryAck.server_time:type_name -> google.protobuf.Timestamp
+	16, // 13: nettact.wire.v1.TelemetryAck.server_time:type_name -> google.protobuf.Timestamp
 	8,  // 14: nettact.wire.v1.TelemetryAck.desired_state:type_name -> nettact.wire.v1.DesiredState
 	10, // 15: nettact.wire.v1.DesiredState.probe_targets:type_name -> nettact.wire.v1.ProbeTarget
 	12, // 16: nettact.wire.v1.DesiredState.intervals:type_name -> nettact.wire.v1.Intervals
 	9,  // 17: nettact.wire.v1.DesiredState.snapshot_request:type_name -> nettact.wire.v1.SnapshotRequest
 	11, // 18: nettact.wire.v1.ProbeTarget.params:type_name -> nettact.wire.v1.ProbeParams
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	15, // 19: nettact.wire.v1.ProbeParams.headers:type_name -> nettact.wire.v1.ProbeParams.HeadersEntry
+	20, // [20:20] is the sub-list for method output_type
+	20, // [20:20] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_telemetry_proto_init() }
@@ -1362,7 +1506,7 @@ func file_telemetry_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_telemetry_proto_rawDesc), len(file_telemetry_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

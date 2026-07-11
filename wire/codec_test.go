@@ -52,8 +52,14 @@ func sampleAck() Ack {
 		DesiredState: &config.DesiredState{
 			ConfigVersion: 8,
 			ProbeTargets: []config.ProbeTarget{
-				{Kind: "icmp", Target: "1.1.1.1", Tier: "base", Params: config.ProbeParams{IntervalSeconds: 10, TimeoutMs: 1000, PacketSize: 56, Retries: 2}},
-				{Kind: "http", Target: "https://example.com", Tier: "regular", Params: config.ProbeParams{Method: "GET", ExpectedStatus: 200}},
+				{Kind: "icmp", Name: "Cloudflare DNS", Target: "1.1.1.1", Params: config.ProbeParams{IntervalSeconds: 10, TimeoutMs: 1000, PacketSize: 56, Retries: 2, PacketCount: 3, GlobalTimeoutMs: 10000}},
+				{Kind: "http", Name: "Example keyword", Target: "https://example.com", Params: config.ProbeParams{
+					Method: "POST", ExpectedStatus: 200, AcceptedStatuses: "200-299,301",
+					Keyword: "Example Domain", KeywordInvert: true, Headers: map[string]string{"X-Test": "1"},
+					Body: `{"k":"v"}`, MaxRedirects: 5, IgnoreTLS: true, MaxResponseBytes: 2048,
+				}},
+				{Kind: "tcp", Name: "TLS port", Target: "1.1.1.1", Params: config.ProbeParams{Port: 443, TLS: true, TimeoutMs: 2000}},
+				{Kind: "dns", Name: "MX lookup", Target: "example.com", Params: config.ProbeParams{RecordType: "MX", ResolverServer: "https://cloudflare-dns.com/dns-query", ResolverProtocol: "doh"}},
 			},
 			Intervals:       config.Intervals{BaseSeconds: 10, RegularSeconds: 60},
 			SnapshotRequest: &config.SnapshotRequest{RequestID: "req-1", WantProcesses: true, WantConnections: false},
