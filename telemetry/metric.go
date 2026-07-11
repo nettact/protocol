@@ -34,6 +34,26 @@ const (
 	// agent exposing any endpoint.
 	AgentUptime     MetricKind = "agent.uptime_s"
 	AgentWALPending MetricKind = "agent.wal_pending"
+
+	// Host / system metrics (LayerLocal). Emitted only when the agent is started
+	// with --report-host; stored as ordinary time-series so History graphs and
+	// the alert engine work unchanged. Modeled on the NeoHtop dashboard.
+	HostCPUPct     MetricKind = "host.cpu.pct"      // overall CPU utilization, Target="host"
+	HostCPUCorePct MetricKind = "host.cpu.core.pct" // per-core, Target="core0","core1",…
+	HostMemPct     MetricKind = "host.mem.pct"
+	HostMemTotal   MetricKind = "host.mem.total" // bytes
+	HostMemUsed    MetricKind = "host.mem.used"  // bytes
+	HostMemFree    MetricKind = "host.mem.free"  // bytes
+	HostDiskPct    MetricKind = "host.disk.pct"  // per mount, Target=mount ("C:")
+	HostDiskTotal  MetricKind = "host.disk.total"
+	HostDiskUsed   MetricKind = "host.disk.used"
+	HostDiskFree   MetricKind = "host.disk.free"
+	HostLoad1      MetricKind = "host.load.1m"
+	HostLoad5      MetricKind = "host.load.5m"
+	HostLoad15     MetricKind = "host.load.15m"
+	HostUptime     MetricKind = "host.uptime_s"
+	HostNetRxBps   MetricKind = "host.net.rx_bps" // receive rate, bytes/s
+	HostNetTxBps   MetricKind = "host.net.tx_bps" // send rate, bytes/s
 )
 
 // Units for Metric.Value.
@@ -44,4 +64,7 @@ const (
 	UnitCode  = "code"
 	UnitCount = "count"
 	UnitSec   = "s"
+	UnitBytes = "bytes"
+	UnitBps   = "bps"  // bytes per second
+	UnitLoad  = "load" // load average (dimensionless)
 )

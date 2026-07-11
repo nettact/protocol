@@ -11,6 +11,21 @@ type DesiredState struct {
 	ConfigVersion int           `json:"config_version"`
 	ProbeTargets  []ProbeTarget `json:"probe_targets"`
 	Intervals     Intervals     `json:"intervals"`
+
+	// SnapshotRequest, when non-nil, asks the agent to return an ephemeral
+	// telemetry.HostSnapshot (live process/connection list) in its next upload.
+	// This is how a console user's live-page request reaches the outbound-only
+	// agent. The agent honors it only for caps it was started with; a request
+	// for a disabled cap is dropped before any collection happens.
+	SnapshotRequest *SnapshotRequest `json:"snapshot_request,omitempty"`
+}
+
+// SnapshotRequest is a one-shot ask for a live host snapshot. Not versioned into
+// ConfigVersion — it is transient and cleared once the matching snapshot arrives.
+type SnapshotRequest struct {
+	RequestID       string `json:"request_id"`
+	WantProcesses   bool   `json:"want_processes,omitempty"`
+	WantConnections bool   `json:"want_connections,omitempty"`
 }
 
 // ProbeTarget is one monitoring target pushed to the agent.

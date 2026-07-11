@@ -14,6 +14,13 @@ const (
 	InventoryARP Capability = "inventory.arp"
 	NetIfaceRead Capability = "network.interface.read"
 	NetRouteRead Capability = "network.route.read"
+
+	// Host / system monitoring. Advertised only when the agent is started with
+	// the corresponding --report-* flag, so the console can tell whether a given
+	// agent will serve host metrics or on-demand process/connection snapshots.
+	HostStatRead       Capability = "host.stat.read"       // --report-host
+	HostProcessRead    Capability = "host.process.read"    // --report-processes
+	HostConnectionRead Capability = "host.connection.read" // --report-connections
 	// Reserved for P2+: network.interface.restart, router.openwrt.read,
 	// wan.lte.status, wan.lte.failover, …
 )
