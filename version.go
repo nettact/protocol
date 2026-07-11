@@ -1,7 +1,13 @@
 // Package protocol defines the shared wire contract used by the agent,
-// server-lite, and (later) the cloud server. It deliberately has no external
-// dependencies so every consumer can import it without pulling in server or
-// agent code (architecture §15.2-3: one shared protocol, no forks).
+// server-lite, and (later) the cloud server. The type packages (telemetry,
+// config, enroll, capability) deliberately have no external dependencies so
+// every consumer can import them without pulling in server or agent code
+// (architecture §15.2-3: one shared protocol, no forks).
+//
+// The one exception is the opt-in protocol/wire codec, which adds protobuf as
+// a compact alternative to JSON on the telemetry hop. Only consumers that
+// import protocol/wire pull google.golang.org/protobuf; the type packages stay
+// dependency-free.
 package protocol
 
 import "fmt"

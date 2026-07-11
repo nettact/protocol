@@ -1,0 +1,154 @@
+// Protobuf wire schema for the NetTact agent -> server telemetry channel and its
+// ack (architecture 5.1 / 15.2-3). This is the compact binary encoding offered
+// alongside JSON on the /api/v1/telemetry hop; the canonical in-memory types
+// remain the hand-written Go structs in protocol/telemetry and protocol/config.
+//
+// Field numbers follow the current struct field order and MUST NOT be reused or
+// renumbered once shipped. Open string enums (kind, type, severity, layer, op)
+// stay `string` on the wire so unknown values are tolerated, matching the JSON
+// contract. Message-typed fields (host_snapshot, snapshot_request, desired_state)
+// are optional: absence == the Go nil pointer.
+syntax = "proto3";
+
+package nettact.wire.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/nettact/protocol/wire/pb;pb";
+
+// Packet mirrors telemetry.Packet — one batched, idempotent upload.
+message Packet {
+  int32 schema_version = 1;
+  string agent_id = 2;
+  string site_id = 3;
+  uint64 sequence = 4;
+  google.protobuf.Timestamp sent_at = 5;
+  repeated Metric metrics = 6;
+  repeated Event events = 7;
+  repeated InventoryItem inventory_delta = 8;
+  int32 reported_config_version = 9;
+  HostSnapshot host_snapshot = 10; // nil in normal packets
+}
+
+// Metric mirrors telemetry.Metric.
+message Metric {
+  google.protobuf.Timestamp ts = 1;
+  string kind = 2; // open enum (telemetry.MetricKind)
+  string target = 3;
+  string layer = 4; // open enum (telemetry.HealthLayer)
+  double value = 5;
+  string unit = 6;
+  map<string, string> labels = 7;
+}
+
+// Event mirrors telemetry.Event.
+message Event {
+  string id = 1;
+  google.protobuf.Timestamp ts = 2;
+  string type = 3; // open enum (telemetry.EventType)
+  string layer = 4; // open enum (telemetry.HealthLayer)
+  string severity = 5; // open enum (telemetry.Severity)
+  string message = 6;
+  map<string, string> attrs = 7;
+}
+
+// InventoryItem mirrors telemetry.InventoryItem.
+message InventoryItem {
+  string kind = 1; // open enum (telemetry.InventoryKind)
+  string op = 2; // open enum (telemetry.DeltaOp)
+  string id = 3;
+  // device fields
+  string mac = 4;
+  string ip = 5;
+  string hostname = 6;
+  string vendor = 7;
+  google.protobuf.Timestamp last_seen = 8;
+  // interface fields
+  string name = 9;
+  repeated string addrs = 10;
+  string gateway = 11;
+  repeated string dns = 12;
+  bool up = 13;
+}
+
+// HostSnapshot mirrors telemetry.HostSnapshot (ephemeral, on-demand).
+message HostSnapshot {
+  google.protobuf.Timestamp ts = 1;
+  string request_id = 2;
+  int32 process_total = 3;
+  repeated ProcessInfo processes = 4;
+  repeated ConnectionInfo connections = 5;
+}
+
+// ProcessInfo mirrors telemetry.ProcessInfo.
+message ProcessInfo {
+  int32 pid = 1;
+  string name = 2;
+  string user = 3;
+  string status = 4;
+  double cpu_pct = 5;
+  uint64 rss_bytes = 6;
+  uint64 virt_bytes = 7;
+  uint64 disk_read_bytes = 8;
+  uint64 disk_write_bytes = 9;
+  double run_time_seconds = 10;
+}
+
+// ConnectionInfo mirrors telemetry.ConnectionInfo.
+message ConnectionInfo {
+  string proto = 1;
+  string local_addr = 2;
+  string remote_addr = 3;
+  string state = 4;
+  int32 pid = 5;
+  string process_name = 6;
+}
+
+// TelemetryAck is the server -> agent response on the telemetry hop. It mirrors
+// server-core's telemetryResponse / agent uploader.Ack.
+message TelemetryAck {
+  uint64 highest_sequence = 1;
+  google.protobuf.Timestamp server_time = 2;
+  int32 config_version = 3;
+  DesiredState desired_state = 4; // nil unless a config downlink is attached
+}
+
+// DesiredState mirrors config.DesiredState (the config downlink).
+message DesiredState {
+  int32 config_version = 1;
+  repeated ProbeTarget probe_targets = 2;
+  Intervals intervals = 3;
+  SnapshotRequest snapshot_request = 4; // nil unless a live snapshot is requested
+}
+
+// SnapshotRequest mirrors config.SnapshotRequest.
+message SnapshotRequest {
+  string request_id = 1;
+  bool want_processes = 2;
+  bool want_connections = 3;
+}
+
+// ProbeTarget mirrors config.ProbeTarget.
+message ProbeTarget {
+  string kind = 1;
+  string target = 2;
+  string tier = 3;
+  ProbeParams params = 4;
+}
+
+// ProbeParams mirrors config.ProbeParams (zero == collector default).
+message ProbeParams {
+  int32 interval_seconds = 1;
+  int32 timeout_ms = 2;
+  int32 packet_size = 3;
+  int32 retries = 4;
+  string record_type = 5;
+  string method = 6;
+  int32 expected_status = 7;
+}
+
+// Intervals mirrors config.Intervals.
+message Intervals {
+  int32 base_seconds = 1;
+  int32 regular_seconds = 2;
+}
