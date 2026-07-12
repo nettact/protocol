@@ -60,9 +60,6 @@ func packetToProto(p telemetry.Packet) *pb.Packet {
 			out.InventoryDelta[i] = inventoryToProto(it)
 		}
 	}
-	if p.HostSnapshot != nil {
-		out.HostSnapshot = hostSnapshotToProto(*p.HostSnapshot)
-	}
 	return out
 }
 
@@ -95,10 +92,6 @@ func packetFromProto(p *pb.Packet) telemetry.Packet {
 		for i, it := range p.InventoryDelta {
 			out.InventoryDelta[i] = inventoryFromProto(it)
 		}
-	}
-	if p.HostSnapshot != nil {
-		hs := hostSnapshotFromProto(p.HostSnapshot)
-		out.HostSnapshot = &hs
 	}
 	return out
 }
@@ -278,31 +271,20 @@ func hostSnapshotFromProto(h *pb.HostSnapshot) telemetry.HostSnapshot {
 // ---- Ack / DesiredState ----
 
 func ackToProto(a Ack) *pb.TelemetryAck {
-	out := &pb.TelemetryAck{
+	return &pb.TelemetryAck{
 		HighestSequence: a.HighestSequence,
 		ServerTime:      tsToProto(a.ServerTime),
-		ConfigVersion:   int32(a.ConfigVersion),
 	}
-	if a.DesiredState != nil {
-		out.DesiredState = desiredStateToProto(*a.DesiredState)
-	}
-	return out
 }
 
 func ackFromProto(a *pb.TelemetryAck) Ack {
 	if a == nil {
 		return Ack{}
 	}
-	out := Ack{
+	return Ack{
 		HighestSequence: a.HighestSequence,
 		ServerTime:      tsFromProto(a.ServerTime),
-		ConfigVersion:   int(a.ConfigVersion),
 	}
-	if a.DesiredState != nil {
-		ds := desiredStateFromProto(a.DesiredState)
-		out.DesiredState = &ds
-	}
-	return out
 }
 
 func desiredStateToProto(d config.DesiredState) *pb.DesiredState {
@@ -348,13 +330,6 @@ func desiredStateToProto(d config.DesiredState) *pb.DesiredState {
 					StunServer2:      t.Params.STUNServer2,
 				},
 			}
-		}
-	}
-	if d.SnapshotRequest != nil {
-		out.SnapshotRequest = &pb.SnapshotRequest{
-			RequestId:       d.SnapshotRequest.RequestID,
-			WantProcesses:   d.SnapshotRequest.WantProcesses,
-			WantConnections: d.SnapshotRequest.WantConnections,
 		}
 	}
 	return out
@@ -410,12 +385,102 @@ func desiredStateFromProto(d *pb.DesiredState) config.DesiredState {
 			out.ProbeTargets[i] = pt
 		}
 	}
-	if d.SnapshotRequest != nil {
-		out.SnapshotRequest = &config.SnapshotRequest{
-			RequestID:       d.SnapshotRequest.RequestId,
-			WantProcesses:   d.SnapshotRequest.WantProcesses,
-			WantConnections: d.SnapshotRequest.WantConnections,
-		}
+	return out
+}
+
+// ---- SnapshotRequest (standalone push frame) ----
+
+func snapshotRequestToProto(r config.SnapshotRequest) *pb.SnapshotRequest {
+	return &pb.SnapshotRequest{
+		RequestId:       r.RequestID,
+		WantProcesses:   r.WantProcesses,
+		WantConnections: r.WantConnections,
+	}
+}
+
+func snapshotRequestFromProto(r *pb.SnapshotRequest) config.SnapshotRequest {
+	if r == nil {
+		return config.SnapshotRequest{}
+	}
+	return config.SnapshotRequest{
+		RequestID:       r.RequestId,
+		WantProcesses:   r.WantProcesses,
+		WantConnections: r.WantConnections,
+	}
+}
+
+// ---- Hello / Frame ----
+
+func helloToProto(h Hello) *pb.Hello {
+	return &pb.Hello{
+		SchemaVersion:         int32(h.SchemaVersion),
+		Hostname:              h.Hostname,
+		Platform:              h.Platform,
+		AgentVersion:          h.AgentVersion,
+		Capabilities:          h.Capabilities,
+		ReportedConfigVersion: int32(h.ReportedConfigVersion),
+	}
+}
+
+func helloFromProto(h *pb.Hello) Hello {
+	if h == nil {
+		return Hello{}
+	}
+	return Hello{
+		SchemaVersion:         int(h.SchemaVersion),
+		Hostname:              h.Hostname,
+		Platform:              h.Platform,
+		AgentVersion:          h.AgentVersion,
+		Capabilities:          h.Capabilities,
+		ReportedConfigVersion: int(h.ReportedConfigVersion),
+	}
+}
+
+// frameToProto assumes the Frame carries exactly one payload (validated by
+// MarshalFrame).
+func frameToProto(f Frame) *pb.Frame {
+	out := &pb.Frame{}
+	switch {
+	case f.Hello != nil:
+		out.Msg = &pb.Frame_Hello{Hello: helloToProto(*f.Hello)}
+	case f.Packet != nil:
+		out.Msg = &pb.Frame_Packet{Packet: packetToProto(*f.Packet)}
+	case f.HostSnapshot != nil:
+		out.Msg = &pb.Frame_HostSnapshot{HostSnapshot: hostSnapshotToProto(*f.HostSnapshot)}
+	case f.Ack != nil:
+		out.Msg = &pb.Frame_Ack{Ack: ackToProto(*f.Ack)}
+	case f.DesiredState != nil:
+		out.Msg = &pb.Frame_DesiredState{DesiredState: desiredStateToProto(*f.DesiredState)}
+	case f.SnapshotRequest != nil:
+		out.Msg = &pb.Frame_SnapshotRequest{SnapshotRequest: snapshotRequestToProto(*f.SnapshotRequest)}
+	}
+	return out
+}
+
+func frameFromProto(f *pb.Frame) Frame {
+	if f == nil {
+		return Frame{}
+	}
+	var out Frame
+	switch m := f.Msg.(type) {
+	case *pb.Frame_Hello:
+		h := helloFromProto(m.Hello)
+		out.Hello = &h
+	case *pb.Frame_Packet:
+		p := packetFromProto(m.Packet)
+		out.Packet = &p
+	case *pb.Frame_HostSnapshot:
+		hs := hostSnapshotFromProto(m.HostSnapshot)
+		out.HostSnapshot = &hs
+	case *pb.Frame_Ack:
+		a := ackFromProto(m.Ack)
+		out.Ack = &a
+	case *pb.Frame_DesiredState:
+		ds := desiredStateFromProto(m.DesiredState)
+		out.DesiredState = &ds
+	case *pb.Frame_SnapshotRequest:
+		sr := snapshotRequestFromProto(m.SnapshotRequest)
+		out.SnapshotRequest = &sr
 	}
 	return out
 }

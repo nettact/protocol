@@ -1,13 +1,14 @@
-// Protobuf wire schema for the NetTact agent -> server telemetry channel and its
-// ack (architecture 5.1 / 15.2-3). This is the compact binary encoding offered
-// alongside JSON on the /api/v1/telemetry hop; the canonical in-memory types
-// remain the hand-written Go structs in protocol/telemetry and protocol/config.
+// Protobuf wire schema for the NetTact agent <-> server WebSocket channel
+// (architecture 5.1 / 15.2-3). Every message on the socket is one Frame
+// (a oneof envelope), encoded per the negotiated WS subprotocol — protobuf
+// (nettact.v1.protobuf) or JSON (nettact.v1.json). The canonical in-memory
+// types remain the hand-written Go structs in protocol/telemetry and
+// protocol/config.
 //
 // Field numbers follow the current struct field order and MUST NOT be reused or
 // renumbered once shipped. Open string enums (kind, type, severity, layer, op)
 // stay `string` on the wire so unknown values are tolerated, matching the JSON
-// contract. Message-typed fields (host_snapshot, snapshot_request, desired_state)
-// are optional: absence == the Go nil pointer.
+// contract. Message-typed fields are optional: absence == the Go nil pointer.
 syntax = "proto3";
 
 package nettact.wire.v1;
@@ -16,8 +17,39 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/nettact/protocol/wire/pb;pb";
 
-// Packet mirrors telemetry.Packet — one batched, idempotent upload.
+// Hello is the first frame an agent sends after the WebSocket upgrade. It
+// replaces the per-request X-Agent-* headers of the old POST transport and
+// carries the config watermark so the server knows what to push on connect.
+message Hello {
+  int32 schema_version = 1;
+  string hostname = 2;
+  string platform = 3;
+  string agent_version = 4;
+  repeated string capabilities = 5;
+  int32 reported_config_version = 6;
+}
+
+// Frame is the envelope for every message on the agent <-> server WebSocket.
+// Exactly one field is set.
+message Frame {
+  oneof msg {
+    // agent -> server
+    Hello hello = 1;
+    Packet packet = 2;
+    HostSnapshot host_snapshot = 3;
+    // server -> agent
+    TelemetryAck ack = 4;
+    DesiredState desired_state = 5;
+    SnapshotRequest snapshot_request = 6;
+  }
+}
+
+// Packet mirrors telemetry.Packet — one batched, idempotent upload. Field 10
+// (host_snapshot) was removed when HostSnapshot became its own Frame variant
+// and is reserved so the number/name can never be silently reused.
 message Packet {
+  reserved 10;
+  reserved "host_snapshot";
   int32 schema_version = 1;
   string agent_id = 2;
   string site_id = 3;
@@ -27,7 +59,6 @@ message Packet {
   repeated Event events = 7;
   repeated InventoryItem inventory_delta = 8;
   int32 reported_config_version = 9;
-  HostSnapshot host_snapshot = 10; // nil in normal packets
 }
 
 // Metric mirrors telemetry.Metric.
@@ -107,21 +138,27 @@ message ConnectionInfo {
   string process_name = 6;
 }
 
-// TelemetryAck is the server -> agent response on the telemetry hop. It mirrors
-// server-core's telemetryResponse / agent uploader.Ack.
+// TelemetryAck is the server -> agent acknowledgment for one Packet frame:
+// the durable-sequence watermark plus the server clock. Fields 3-4
+// (config_version, desired_state) were removed when DesiredState became its
+// own push frame and are reserved.
 message TelemetryAck {
+  reserved 3, 4;
+  reserved "config_version", "desired_state";
   uint64 highest_sequence = 1;
   google.protobuf.Timestamp server_time = 2;
-  int32 config_version = 3;
-  DesiredState desired_state = 4; // nil unless a config downlink is attached
 }
 
-// DesiredState mirrors config.DesiredState (the config downlink).
+// DesiredState mirrors config.DesiredState (the config downlink, pushed as a
+// standalone frame on connect and on every config change). Field 4
+// (snapshot_request) was removed when SnapshotRequest became its own push
+// frame and is reserved.
 message DesiredState {
+  reserved 4;
+  reserved "snapshot_request";
   int32 config_version = 1;
   repeated ProbeTarget probe_targets = 2;
   Intervals intervals = 3;
-  SnapshotRequest snapshot_request = 4; // nil unless a live snapshot is requested
 }
 
 // SnapshotRequest mirrors config.SnapshotRequest.

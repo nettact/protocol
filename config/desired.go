@@ -1,7 +1,7 @@
 // Package config defines the DesiredState the server pushes down to an agent
-// via the telemetry ack. Monitoring targets are configured centrally in Lite
-// and delivered to agents on the agent's own outbound request — the agent
-// never listens, and users don't edit agent config files (low friction).
+// over the persistent WebSocket channel. Monitoring targets are configured
+// centrally in Lite and pushed on connect and on every config change — the
+// agent never listens, and users don't edit agent config files (low friction).
 package config
 
 // DesiredState is the monitoring configuration for one agent. The agent applies
@@ -11,17 +11,13 @@ type DesiredState struct {
 	ConfigVersion int           `json:"config_version"`
 	ProbeTargets  []ProbeTarget `json:"probe_targets"`
 	Intervals     Intervals     `json:"intervals"`
-
-	// SnapshotRequest, when non-nil, asks the agent to return an ephemeral
-	// telemetry.HostSnapshot (live process/connection list) in its next upload.
-	// This is how a console user's live-page request reaches the outbound-only
-	// agent. The agent honors it only for caps it was started with; a request
-	// for a disabled cap is dropped before any collection happens.
-	SnapshotRequest *SnapshotRequest `json:"snapshot_request,omitempty"`
 }
 
-// SnapshotRequest is a one-shot ask for a live host snapshot. Not versioned into
-// ConfigVersion — it is transient and cleared once the matching snapshot arrives.
+// SnapshotRequest is a one-shot ask for a live host snapshot, pushed to the
+// agent as a standalone frame. Not versioned into ConfigVersion — it is
+// transient and cleared once the matching snapshot arrives. The agent honors
+// it only for caps it was started with; a request for a disabled cap is
+// dropped before any collection happens.
 type SnapshotRequest struct {
 	RequestID       string `json:"request_id"`
 	WantProcesses   bool   `json:"want_processes,omitempty"`

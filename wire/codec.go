@@ -1,7 +1,7 @@
-// Package wire is the opt-in serialization codec for the NetTact telemetry hop.
-// It offers a compact protobuf encoding alongside the existing JSON one for the
-// agent -> server telemetry Packet and its ack (config downlink), selected per
-// request via HTTP Content-Type / Accept.
+// Package wire is the opt-in serialization codec for the NetTact agent <->
+// server WebSocket channel. It offers a compact protobuf encoding alongside
+// JSON for the Frame envelope (and its payload types), selected per connection
+// via the negotiated WS subprotocol.
 //
 // Unlike the rest of the protocol module (which is deliberately stdlib-only),
 // this package imports google.golang.org/protobuf. Consumers that stay on JSON
@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nettact/protocol/config"
 	"github.com/nettact/protocol/telemetry"
 	"github.com/nettact/protocol/wire/pb"
 	"google.golang.org/protobuf/proto"
@@ -27,15 +26,28 @@ const (
 	ContentTypeProtobuf = "application/x-protobuf"
 )
 
-// Ack is the server -> agent telemetry response (sequence watermark + optional
-// config downlink). It carries the same fields and JSON tags as the agent's
-// uploader.Ack and server-core's telemetryResponse, so the JSON branch is
-// byte-compatible with the pre-protobuf format.
+// WebSocket subprotocol names offered by the agent and accepted by the server.
+// The negotiated subprotocol fixes the Frame encoding for the whole session.
+const (
+	SubprotocolProtobuf = "nettact.v1.protobuf"
+	SubprotocolJSON     = "nettact.v1.json"
+)
+
+// SubprotocolContentType maps a negotiated WS subprotocol to the canonical
+// content-type the codec functions accept. Unknown values fall back to JSON,
+// mirroring Negotiate's safe default.
+func SubprotocolContentType(subprotocol string) string {
+	if subprotocol == SubprotocolProtobuf {
+		return ContentTypeProtobuf
+	}
+	return ContentTypeJSON
+}
+
+// Ack is the server -> agent acknowledgment for one Packet frame: the durable
+// sequence watermark the agent's WAL prunes against, plus the server clock.
 type Ack struct {
-	HighestSequence uint64               `json:"highest_sequence"`
-	ServerTime      time.Time            `json:"server_time"`
-	ConfigVersion   int                  `json:"config_version"`
-	DesiredState    *config.DesiredState `json:"desired_state,omitempty"`
+	HighestSequence uint64    `json:"highest_sequence"`
+	ServerTime      time.Time `json:"server_time"`
 }
 
 // Negotiate maps a raw HTTP Content-Type or Accept header value to a canonical

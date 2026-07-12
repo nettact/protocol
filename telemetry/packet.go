@@ -16,9 +16,4 @@ type Packet struct {
 	Events                []Event         `json:"events,omitempty"`
 	InventoryDelta        []InventoryItem `json:"inventory_delta,omitempty"`
 	ReportedConfigVersion int             `json:"reported_config_version"`
-
-	// HostSnapshot carries an ephemeral, on-demand process/connection view when
-	// the server requested one via config.SnapshotRequest. It is never stored;
-	// the server keeps only the latest per agent in memory. Nil in normal packets.
-	HostSnapshot *HostSnapshot `json:"host_snapshot,omitempty"`
 }
