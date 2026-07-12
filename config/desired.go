@@ -30,7 +30,7 @@ type SnapshotRequest struct {
 
 // ProbeTarget is one monitoring target pushed to the agent.
 type ProbeTarget struct {
-	Kind   string      `json:"kind"`           // "icmp" | "dns" | "http" | "tcp" (host is server-side only)
+	Kind   string      `json:"kind"`           // "icmp" | "dns" | "http" | "tcp" | "nat" (host is server-side only)
 	Name   string      `json:"name,omitempty"` // human-friendly display name; optional
 	Target string      `json:"target"`         // "1.1.1.1", "example.com", "https://…"
 	Params ProbeParams `json:"params"`         // per-protocol probe settings (zero = collector defaults)
@@ -68,8 +68,12 @@ type ProbeParams struct {
 	MaxResponseBytes int               `json:"max_response_bytes,omitempty"` // cap on body bytes read for keyword match (default 1 KiB)
 
 	// TCP.
-	Port int  `json:"port,omitempty"` // TCP port to connect to
+	Port int  `json:"port,omitempty"` // TCP port to connect to (also the STUN port for kind=nat; default 3478)
 	TLS  bool `json:"tls,omitempty"`  // perform a TLS handshake after connect
+
+	// NAT (STUN behavior discovery, RFC 5780 / RFC 4787).
+	NATTransport string `json:"nat_transport,omitempty"` // "" | udp | tcp | tls | dtls (default udp); only udp does the filtering test + classic type
+	STUNServer2  string `json:"stun_server2,omitempty"`  // optional 2nd STUN server host[:port] used as the mapping-test alternate when the primary lacks OTHER-ADDRESS
 }
 
 // Intervals controls the agent scheduler tiers (seconds).

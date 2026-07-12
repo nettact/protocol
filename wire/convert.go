@@ -341,6 +341,8 @@ func desiredStateToProto(d config.DesiredState) *pb.DesiredState {
 					MaxResponseBytes: int32(t.Params.MaxResponseBytes),
 					Port:             int32(t.Params.Port),
 					Tls:              t.Params.TLS,
+					NatTransport:     t.Params.NATTransport,
+					StunServer2:      t.Params.STUNServer2,
 				},
 			}
 		}
@@ -397,6 +399,8 @@ func desiredStateFromProto(d *pb.DesiredState) config.DesiredState {
 					MaxResponseBytes: int(t.Params.MaxResponseBytes),
 					Port:             int(t.Params.Port),
 					TLS:              t.Params.Tls,
+					NATTransport:     t.Params.NatTransport,
+					STUNServer2:      t.Params.StunServer2,
 				}
 			}
 			out.ProbeTargets[i] = pt

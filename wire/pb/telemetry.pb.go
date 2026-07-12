@@ -1054,6 +1054,8 @@ type ProbeParams struct {
 	ResolverServer   string            `protobuf:"bytes,20,opt,name=resolver_server,json=resolverServer,proto3" json:"resolver_server,omitempty"`
 	ResolverPort     int32             `protobuf:"varint,21,opt,name=resolver_port,json=resolverPort,proto3" json:"resolver_port,omitempty"`
 	ResolverProtocol string            `protobuf:"bytes,22,opt,name=resolver_protocol,json=resolverProtocol,proto3" json:"resolver_protocol,omitempty"`
+	NatTransport     string            `protobuf:"bytes,23,opt,name=nat_transport,json=natTransport,proto3" json:"nat_transport,omitempty"`
+	StunServer2      string            `protobuf:"bytes,24,opt,name=stun_server2,json=stunServer2,proto3" json:"stun_server2,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1242,6 +1244,20 @@ func (x *ProbeParams) GetResolverProtocol() string {
 	return ""
 }
 
+func (x *ProbeParams) GetNatTransport() string {
+	if x != nil {
+		return x.NatTransport
+	}
+	return ""
+}
+
+func (x *ProbeParams) GetStunServer2() string {
+	if x != nil {
+		return x.StunServer2
+	}
+	return ""
+}
+
 // Intervals mirrors config.Intervals.
 type Intervals struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -1399,7 +1415,7 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x124\n" +
 	"\x06params\x18\x04 \x01(\v2\x1c.nettact.wire.v1.ProbeParamsR\x06params\x12\x12\n" +
-	"\x04name\x18\x05 \x01(\tR\x04nameJ\x04\b\x03\x10\x04R\x04tier\"\xd9\x06\n" +
+	"\x04name\x18\x05 \x01(\tR\x04nameJ\x04\b\x03\x10\x04R\x04tier\"\xa1\a\n" +
 	"\vProbeParams\x12)\n" +
 	"\x10interval_seconds\x18\x01 \x01(\x05R\x0fintervalSeconds\x12\x1d\n" +
 	"\n" +
@@ -1427,7 +1443,9 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x11global_timeout_ms\x18\x13 \x01(\x05R\x0fglobalTimeoutMs\x12'\n" +
 	"\x0fresolver_server\x18\x14 \x01(\tR\x0eresolverServer\x12#\n" +
 	"\rresolver_port\x18\x15 \x01(\x05R\fresolverPort\x12+\n" +
-	"\x11resolver_protocol\x18\x16 \x01(\tR\x10resolverProtocol\x1a:\n" +
+	"\x11resolver_protocol\x18\x16 \x01(\tR\x10resolverProtocol\x12#\n" +
+	"\rnat_transport\x18\x17 \x01(\tR\fnatTransport\x12!\n" +
+	"\fstun_server2\x18\x18 \x01(\tR\vstunServer2\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"W\n" +

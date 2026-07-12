@@ -11,6 +11,7 @@ const (
 	ProbeDNS     Capability = "probe.dns"
 	ProbeHTTP    Capability = "probe.http"
 	ProbeTCP     Capability = "probe.tcp"
+	ProbeNAT     Capability = "probe.nat"
 	InventoryARP Capability = "inventory.arp"
 	NetIfaceRead Capability = "network.interface.read"
 	NetRouteRead Capability = "network.route.read"

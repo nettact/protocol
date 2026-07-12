@@ -164,6 +164,8 @@ message ProbeParams {
   string resolver_server = 20;
   int32 resolver_port = 21;
   string resolver_protocol = 22;
+  string nat_transport = 23;
+  string stun_server2 = 24;
 }
 
 // Intervals mirrors config.Intervals.

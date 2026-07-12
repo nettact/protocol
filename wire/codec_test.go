@@ -60,6 +60,7 @@ func sampleAck() Ack {
 				}},
 				{Kind: "tcp", Name: "TLS port", Target: "1.1.1.1", Params: config.ProbeParams{Port: 443, TLS: true, TimeoutMs: 2000}},
 				{Kind: "dns", Name: "MX lookup", Target: "example.com", Params: config.ProbeParams{RecordType: "MX", ResolverServer: "https://cloudflare-dns.com/dns-query", ResolverProtocol: "doh"}},
+				{Kind: "nat", Name: "NAT type", Target: "stun.example.com", Params: config.ProbeParams{Port: 3478, NATTransport: "udp", STUNServer2: "stun2.example.com:3478", TimeoutMs: 3000}},
 			},
 			Intervals:       config.Intervals{BaseSeconds: 10, RegularSeconds: 60},
 			SnapshotRequest: &config.SnapshotRequest{RequestID: "req-1", WantProcesses: true, WantConnections: false},
