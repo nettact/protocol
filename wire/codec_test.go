@@ -21,7 +21,9 @@ func samplePacket() telemetry.Packet {
 		SentAt:                ts,
 		ReportedConfigVersion: 7,
 		Metrics: []telemetry.Metric{
-			{TS: ts, Kind: telemetry.ICMPRTTms, Target: "1.1.1.1", Layer: telemetry.HealthLayer("internet"), Value: 12.5, Unit: telemetry.UnitMs, Labels: map[string]string{"iface": "eth0", "region": "us"}},
+			// One monitor-stamped probe metric and one id-less system metric, so the
+			// round-trip covers both monitor_id shapes.
+			{TS: ts, Kind: telemetry.ICMPRTTms, Target: "1.1.1.1", Layer: telemetry.HealthLayer("internet"), Value: 12.5, Unit: telemetry.UnitMs, Labels: map[string]string{"iface": "eth0", "region": "us"}, MonitorID: "probe_mon1"},
 			{TS: ts, Kind: telemetry.MetricKind("some.future.kind"), Value: 0, Unit: telemetry.UnitBool},
 		},
 		Events: []telemetry.Event{
@@ -52,7 +54,7 @@ func sampleAck() Ack {
 		DesiredState: &config.DesiredState{
 			ConfigVersion: 8,
 			ProbeTargets: []config.ProbeTarget{
-				{Kind: "icmp", Name: "Cloudflare DNS", Target: "1.1.1.1", Params: config.ProbeParams{IntervalSeconds: 10, TimeoutMs: 1000, PacketSize: 56, Retries: 2, PacketCount: 3, GlobalTimeoutMs: 10000}},
+				{MonitorID: "probe_mon1", Kind: "icmp", Name: "Cloudflare DNS", Target: "1.1.1.1", Params: config.ProbeParams{IntervalSeconds: 10, TimeoutMs: 1000, PacketSize: 56, Retries: 2, PacketCount: 3, GlobalTimeoutMs: 10000}},
 				{Kind: "http", Name: "Example keyword", Target: "https://example.com", Params: config.ProbeParams{
 					Method: "POST", ExpectedStatus: 200, AcceptedStatuses: "200-299,301",
 					Keyword: "Example Domain", KeywordInvert: true, Headers: map[string]string{"X-Test": "1"},
@@ -133,12 +135,12 @@ func TestEmptyRoundTrip(t *testing.T) {
 
 func TestNegotiate(t *testing.T) {
 	cases := map[string]string{
-		"":                                        ContentTypeJSON,
-		"application/json":                        ContentTypeJSON,
-		"application/x-protobuf":                  ContentTypeProtobuf,
-		"application/x-protobuf; charset=utf-8":   ContentTypeProtobuf,
+		"":                                      ContentTypeJSON,
+		"application/json":                      ContentTypeJSON,
+		"application/x-protobuf":                ContentTypeProtobuf,
+		"application/x-protobuf; charset=utf-8": ContentTypeProtobuf,
 		"application/x-protobuf, application/json": ContentTypeProtobuf,
-		"text/plain":                              ContentTypeJSON,
+		"text/plain": ContentTypeJSON,
 		// q-values: protobuf explicitly rejected must fall back to JSON.
 		"application/x-protobuf;q=0, application/json":   ContentTypeJSON,
 		"application/x-protobuf;q=0.0":                   ContentTypeJSON,

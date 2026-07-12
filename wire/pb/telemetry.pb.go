@@ -152,14 +152,17 @@ func (x *Packet) GetHostSnapshot() *HostSnapshot {
 
 // Metric mirrors telemetry.Metric.
 type Metric struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ts            *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=ts,proto3" json:"ts,omitempty"`
-	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // open enum (telemetry.MetricKind)
-	Target        string                 `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	Layer         string                 `protobuf:"bytes,4,opt,name=layer,proto3" json:"layer,omitempty"` // open enum (telemetry.HealthLayer)
-	Value         float64                `protobuf:"fixed64,5,opt,name=value,proto3" json:"value,omitempty"`
-	Unit          string                 `protobuf:"bytes,6,opt,name=unit,proto3" json:"unit,omitempty"`
-	Labels        map[string]string      `protobuf:"bytes,7,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Ts     *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=ts,proto3" json:"ts,omitempty"`
+	Kind   string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // open enum (telemetry.MetricKind)
+	Target string                 `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Layer  string                 `protobuf:"bytes,4,opt,name=layer,proto3" json:"layer,omitempty"` // open enum (telemetry.HealthLayer)
+	Value  float64                `protobuf:"fixed64,5,opt,name=value,proto3" json:"value,omitempty"`
+	Unit   string                 `protobuf:"bytes,6,opt,name=unit,proto3" json:"unit,omitempty"`
+	Labels map[string]string      `protobuf:"bytes,7,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// The user-created monitor (probe task) that produced this sample. Empty for
+	// system metrics (host.*, iface.up, agent.*, the built-in gateway probe).
+	MonitorId     string `protobuf:"bytes,8,opt,name=monitor_id,json=monitorId,proto3" json:"monitor_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -241,6 +244,13 @@ func (x *Metric) GetLabels() map[string]string {
 		return x.Labels
 	}
 	return nil
+}
+
+func (x *Metric) GetMonitorId() string {
+	if x != nil {
+		return x.MonitorId
+	}
+	return ""
 }
 
 // Event mirrors telemetry.Event.
@@ -961,11 +971,14 @@ func (x *SnapshotRequest) GetWantConnections() bool {
 // ProbeTarget mirrors config.ProbeTarget. Field 3 (tier) was removed and is
 // reserved so the number/name can never be silently reused by a future field.
 type ProbeTarget struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
-	Target        string                 `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
-	Params        *ProbeParams           `protobuf:"bytes,4,opt,name=params,proto3" json:"params,omitempty"`
-	Name          string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Kind   string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	Target string                 `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	Params *ProbeParams           `protobuf:"bytes,4,opt,name=params,proto3" json:"params,omitempty"`
+	Name   string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
+	// Stable server-side id of this monitor (probe_tasks.id). The agent stamps it
+	// onto every Metric the probe emits so the server can key series per monitor.
+	MonitorId     string `protobuf:"bytes,6,opt,name=monitor_id,json=monitorId,proto3" json:"monitor_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1024,6 +1037,13 @@ func (x *ProbeTarget) GetParams() *ProbeParams {
 func (x *ProbeTarget) GetName() string {
 	if x != nil {
 		return x.Name
+	}
+	return ""
+}
+
+func (x *ProbeTarget) GetMonitorId() string {
+	if x != nil {
+		return x.MonitorId
 	}
 	return ""
 }
@@ -1327,7 +1347,7 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x0finventory_delta\x18\b \x03(\v2\x1e.nettact.wire.v1.InventoryItemR\x0einventoryDelta\x126\n" +
 	"\x17reported_config_version\x18\t \x01(\x05R\x15reportedConfigVersion\x12B\n" +
 	"\rhost_snapshot\x18\n" +
-	" \x01(\v2\x1d.nettact.wire.v1.HostSnapshotR\fhostSnapshot\"\x98\x02\n" +
+	" \x01(\v2\x1d.nettact.wire.v1.HostSnapshotR\fhostSnapshot\"\xb7\x02\n" +
 	"\x06Metric\x12*\n" +
 	"\x02ts\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x16\n" +
@@ -1335,7 +1355,9 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x05layer\x18\x04 \x01(\tR\x05layer\x12\x14\n" +
 	"\x05value\x18\x05 \x01(\x01R\x05value\x12\x12\n" +
 	"\x04unit\x18\x06 \x01(\tR\x04unit\x12;\n" +
-	"\x06labels\x18\a \x03(\v2#.nettact.wire.v1.Metric.LabelsEntryR\x06labels\x1a9\n" +
+	"\x06labels\x18\a \x03(\v2#.nettact.wire.v1.Metric.LabelsEntryR\x06labels\x12\x1d\n" +
+	"\n" +
+	"monitor_id\x18\b \x01(\tR\tmonitorId\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x96\x02\n" +
@@ -1410,12 +1432,14 @@ const file_telemetry_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12%\n" +
 	"\x0ewant_processes\x18\x02 \x01(\bR\rwantProcesses\x12)\n" +
-	"\x10want_connections\x18\x03 \x01(\bR\x0fwantConnections\"\x8f\x01\n" +
+	"\x10want_connections\x18\x03 \x01(\bR\x0fwantConnections\"\xae\x01\n" +
 	"\vProbeTarget\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x124\n" +
 	"\x06params\x18\x04 \x01(\v2\x1c.nettact.wire.v1.ProbeParamsR\x06params\x12\x12\n" +
-	"\x04name\x18\x05 \x01(\tR\x04nameJ\x04\b\x03\x10\x04R\x04tier\"\xa1\a\n" +
+	"\x04name\x18\x05 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"monitor_id\x18\x06 \x01(\tR\tmonitorIdJ\x04\b\x03\x10\x04R\x04tier\"\xa1\a\n" +
 	"\vProbeParams\x12)\n" +
 	"\x10interval_seconds\x18\x01 \x01(\x05R\x0fintervalSeconds\x12\x1d\n" +
 	"\n" +

@@ -30,10 +30,14 @@ type SnapshotRequest struct {
 
 // ProbeTarget is one monitoring target pushed to the agent.
 type ProbeTarget struct {
-	Kind   string      `json:"kind"`           // "icmp" | "dns" | "http" | "tcp" | "nat" (host is server-side only)
-	Name   string      `json:"name,omitempty"` // human-friendly display name; optional
-	Target string      `json:"target"`         // "1.1.1.1", "example.com", "https://…"
-	Params ProbeParams `json:"params"`         // per-protocol probe settings (zero = collector defaults)
+	// MonitorID is the stable server-side id of this monitor (probe_tasks.id).
+	// The agent stamps it onto every Metric the probe emits so the server keys
+	// series per monitor — two monitors on the same target string stay distinct.
+	MonitorID string      `json:"monitor_id,omitempty"`
+	Kind      string      `json:"kind"`           // "icmp" | "dns" | "http" | "tcp" | "nat" (host is server-side only)
+	Name      string      `json:"name,omitempty"` // human-friendly display name; optional
+	Target    string      `json:"target"`         // "1.1.1.1", "example.com", "https://…"
+	Params    ProbeParams `json:"params"`         // per-protocol probe settings (zero = collector defaults)
 }
 
 // ProbeParams carries per-target, per-protocol probe settings. Zero values mean
@@ -56,15 +60,15 @@ type ProbeParams struct {
 	ResolverProtocol string `json:"resolver_protocol,omitempty"` // "" | udp | tcp | dot | doh (default plain UDP/system)
 
 	// HTTP.
-	Method           string            `json:"method,omitempty"`            // GET | HEAD | POST | … (default GET)
-	ExpectedStatus   int               `json:"expected_status,omitempty"`   // legacy single status; 0 = any 2xx (kept for back-compat)
-	AcceptedStatuses string            `json:"accepted_statuses,omitempty"` // ranges/CSV e.g. "200-299,301"; overrides ExpectedStatus when set
-	Keyword          string            `json:"keyword,omitempty"`           // body keyword; ok requires presence (or absence when KeywordInvert)
-	KeywordInvert    bool              `json:"keyword_invert,omitempty"`    // invert keyword match (fail when keyword present)
-	Headers          map[string]string `json:"headers,omitempty"`           // request headers
-	Body             string            `json:"body,omitempty"`              // request body (sent for non-GET/HEAD)
-	MaxRedirects     int               `json:"max_redirects,omitempty"`     // max redirects to follow; <0 disables following
-	IgnoreTLS        bool              `json:"ignore_tls,omitempty"`        // skip TLS certificate verification
+	Method           string            `json:"method,omitempty"`             // GET | HEAD | POST | … (default GET)
+	ExpectedStatus   int               `json:"expected_status,omitempty"`    // legacy single status; 0 = any 2xx (kept for back-compat)
+	AcceptedStatuses string            `json:"accepted_statuses,omitempty"`  // ranges/CSV e.g. "200-299,301"; overrides ExpectedStatus when set
+	Keyword          string            `json:"keyword,omitempty"`            // body keyword; ok requires presence (or absence when KeywordInvert)
+	KeywordInvert    bool              `json:"keyword_invert,omitempty"`     // invert keyword match (fail when keyword present)
+	Headers          map[string]string `json:"headers,omitempty"`            // request headers
+	Body             string            `json:"body,omitempty"`               // request body (sent for non-GET/HEAD)
+	MaxRedirects     int               `json:"max_redirects,omitempty"`      // max redirects to follow; <0 disables following
+	IgnoreTLS        bool              `json:"ignore_tls,omitempty"`         // skip TLS certificate verification
 	MaxResponseBytes int               `json:"max_response_bytes,omitempty"` // cap on body bytes read for keyword match (default 1 KiB)
 
 	// TCP.

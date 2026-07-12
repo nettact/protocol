@@ -13,6 +13,11 @@ type Metric struct {
 	Value  float64           `json:"value"`
 	Unit   string            `json:"unit,omitempty"` // "ms", "pct", "bool"
 	Labels map[string]string `json:"labels,omitempty"`
+	// MonitorID is the user-created monitor (probe task) that produced this
+	// sample; empty for system metrics (host.*, iface.up, agent.*, the built-in
+	// gateway probe). It keys the server's series so same-target monitors stay
+	// distinct.
+	MonitorID string `json:"monitor_id,omitempty"`
 }
 
 // MetricKind is a string enum so unknown kinds are ignored rather than failing
@@ -20,14 +25,14 @@ type Metric struct {
 type MetricKind string
 
 const (
-	ICMPRTTms  MetricKind = "probe.icmp.rtt_ms"
-	ICMPLoss   MetricKind = "probe.icmp.loss_pct"
-	ICMPJitter MetricKind = "probe.icmp.jitter_ms"
-	DNSResolve MetricKind = "probe.dns.resolve_ms"
-	DNSOK      MetricKind = "probe.dns.ok"
-	HTTPStatus MetricKind = "probe.http.status"
-	HTTPLat    MetricKind = "probe.http.latency_ms"
-	HTTPOK     MetricKind = "probe.http.ok"
+	ICMPRTTms    MetricKind = "probe.icmp.rtt_ms"
+	ICMPLoss     MetricKind = "probe.icmp.loss_pct"
+	ICMPJitter   MetricKind = "probe.icmp.jitter_ms"
+	DNSResolve   MetricKind = "probe.dns.resolve_ms"
+	DNSOK        MetricKind = "probe.dns.ok"
+	HTTPStatus   MetricKind = "probe.http.status"
+	HTTPLat      MetricKind = "probe.http.latency_ms"
+	HTTPOK       MetricKind = "probe.http.ok"
 	TCPOK        MetricKind = "probe.tcp.ok"
 	TCPConnectMs MetricKind = "probe.tcp.connect_ms"
 
@@ -41,7 +46,7 @@ const (
 	NATFiltering MetricKind = "probe.nat.filtering" // code: 0 unknown, 1 endpoint-independent, 2 address-dependent, 3 address-and-port-dependent (udp only)
 	NATType      MetricKind = "probe.nat.type"      // code: 0 unknown, 1 open, 2 full-cone, 3 restricted-cone, 4 port-restricted-cone, 5 symmetric (udp only)
 
-	IfaceUp    MetricKind = "iface.up"
+	IfaceUp MetricKind = "iface.up"
 
 	// Agent self-status (heartbeat), so status is reported outbound without the
 	// agent exposing any endpoint.

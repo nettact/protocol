@@ -107,25 +107,27 @@ func packetFromProto(p *pb.Packet) telemetry.Packet {
 
 func metricToProto(m telemetry.Metric) *pb.Metric {
 	return &pb.Metric{
-		Ts:     tsToProto(m.TS),
-		Kind:   string(m.Kind),
-		Target: m.Target,
-		Layer:  string(m.Layer),
-		Value:  m.Value,
-		Unit:   m.Unit,
-		Labels: m.Labels,
+		Ts:        tsToProto(m.TS),
+		Kind:      string(m.Kind),
+		Target:    m.Target,
+		Layer:     string(m.Layer),
+		Value:     m.Value,
+		Unit:      m.Unit,
+		Labels:    m.Labels,
+		MonitorId: m.MonitorID,
 	}
 }
 
 func metricFromProto(m *pb.Metric) telemetry.Metric {
 	return telemetry.Metric{
-		TS:     tsFromProto(m.Ts),
-		Kind:   telemetry.MetricKind(m.Kind),
-		Target: m.Target,
-		Layer:  telemetry.HealthLayer(m.Layer),
-		Value:  m.Value,
-		Unit:   m.Unit,
-		Labels: m.Labels,
+		TS:        tsFromProto(m.Ts),
+		Kind:      telemetry.MetricKind(m.Kind),
+		Target:    m.Target,
+		Layer:     telemetry.HealthLayer(m.Layer),
+		Value:     m.Value,
+		Unit:      m.Unit,
+		Labels:    m.Labels,
+		MonitorID: m.MonitorId,
 	}
 }
 
@@ -315,9 +317,10 @@ func desiredStateToProto(d config.DesiredState) *pb.DesiredState {
 		out.ProbeTargets = make([]*pb.ProbeTarget, len(d.ProbeTargets))
 		for i, t := range d.ProbeTargets {
 			out.ProbeTargets[i] = &pb.ProbeTarget{
-				Kind:   t.Kind,
-				Name:   t.Name,
-				Target: t.Target,
+				MonitorId: t.MonitorID,
+				Kind:      t.Kind,
+				Name:      t.Name,
+				Target:    t.Target,
 				Params: &pb.ProbeParams{
 					IntervalSeconds:  int32(t.Params.IntervalSeconds),
 					TimeoutMs:        int32(t.Params.TimeoutMs),
@@ -371,9 +374,10 @@ func desiredStateFromProto(d *pb.DesiredState) config.DesiredState {
 		out.ProbeTargets = make([]config.ProbeTarget, len(d.ProbeTargets))
 		for i, t := range d.ProbeTargets {
 			pt := config.ProbeTarget{
-				Kind:   t.Kind,
-				Name:   t.Name,
-				Target: t.Target,
+				MonitorID: t.MonitorId,
+				Kind:      t.Kind,
+				Name:      t.Name,
+				Target:    t.Target,
 			}
 			if t.Params != nil {
 				pt.Params = config.ProbeParams{

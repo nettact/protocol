@@ -39,6 +39,9 @@ message Metric {
   double value = 5;
   string unit = 6;
   map<string, string> labels = 7;
+  // The user-created monitor (probe task) that produced this sample. Empty for
+  // system metrics (host.*, iface.up, agent.*, the built-in gateway probe).
+  string monitor_id = 8;
 }
 
 // Event mirrors telemetry.Event.
@@ -137,6 +140,9 @@ message ProbeTarget {
   string target = 2;
   ProbeParams params = 4;
   string name = 5;
+  // Stable server-side id of this monitor (probe_tasks.id). The agent stamps it
+  // onto every Metric the probe emits so the server can key series per monitor.
+  string monitor_id = 6;
 }
 
 // ProbeParams mirrors config.ProbeParams (zero == collector default).
