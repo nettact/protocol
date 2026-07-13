@@ -52,11 +52,22 @@ func (f Frame) variants() int {
 	return n
 }
 
+// Validate reports ErrFrameVariant unless exactly one payload field is set. It
+// is the invariant MarshalFrame/UnmarshalFrame enforce at the socket boundary,
+// exported so the in-memory Pipe transport (which never serializes) can enforce
+// the same contract on send.
+func (f Frame) Validate() error {
+	if f.variants() != 1 {
+		return ErrFrameVariant
+	}
+	return nil
+}
+
 // MarshalFrame encodes a Frame in the format named by contentType (canonical
 // constant, raw header value, or a value from SubprotocolContentType).
 func MarshalFrame(f Frame, contentType string) ([]byte, error) {
-	if f.variants() != 1 {
-		return nil, ErrFrameVariant
+	if err := f.Validate(); err != nil {
+		return nil, err
 	}
 	if Negotiate(contentType) == ContentTypeProtobuf {
 		return proto.Marshal(frameToProto(f))
@@ -76,8 +87,8 @@ func UnmarshalFrame(data []byte, contentType string) (Frame, error) {
 	} else if err := json.Unmarshal(data, &f); err != nil {
 		return Frame{}, err
 	}
-	if f.variants() != 1 {
-		return Frame{}, ErrFrameVariant
+	if err := f.Validate(); err != nil {
+		return Frame{}, err
 	}
 	return f, nil
 }
