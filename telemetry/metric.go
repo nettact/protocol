@@ -48,6 +48,17 @@ const (
 
 	IfaceUp MetricKind = "iface.up"
 
+	// Local Wi-Fi link metrics (LayerWireless). Emitted per wireless adapter by
+	// the interface collector, Target=<interface name>, MonitorID="". Only honest
+	// known values are emitted: an unreadable adapter produces NO wifi.up sample
+	// (a chart gap, never a synthetic zero/third-state), and the numeric link
+	// values are emitted only when connected AND the driver reports them.
+	WiFiUp         MetricKind = "wifi.up"           // bool: 1 connected / 0 disconnected (readable only)
+	WiFiSignalDBm  MetricKind = "wifi.signal_dbm"   // signal strength, dBm
+	WiFiQualityPct MetricKind = "wifi.quality_pct"  // link quality, percent
+	WiFiLinkRxMbps MetricKind = "wifi.link_rx_mbps" // receive link rate, Mbps
+	WiFiLinkTxMbps MetricKind = "wifi.link_tx_mbps" // transmit link rate, Mbps
+
 	// Agent self-status (heartbeat), so status is reported outbound without the
 	// agent exposing any endpoint.
 	AgentUptime     MetricKind = "agent.uptime_s"
@@ -85,4 +96,6 @@ const (
 	UnitBytes = "bytes"
 	UnitBps   = "bps"  // bytes per second
 	UnitLoad  = "load" // load average (dimensionless)
+	UnitDBm   = "dbm"  // signal strength in decibel-milliwatts
+	UnitMbps  = "mbps" // link rate in megabits per second
 )

@@ -30,8 +30,23 @@ func samplePacket() telemetry.Packet {
 			{ID: "evt-1", TS: ts, Type: telemetry.EventIfaceDown, Layer: telemetry.HealthLayer("local"), Severity: telemetry.SeverityWarn, Message: "iface down", Attrs: map[string]string{"iface": "eth0"}},
 		},
 		InventoryDelta: []telemetry.InventoryItem{
-			{Kind: telemetry.InventoryInterface, Op: telemetry.OpUpsert, ID: "eth0", Name: "eth0", Addrs: []string{"10.0.0.2"}, Gateway: "10.0.0.1", DNS: []string{"1.1.1.1", "8.8.8.8"}, Up: false},
 			{Kind: telemetry.InventoryDevice, Op: telemetry.OpUpsert, ID: "aa:bb:cc:dd:ee:ff", MAC: "aa:bb:cc:dd:ee:ff", IP: "10.0.0.5", Hostname: "printer", Vendor: "HP", LastSeen: ts},
+		},
+		InterfaceSnapshots: []telemetry.InterfaceSnapshot{
+			{
+				SampledAt: ts,
+				WiFiState: telemetry.WiFiCollectionOK,
+				Interfaces: []telemetry.InterfaceState{
+					{Name: "eth0", Addrs: []string{"10.0.0.2/24"}, Gateway: "10.0.0.1", DNS: []string{"1.1.1.1"}, Up: true},
+					{Name: "wlan0", Addrs: []string{"192.168.1.2/24"}, Up: true, IsWireless: true, WiFi: &telemetry.WiFiInfo{
+						State: telemetry.WiFiConnected, Reason: telemetry.WiFiReasonPermission,
+						SSID: "home", Band: telemetry.WiFiBand5, Channel: 36,
+					}},
+				},
+			},
+			// Explicit empty is a semantic shape: protobuf decode must reconstruct
+			// a non-nil empty slice so JSON remains `interfaces: []`, not null.
+			{SampledAt: ts.Add(time.Second), WiFiState: telemetry.WiFiCollectionOK, Interfaces: []telemetry.InterfaceState{}},
 		},
 	}
 }
@@ -166,7 +181,7 @@ func TestFrameVariantValidation(t *testing.T) {
 	ack := sampleAck()
 	hello := Hello{SchemaVersion: 1}
 	bad := []Frame{
-		{}, // empty
+		{},                         // empty
 		{Hello: &hello, Ack: &ack}, // two payloads
 	}
 	for i, f := range bad {

@@ -59,6 +59,7 @@ message Packet {
   repeated Event events = 7;
   repeated InventoryItem inventory_delta = 8;
   int32 reported_config_version = 9;
+  repeated InterfaceSnapshot interface_snapshots = 11;
 }
 
 // Metric mirrors telemetry.Metric.
@@ -86,8 +87,13 @@ message Event {
   map<string, string> attrs = 7;
 }
 
-// InventoryItem mirrors telemetry.InventoryItem.
+// InventoryItem mirrors telemetry.InventoryItem (device-only). Fields 9-13
+// (the former interface delta: name, addrs, gateway, dns, up) were removed when
+// interface state moved to the authoritative InterfaceSnapshot and are reserved
+// so the numbers/names can never be silently reused.
 message InventoryItem {
+  reserved 9 to 13;
+  reserved "name", "addrs", "gateway", "dns", "up";
   string kind = 1; // open enum (telemetry.InventoryKind)
   string op = 2; // open enum (telemetry.DeltaOp)
   string id = 3;
@@ -97,12 +103,37 @@ message InventoryItem {
   string hostname = 6;
   string vendor = 7;
   google.protobuf.Timestamp last_seen = 8;
-  // interface fields
-  string name = 9;
-  repeated string addrs = 10;
-  string gateway = 11;
-  repeated string dns = 12;
-  bool up = 13;
+}
+
+// InterfaceSnapshot mirrors telemetry.InterfaceSnapshot — the authoritative full
+// set of the agent's network interfaces for one collection round plus the
+// collection-level Wi-Fi verdict.
+message InterfaceSnapshot {
+  google.protobuf.Timestamp sampled_at = 1;
+  string wifi_state = 2; // open enum (telemetry.WiFiCollectionState)
+  string wifi_reason = 3; // open enum (telemetry.WiFiReason)
+  repeated InterfaceState interfaces = 4;
+}
+
+// InterfaceState mirrors telemetry.InterfaceState — one interface row. wifi is
+// absent (nil) on wired rows.
+message InterfaceState {
+  string name = 1;
+  repeated string addrs = 2;
+  string gateway = 3;
+  repeated string dns = 4;
+  bool up = 5;
+  bool is_wireless = 6;
+  WiFiInfo wifi = 7;
+}
+
+// WiFiInfo mirrors telemetry.WiFiInfo — one wireless adapter's current status.
+message WiFiInfo {
+  string state = 1; // open enum (telemetry.WiFiLinkState)
+  string reason = 2; // open enum (telemetry.WiFiReason)
+  string ssid = 3;
+  string band = 4; // open enum (telemetry.WiFiBand)
+  int32 channel = 5;
 }
 
 // HostSnapshot mirrors telemetry.HostSnapshot (ephemeral, on-demand).

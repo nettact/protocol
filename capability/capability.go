@@ -15,6 +15,7 @@ const (
 	InventoryARP Capability = "inventory.arp"
 	NetIfaceRead Capability = "network.interface.read"
 	NetRouteRead Capability = "network.route.read"
+	NetWiFiRead  Capability = "network.wifi.read"
 
 	// Host / system monitoring. Advertised only when the agent is started with
 	// the corresponding --report-* flag, so the console can tell whether a given

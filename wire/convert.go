@@ -60,6 +60,12 @@ func packetToProto(p telemetry.Packet) *pb.Packet {
 			out.InventoryDelta[i] = inventoryToProto(it)
 		}
 	}
+	if len(p.InterfaceSnapshots) > 0 {
+		out.InterfaceSnapshots = make([]*pb.InterfaceSnapshot, len(p.InterfaceSnapshots))
+		for i, s := range p.InterfaceSnapshots {
+			out.InterfaceSnapshots[i] = interfaceSnapshotToProto(s)
+		}
+	}
 	return out
 }
 
@@ -91,6 +97,12 @@ func packetFromProto(p *pb.Packet) telemetry.Packet {
 		out.InventoryDelta = make([]telemetry.InventoryItem, len(p.InventoryDelta))
 		for i, it := range p.InventoryDelta {
 			out.InventoryDelta[i] = inventoryFromProto(it)
+		}
+	}
+	if len(p.InterfaceSnapshots) > 0 {
+		out.InterfaceSnapshots = make([]telemetry.InterfaceSnapshot, len(p.InterfaceSnapshots))
+		for i, s := range p.InterfaceSnapshots {
+			out.InterfaceSnapshots[i] = interfaceSnapshotFromProto(s)
 		}
 	}
 	return out
@@ -150,7 +162,7 @@ func eventFromProto(e *pb.Event) telemetry.Event {
 	}
 }
 
-// ---- InventoryItem ----
+// ---- InventoryItem (device-only) ----
 
 func inventoryToProto(it telemetry.InventoryItem) *pb.InventoryItem {
 	return &pb.InventoryItem{
@@ -162,11 +174,6 @@ func inventoryToProto(it telemetry.InventoryItem) *pb.InventoryItem {
 		Hostname: it.Hostname,
 		Vendor:   it.Vendor,
 		LastSeen: tsToProto(it.LastSeen),
-		Name:     it.Name,
-		Addrs:    it.Addrs,
-		Gateway:  it.Gateway,
-		Dns:      it.DNS,
-		Up:       it.Up,
 	}
 }
 
@@ -180,11 +187,98 @@ func inventoryFromProto(it *pb.InventoryItem) telemetry.InventoryItem {
 		Hostname: it.Hostname,
 		Vendor:   it.Vendor,
 		LastSeen: tsFromProto(it.LastSeen),
-		Name:     it.Name,
-		Addrs:    it.Addrs,
-		Gateway:  it.Gateway,
-		DNS:      it.Dns,
-		Up:       it.Up,
+	}
+}
+
+// ---- InterfaceSnapshot / InterfaceState / WiFiInfo ----
+
+func interfaceSnapshotToProto(s telemetry.InterfaceSnapshot) *pb.InterfaceSnapshot {
+	out := &pb.InterfaceSnapshot{
+		SampledAt:  tsToProto(s.SampledAt),
+		WifiState:  string(s.WiFiState),
+		WifiReason: string(s.WiFiReason),
+	}
+	if len(s.Interfaces) > 0 {
+		out.Interfaces = make([]*pb.InterfaceState, len(s.Interfaces))
+		for i, ifs := range s.Interfaces {
+			out.Interfaces[i] = interfaceStateToProto(ifs)
+		}
+	}
+	return out
+}
+
+func interfaceSnapshotFromProto(s *pb.InterfaceSnapshot) telemetry.InterfaceSnapshot {
+	if s == nil {
+		return telemetry.InterfaceSnapshot{}
+	}
+	// Interfaces is intentionally non-omitempty (telemetry.InterfaceSnapshot): a
+	// zero-interface round must decode to a non-nil empty slice so it serializes
+	// as `interfaces: []` (the authoritative empty set that clears server rows),
+	// never `null`, and reflect.DeepEqual matches the collector's explicit empty
+	// slice. Protobuf repeated fields carry no nil-vs-empty distinction, so
+	// allocate unconditionally rather than guarding on len > 0.
+	out := telemetry.InterfaceSnapshot{
+		SampledAt:  tsFromProto(s.SampledAt),
+		WiFiState:  telemetry.WiFiCollectionState(s.WifiState),
+		WiFiReason: telemetry.WiFiReason(s.WifiReason),
+		Interfaces: make([]telemetry.InterfaceState, len(s.Interfaces)),
+	}
+	for i, ifs := range s.Interfaces {
+		out.Interfaces[i] = interfaceStateFromProto(ifs)
+	}
+	return out
+}
+
+func interfaceStateToProto(s telemetry.InterfaceState) *pb.InterfaceState {
+	return &pb.InterfaceState{
+		Name:       s.Name,
+		Addrs:      s.Addrs,
+		Gateway:    s.Gateway,
+		Dns:        s.DNS,
+		Up:         s.Up,
+		IsWireless: s.IsWireless,
+		Wifi:       wifiInfoToProto(s.WiFi),
+	}
+}
+
+func interfaceStateFromProto(s *pb.InterfaceState) telemetry.InterfaceState {
+	if s == nil {
+		return telemetry.InterfaceState{}
+	}
+	return telemetry.InterfaceState{
+		Name:       s.Name,
+		Addrs:      s.Addrs,
+		Gateway:    s.Gateway,
+		DNS:        s.Dns,
+		Up:         s.Up,
+		IsWireless: s.IsWireless,
+		WiFi:       wifiInfoFromProto(s.Wifi),
+	}
+}
+
+func wifiInfoToProto(w *telemetry.WiFiInfo) *pb.WiFiInfo {
+	if w == nil {
+		return nil
+	}
+	return &pb.WiFiInfo{
+		State:   string(w.State),
+		Reason:  string(w.Reason),
+		Ssid:    w.SSID,
+		Band:    string(w.Band),
+		Channel: int32(w.Channel),
+	}
+}
+
+func wifiInfoFromProto(w *pb.WiFiInfo) *telemetry.WiFiInfo {
+	if w == nil {
+		return nil
+	}
+	return &telemetry.WiFiInfo{
+		State:   telemetry.WiFiLinkState(w.State),
+		Reason:  telemetry.WiFiReason(w.Reason),
+		SSID:    w.Ssid,
+		Band:    telemetry.WiFiBand(w.Band),
+		Channel: int(w.Channel),
 	}
 }
 

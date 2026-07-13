@@ -7,13 +7,14 @@ import "time"
 // Packet is one batched, idempotent telemetry upload. The server dedups on
 // (AgentID, Sequence); see architecture §3.3 / §5.1.
 type Packet struct {
-	SchemaVersion         int             `json:"schema_version"`
-	AgentID               string          `json:"agent_id"`
-	SiteID                string          `json:"site_id"`
-	Sequence              uint64          `json:"sequence"`
-	SentAt                time.Time       `json:"sent_at"`
-	Metrics               []Metric        `json:"metrics,omitempty"`
-	Events                []Event         `json:"events,omitempty"`
-	InventoryDelta        []InventoryItem `json:"inventory_delta,omitempty"`
-	ReportedConfigVersion int             `json:"reported_config_version"`
+	SchemaVersion         int                 `json:"schema_version"`
+	AgentID               string              `json:"agent_id"`
+	SiteID                string              `json:"site_id"`
+	Sequence              uint64              `json:"sequence"`
+	SentAt                time.Time           `json:"sent_at"`
+	Metrics               []Metric            `json:"metrics,omitempty"`
+	Events                []Event             `json:"events,omitempty"`
+	InventoryDelta        []InventoryItem     `json:"inventory_delta,omitempty"`
+	InterfaceSnapshots    []InterfaceSnapshot `json:"interface_snapshots,omitempty"`
+	ReportedConfigVersion int                 `json:"reported_config_version"`
 }
