@@ -1501,6 +1501,7 @@ type ProbeParams struct {
 	ResolverProtocol string            `protobuf:"bytes,22,opt,name=resolver_protocol,json=resolverProtocol,proto3" json:"resolver_protocol,omitempty"`
 	NatTransport     string            `protobuf:"bytes,23,opt,name=nat_transport,json=natTransport,proto3" json:"nat_transport,omitempty"`
 	StunServer2      string            `protobuf:"bytes,24,opt,name=stun_server2,json=stunServer2,proto3" json:"stun_server2,omitempty"`
+	Interface        string            `protobuf:"bytes,25,opt,name=interface,proto3" json:"interface,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1703,6 +1704,13 @@ func (x *ProbeParams) GetStunServer2() string {
 	return ""
 }
 
+func (x *ProbeParams) GetInterface() string {
+	if x != nil {
+		return x.Interface
+	}
+	return ""
+}
+
 // Intervals mirrors config.Intervals.
 type Intervals struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -1895,7 +1903,7 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x06params\x18\x04 \x01(\v2\x1c.nettact.wire.v1.ProbeParamsR\x06params\x12\x12\n" +
 	"\x04name\x18\x05 \x01(\tR\x04name\x12\x1d\n" +
 	"\n" +
-	"monitor_id\x18\x06 \x01(\tR\tmonitorIdJ\x04\b\x03\x10\x04R\x04tier\"\xa1\a\n" +
+	"monitor_id\x18\x06 \x01(\tR\tmonitorIdJ\x04\b\x03\x10\x04R\x04tier\"\xbf\a\n" +
 	"\vProbeParams\x12)\n" +
 	"\x10interval_seconds\x18\x01 \x01(\x05R\x0fintervalSeconds\x12\x1d\n" +
 	"\n" +
@@ -1925,7 +1933,8 @@ const file_telemetry_proto_rawDesc = "" +
 	"\rresolver_port\x18\x15 \x01(\x05R\fresolverPort\x12+\n" +
 	"\x11resolver_protocol\x18\x16 \x01(\tR\x10resolverProtocol\x12#\n" +
 	"\rnat_transport\x18\x17 \x01(\tR\fnatTransport\x12!\n" +
-	"\fstun_server2\x18\x18 \x01(\tR\vstunServer2\x1a:\n" +
+	"\fstun_server2\x18\x18 \x01(\tR\vstunServer2\x12\x1c\n" +
+	"\tinterface\x18\x19 \x01(\tR\tinterface\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"W\n" +

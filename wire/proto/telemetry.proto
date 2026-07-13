@@ -240,6 +240,7 @@ message ProbeParams {
   string resolver_protocol = 22;
   string nat_transport = 23;
   string stun_server2 = 24;
+  string interface = 25;
 }
 
 // Intervals mirrors config.Intervals.

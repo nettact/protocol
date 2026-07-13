@@ -422,6 +422,7 @@ func desiredStateToProto(d config.DesiredState) *pb.DesiredState {
 					Tls:              t.Params.TLS,
 					NatTransport:     t.Params.NATTransport,
 					StunServer2:      t.Params.STUNServer2,
+					Interface:        t.Params.Interface,
 				},
 			}
 		}
@@ -474,6 +475,7 @@ func desiredStateFromProto(d *pb.DesiredState) config.DesiredState {
 					TLS:              t.Params.Tls,
 					NATTransport:     t.Params.NatTransport,
 					STUNServer2:      t.Params.StunServer2,
+					Interface:        t.Params.Interface,
 				}
 			}
 			out.ProbeTargets[i] = pt

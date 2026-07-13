@@ -30,7 +30,7 @@ type ProbeTarget struct {
 	// The agent stamps it onto every Metric the probe emits so the server keys
 	// series per monitor — two monitors on the same target string stay distinct.
 	MonitorID string      `json:"monitor_id,omitempty"`
-	Kind      string      `json:"kind"`           // "icmp" | "dns" | "http" | "tcp" | "nat" (host is server-side only)
+	Kind      string      `json:"kind"`           // "icmp" | "dns" | "http" | "tcp" | "nat" | "gateway" (host is server-side only)
 	Name      string      `json:"name,omitempty"` // human-friendly display name; optional
 	Target    string      `json:"target"`         // "1.1.1.1", "example.com", "https://…"
 	Params    ProbeParams `json:"params"`         // per-protocol probe settings (zero = collector defaults)
@@ -74,6 +74,9 @@ type ProbeParams struct {
 	// NAT (STUN behavior discovery, RFC 5780 / RFC 4787).
 	NATTransport string `json:"nat_transport,omitempty"` // "" | udp | tcp | tls | dtls (default udp); only udp does the filtering test + classic type
 	STUNServer2  string `json:"stun_server2,omitempty"`  // optional 2nd STUN server host[:port] used as the mapping-test alternate when the primary lacks OTHER-ADDRESS
+
+	// Gateway.
+	Interface string `json:"interface,omitempty"` // NIC to resolve the gateway from, matched against IfaceInfo.ID or Name; "" = default interface
 }
 
 // Intervals controls the agent scheduler tiers (seconds).
