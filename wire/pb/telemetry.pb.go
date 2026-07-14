@@ -37,14 +37,16 @@ const (
 // Hello is the first frame an agent sends after the WebSocket upgrade. It
 // replaces the per-request X-Agent-* headers of the old POST transport and
 // carries the config watermark so the server knows what to push on connect.
+// Field 5 (capabilities) was removed when the flat capability list became the
+// three-view PermissionReport and is reserved.
 type Hello struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	SchemaVersion         int32                  `protobuf:"varint,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
 	Hostname              string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	Platform              string                 `protobuf:"bytes,3,opt,name=platform,proto3" json:"platform,omitempty"`
 	AgentVersion          string                 `protobuf:"bytes,4,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
-	Capabilities          []string               `protobuf:"bytes,5,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
 	ReportedConfigVersion int32                  `protobuf:"varint,6,opt,name=reported_config_version,json=reportedConfigVersion,proto3" json:"reported_config_version,omitempty"`
+	Permissions           *PermissionReport      `protobuf:"bytes,7,opt,name=permissions,proto3" json:"permissions,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -107,18 +109,236 @@ func (x *Hello) GetAgentVersion() string {
 	return ""
 }
 
-func (x *Hello) GetCapabilities() []string {
-	if x != nil {
-		return x.Capabilities
-	}
-	return nil
-}
-
 func (x *Hello) GetReportedConfigVersion() int32 {
 	if x != nil {
 		return x.ReportedConfigVersion
 	}
 	return 0
+}
+
+func (x *Hello) GetPermissions() *PermissionReport {
+	if x != nil {
+		return x.Permissions
+	}
+	return nil
+}
+
+// PermissionReport mirrors permission.PermissionReport — the agent's
+// authoritative supported/granted/effective permission views plus policy source
+// and hash. Carried by both Hello and (at enrollment) the HTTP EnrollRequest.
+type PermissionReport struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Supported     []string               `protobuf:"bytes,1,rep,name=supported,proto3" json:"supported,omitempty"`
+	Granted       []string               `protobuf:"bytes,2,rep,name=granted,proto3" json:"granted,omitempty"`
+	Effective     []string               `protobuf:"bytes,3,rep,name=effective,proto3" json:"effective,omitempty"`
+	Source        string                 `protobuf:"bytes,4,opt,name=source,proto3" json:"source,omitempty"`
+	PolicyHash    string                 `protobuf:"bytes,5,opt,name=policy_hash,json=policyHash,proto3" json:"policy_hash,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PermissionReport) Reset() {
+	*x = PermissionReport{}
+	mi := &file_telemetry_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PermissionReport) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PermissionReport) ProtoMessage() {}
+
+func (x *PermissionReport) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PermissionReport.ProtoReflect.Descriptor instead.
+func (*PermissionReport) Descriptor() ([]byte, []int) {
+	return file_telemetry_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *PermissionReport) GetSupported() []string {
+	if x != nil {
+		return x.Supported
+	}
+	return nil
+}
+
+func (x *PermissionReport) GetGranted() []string {
+	if x != nil {
+		return x.Granted
+	}
+	return nil
+}
+
+func (x *PermissionReport) GetEffective() []string {
+	if x != nil {
+		return x.Effective
+	}
+	return nil
+}
+
+func (x *PermissionReport) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *PermissionReport) GetPolicyHash() string {
+	if x != nil {
+		return x.PolicyHash
+	}
+	return ""
+}
+
+// MonitorStatus mirrors wire.MonitorStatus — the agent's full-state evaluation
+// of every pushed monitor for one ConfigVersion.
+type MonitorStatus struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ConfigVersion int32                  `protobuf:"varint,1,opt,name=config_version,json=configVersion,proto3" json:"config_version,omitempty"`
+	PolicyHash    string                 `protobuf:"bytes,2,opt,name=policy_hash,json=policyHash,proto3" json:"policy_hash,omitempty"`
+	Statuses      []*MonitorStatusEntry  `protobuf:"bytes,3,rep,name=statuses,proto3" json:"statuses,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MonitorStatus) Reset() {
+	*x = MonitorStatus{}
+	mi := &file_telemetry_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MonitorStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MonitorStatus) ProtoMessage() {}
+
+func (x *MonitorStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MonitorStatus.ProtoReflect.Descriptor instead.
+func (*MonitorStatus) Descriptor() ([]byte, []int) {
+	return file_telemetry_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *MonitorStatus) GetConfigVersion() int32 {
+	if x != nil {
+		return x.ConfigVersion
+	}
+	return 0
+}
+
+func (x *MonitorStatus) GetPolicyHash() string {
+	if x != nil {
+		return x.PolicyHash
+	}
+	return ""
+}
+
+func (x *MonitorStatus) GetStatuses() []*MonitorStatusEntry {
+	if x != nil {
+		return x.Statuses
+	}
+	return nil
+}
+
+// MonitorStatusEntry mirrors wire.MonitorStatusEntry.
+type MonitorStatusEntry struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	MonitorId          string                 `protobuf:"bytes,1,opt,name=monitor_id,json=monitorId,proto3" json:"monitor_id,omitempty"`
+	Status             string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"` // active | permission_blocked | target_blocked | unsupported
+	MissingPermissions []string               `protobuf:"bytes,3,rep,name=missing_permissions,json=missingPermissions,proto3" json:"missing_permissions,omitempty"`
+	MatchedSelector    string                 `protobuf:"bytes,4,opt,name=matched_selector,json=matchedSelector,proto3" json:"matched_selector,omitempty"`
+	Reason             string                 `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *MonitorStatusEntry) Reset() {
+	*x = MonitorStatusEntry{}
+	mi := &file_telemetry_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MonitorStatusEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MonitorStatusEntry) ProtoMessage() {}
+
+func (x *MonitorStatusEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MonitorStatusEntry.ProtoReflect.Descriptor instead.
+func (*MonitorStatusEntry) Descriptor() ([]byte, []int) {
+	return file_telemetry_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *MonitorStatusEntry) GetMonitorId() string {
+	if x != nil {
+		return x.MonitorId
+	}
+	return ""
+}
+
+func (x *MonitorStatusEntry) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *MonitorStatusEntry) GetMissingPermissions() []string {
+	if x != nil {
+		return x.MissingPermissions
+	}
+	return nil
+}
+
+func (x *MonitorStatusEntry) GetMatchedSelector() string {
+	if x != nil {
+		return x.MatchedSelector
+	}
+	return ""
+}
+
+func (x *MonitorStatusEntry) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
 }
 
 // Frame is the envelope for every message on the agent <-> server WebSocket.
@@ -130,6 +350,7 @@ type Frame struct {
 	//	*Frame_Hello
 	//	*Frame_Packet
 	//	*Frame_HostSnapshot
+	//	*Frame_MonitorStatus
 	//	*Frame_Ack
 	//	*Frame_DesiredState
 	//	*Frame_SnapshotRequest
@@ -140,7 +361,7 @@ type Frame struct {
 
 func (x *Frame) Reset() {
 	*x = Frame{}
-	mi := &file_telemetry_proto_msgTypes[1]
+	mi := &file_telemetry_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -152,7 +373,7 @@ func (x *Frame) String() string {
 func (*Frame) ProtoMessage() {}
 
 func (x *Frame) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[1]
+	mi := &file_telemetry_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -165,7 +386,7 @@ func (x *Frame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Frame.ProtoReflect.Descriptor instead.
 func (*Frame) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{1}
+	return file_telemetry_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Frame) GetMsg() isFrame_Msg {
@@ -197,6 +418,15 @@ func (x *Frame) GetHostSnapshot() *HostSnapshot {
 	if x != nil {
 		if x, ok := x.Msg.(*Frame_HostSnapshot); ok {
 			return x.HostSnapshot
+		}
+	}
+	return nil
+}
+
+func (x *Frame) GetMonitorStatus() *MonitorStatus {
+	if x != nil {
+		if x, ok := x.Msg.(*Frame_MonitorStatus); ok {
+			return x.MonitorStatus
 		}
 	}
 	return nil
@@ -246,6 +476,10 @@ type Frame_HostSnapshot struct {
 	HostSnapshot *HostSnapshot `protobuf:"bytes,3,opt,name=host_snapshot,json=hostSnapshot,proto3,oneof"`
 }
 
+type Frame_MonitorStatus struct {
+	MonitorStatus *MonitorStatus `protobuf:"bytes,7,opt,name=monitor_status,json=monitorStatus,proto3,oneof"`
+}
+
 type Frame_Ack struct {
 	// server -> agent
 	Ack *TelemetryAck `protobuf:"bytes,4,opt,name=ack,proto3,oneof"`
@@ -264,6 +498,8 @@ func (*Frame_Hello) isFrame_Msg() {}
 func (*Frame_Packet) isFrame_Msg() {}
 
 func (*Frame_HostSnapshot) isFrame_Msg() {}
+
+func (*Frame_MonitorStatus) isFrame_Msg() {}
 
 func (*Frame_Ack) isFrame_Msg() {}
 
@@ -292,7 +528,7 @@ type Packet struct {
 
 func (x *Packet) Reset() {
 	*x = Packet{}
-	mi := &file_telemetry_proto_msgTypes[2]
+	mi := &file_telemetry_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -304,7 +540,7 @@ func (x *Packet) String() string {
 func (*Packet) ProtoMessage() {}
 
 func (x *Packet) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[2]
+	mi := &file_telemetry_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -317,7 +553,7 @@ func (x *Packet) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Packet.ProtoReflect.Descriptor instead.
 func (*Packet) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{2}
+	return file_telemetry_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Packet) GetSchemaVersion() int32 {
@@ -409,7 +645,7 @@ type Metric struct {
 
 func (x *Metric) Reset() {
 	*x = Metric{}
-	mi := &file_telemetry_proto_msgTypes[3]
+	mi := &file_telemetry_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -421,7 +657,7 @@ func (x *Metric) String() string {
 func (*Metric) ProtoMessage() {}
 
 func (x *Metric) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[3]
+	mi := &file_telemetry_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -434,7 +670,7 @@ func (x *Metric) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Metric.ProtoReflect.Descriptor instead.
 func (*Metric) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{3}
+	return file_telemetry_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Metric) GetTs() *timestamppb.Timestamp {
@@ -509,7 +745,7 @@ type Event struct {
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_telemetry_proto_msgTypes[4]
+	mi := &file_telemetry_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -521,7 +757,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[4]
+	mi := &file_telemetry_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -534,7 +770,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{4}
+	return file_telemetry_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Event) GetId() string {
@@ -607,7 +843,7 @@ type InventoryItem struct {
 
 func (x *InventoryItem) Reset() {
 	*x = InventoryItem{}
-	mi := &file_telemetry_proto_msgTypes[5]
+	mi := &file_telemetry_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -619,7 +855,7 @@ func (x *InventoryItem) String() string {
 func (*InventoryItem) ProtoMessage() {}
 
 func (x *InventoryItem) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[5]
+	mi := &file_telemetry_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -632,7 +868,7 @@ func (x *InventoryItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InventoryItem.ProtoReflect.Descriptor instead.
 func (*InventoryItem) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{5}
+	return file_telemetry_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *InventoryItem) GetKind() string {
@@ -706,7 +942,7 @@ type InterfaceSnapshot struct {
 
 func (x *InterfaceSnapshot) Reset() {
 	*x = InterfaceSnapshot{}
-	mi := &file_telemetry_proto_msgTypes[6]
+	mi := &file_telemetry_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -718,7 +954,7 @@ func (x *InterfaceSnapshot) String() string {
 func (*InterfaceSnapshot) ProtoMessage() {}
 
 func (x *InterfaceSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[6]
+	mi := &file_telemetry_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -731,7 +967,7 @@ func (x *InterfaceSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InterfaceSnapshot.ProtoReflect.Descriptor instead.
 func (*InterfaceSnapshot) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{6}
+	return file_telemetry_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *InterfaceSnapshot) GetSampledAt() *timestamppb.Timestamp {
@@ -779,7 +1015,7 @@ type InterfaceState struct {
 
 func (x *InterfaceState) Reset() {
 	*x = InterfaceState{}
-	mi := &file_telemetry_proto_msgTypes[7]
+	mi := &file_telemetry_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -791,7 +1027,7 @@ func (x *InterfaceState) String() string {
 func (*InterfaceState) ProtoMessage() {}
 
 func (x *InterfaceState) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[7]
+	mi := &file_telemetry_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -804,7 +1040,7 @@ func (x *InterfaceState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InterfaceState.ProtoReflect.Descriptor instead.
 func (*InterfaceState) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{7}
+	return file_telemetry_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *InterfaceState) GetName() string {
@@ -870,7 +1106,7 @@ type WiFiInfo struct {
 
 func (x *WiFiInfo) Reset() {
 	*x = WiFiInfo{}
-	mi := &file_telemetry_proto_msgTypes[8]
+	mi := &file_telemetry_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -882,7 +1118,7 @@ func (x *WiFiInfo) String() string {
 func (*WiFiInfo) ProtoMessage() {}
 
 func (x *WiFiInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[8]
+	mi := &file_telemetry_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -895,7 +1131,7 @@ func (x *WiFiInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WiFiInfo.ProtoReflect.Descriptor instead.
 func (*WiFiInfo) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{8}
+	return file_telemetry_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *WiFiInfo) GetState() string {
@@ -933,21 +1169,24 @@ func (x *WiFiInfo) GetChannel() int32 {
 	return 0
 }
 
-// HostSnapshot mirrors telemetry.HostSnapshot (ephemeral, on-demand).
+// HostSnapshot mirrors telemetry.HostSnapshot (ephemeral, on-demand). Fields
+// use proto3 presence so a scope-denied field stays absent, matching the Go
+// pointer structs. Scopes carries one result per requested scope.
 type HostSnapshot struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ts            *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=ts,proto3" json:"ts,omitempty"`
 	RequestId     string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	ProcessTotal  int32                  `protobuf:"varint,3,opt,name=process_total,json=processTotal,proto3" json:"process_total,omitempty"`
+	ProcessTotal  *int32                 `protobuf:"varint,3,opt,name=process_total,json=processTotal,proto3,oneof" json:"process_total,omitempty"`
 	Processes     []*ProcessInfo         `protobuf:"bytes,4,rep,name=processes,proto3" json:"processes,omitempty"`
 	Connections   []*ConnectionInfo      `protobuf:"bytes,5,rep,name=connections,proto3" json:"connections,omitempty"`
+	Scopes        []*SnapshotScopeResult `protobuf:"bytes,6,rep,name=scopes,proto3" json:"scopes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *HostSnapshot) Reset() {
 	*x = HostSnapshot{}
-	mi := &file_telemetry_proto_msgTypes[9]
+	mi := &file_telemetry_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -959,7 +1198,7 @@ func (x *HostSnapshot) String() string {
 func (*HostSnapshot) ProtoMessage() {}
 
 func (x *HostSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[9]
+	mi := &file_telemetry_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -972,7 +1211,7 @@ func (x *HostSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostSnapshot.ProtoReflect.Descriptor instead.
 func (*HostSnapshot) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{9}
+	return file_telemetry_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *HostSnapshot) GetTs() *timestamppb.Timestamp {
@@ -990,8 +1229,8 @@ func (x *HostSnapshot) GetRequestId() string {
 }
 
 func (x *HostSnapshot) GetProcessTotal() int32 {
-	if x != nil {
-		return x.ProcessTotal
+	if x != nil && x.ProcessTotal != nil {
+		return *x.ProcessTotal
 	}
 	return 0
 }
@@ -1010,26 +1249,95 @@ func (x *HostSnapshot) GetConnections() []*ConnectionInfo {
 	return nil
 }
 
-// ProcessInfo mirrors telemetry.ProcessInfo.
+func (x *HostSnapshot) GetScopes() []*SnapshotScopeResult {
+	if x != nil {
+		return x.Scopes
+	}
+	return nil
+}
+
+// SnapshotScopeResult mirrors telemetry.SnapshotScopeResult.
+type SnapshotScopeResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Scope         string                 `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"` // collected | denied | unsupported | failed
+	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SnapshotScopeResult) Reset() {
+	*x = SnapshotScopeResult{}
+	mi := &file_telemetry_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SnapshotScopeResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SnapshotScopeResult) ProtoMessage() {}
+
+func (x *SnapshotScopeResult) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SnapshotScopeResult.ProtoReflect.Descriptor instead.
+func (*SnapshotScopeResult) Descriptor() ([]byte, []int) {
+	return file_telemetry_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *SnapshotScopeResult) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+func (x *SnapshotScopeResult) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *SnapshotScopeResult) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+// ProcessInfo mirrors telemetry.ProcessInfo. Basic fields (pid/name/status) are
+// always present when a row exists; the rest use presence per scope.
 type ProcessInfo struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Pid            int32                  `protobuf:"varint,1,opt,name=pid,proto3" json:"pid,omitempty"`
 	Name           string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	User           string                 `protobuf:"bytes,3,opt,name=user,proto3" json:"user,omitempty"`
 	Status         string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
-	CpuPct         float64                `protobuf:"fixed64,5,opt,name=cpu_pct,json=cpuPct,proto3" json:"cpu_pct,omitempty"`
-	RssBytes       uint64                 `protobuf:"varint,6,opt,name=rss_bytes,json=rssBytes,proto3" json:"rss_bytes,omitempty"`
-	VirtBytes      uint64                 `protobuf:"varint,7,opt,name=virt_bytes,json=virtBytes,proto3" json:"virt_bytes,omitempty"`
-	DiskReadBytes  uint64                 `protobuf:"varint,8,opt,name=disk_read_bytes,json=diskReadBytes,proto3" json:"disk_read_bytes,omitempty"`
-	DiskWriteBytes uint64                 `protobuf:"varint,9,opt,name=disk_write_bytes,json=diskWriteBytes,proto3" json:"disk_write_bytes,omitempty"`
-	RunTimeSeconds float64                `protobuf:"fixed64,10,opt,name=run_time_seconds,json=runTimeSeconds,proto3" json:"run_time_seconds,omitempty"`
+	User           *string                `protobuf:"bytes,3,opt,name=user,proto3,oneof" json:"user,omitempty"`
+	CpuPct         *float64               `protobuf:"fixed64,5,opt,name=cpu_pct,json=cpuPct,proto3,oneof" json:"cpu_pct,omitempty"`
+	RssBytes       *uint64                `protobuf:"varint,6,opt,name=rss_bytes,json=rssBytes,proto3,oneof" json:"rss_bytes,omitempty"`
+	VirtBytes      *uint64                `protobuf:"varint,7,opt,name=virt_bytes,json=virtBytes,proto3,oneof" json:"virt_bytes,omitempty"`
+	DiskReadBytes  *uint64                `protobuf:"varint,8,opt,name=disk_read_bytes,json=diskReadBytes,proto3,oneof" json:"disk_read_bytes,omitempty"`
+	DiskWriteBytes *uint64                `protobuf:"varint,9,opt,name=disk_write_bytes,json=diskWriteBytes,proto3,oneof" json:"disk_write_bytes,omitempty"`
+	RunTimeSeconds *float64               `protobuf:"fixed64,10,opt,name=run_time_seconds,json=runTimeSeconds,proto3,oneof" json:"run_time_seconds,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ProcessInfo) Reset() {
 	*x = ProcessInfo{}
-	mi := &file_telemetry_proto_msgTypes[10]
+	mi := &file_telemetry_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1041,7 +1349,7 @@ func (x *ProcessInfo) String() string {
 func (*ProcessInfo) ProtoMessage() {}
 
 func (x *ProcessInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[10]
+	mi := &file_telemetry_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1054,7 +1362,7 @@ func (x *ProcessInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProcessInfo.ProtoReflect.Descriptor instead.
 func (*ProcessInfo) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{10}
+	return file_telemetry_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ProcessInfo) GetPid() int32 {
@@ -1071,13 +1379,6 @@ func (x *ProcessInfo) GetName() string {
 	return ""
 }
 
-func (x *ProcessInfo) GetUser() string {
-	if x != nil {
-		return x.User
-	}
-	return ""
-}
-
 func (x *ProcessInfo) GetStatus() string {
 	if x != nil {
 		return x.Status
@@ -1085,64 +1386,72 @@ func (x *ProcessInfo) GetStatus() string {
 	return ""
 }
 
+func (x *ProcessInfo) GetUser() string {
+	if x != nil && x.User != nil {
+		return *x.User
+	}
+	return ""
+}
+
 func (x *ProcessInfo) GetCpuPct() float64 {
-	if x != nil {
-		return x.CpuPct
+	if x != nil && x.CpuPct != nil {
+		return *x.CpuPct
 	}
 	return 0
 }
 
 func (x *ProcessInfo) GetRssBytes() uint64 {
-	if x != nil {
-		return x.RssBytes
+	if x != nil && x.RssBytes != nil {
+		return *x.RssBytes
 	}
 	return 0
 }
 
 func (x *ProcessInfo) GetVirtBytes() uint64 {
-	if x != nil {
-		return x.VirtBytes
+	if x != nil && x.VirtBytes != nil {
+		return *x.VirtBytes
 	}
 	return 0
 }
 
 func (x *ProcessInfo) GetDiskReadBytes() uint64 {
-	if x != nil {
-		return x.DiskReadBytes
+	if x != nil && x.DiskReadBytes != nil {
+		return *x.DiskReadBytes
 	}
 	return 0
 }
 
 func (x *ProcessInfo) GetDiskWriteBytes() uint64 {
-	if x != nil {
-		return x.DiskWriteBytes
+	if x != nil && x.DiskWriteBytes != nil {
+		return *x.DiskWriteBytes
 	}
 	return 0
 }
 
 func (x *ProcessInfo) GetRunTimeSeconds() float64 {
-	if x != nil {
-		return x.RunTimeSeconds
+	if x != nil && x.RunTimeSeconds != nil {
+		return *x.RunTimeSeconds
 	}
 	return 0
 }
 
-// ConnectionInfo mirrors telemetry.ConnectionInfo.
+// ConnectionInfo mirrors telemetry.ConnectionInfo. Summary fields (proto/state)
+// are always present when a row exists; the rest use presence per scope.
 type ConnectionInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Proto         string                 `protobuf:"bytes,1,opt,name=proto,proto3" json:"proto,omitempty"`
-	LocalAddr     string                 `protobuf:"bytes,2,opt,name=local_addr,json=localAddr,proto3" json:"local_addr,omitempty"`
-	RemoteAddr    string                 `protobuf:"bytes,3,opt,name=remote_addr,json=remoteAddr,proto3" json:"remote_addr,omitempty"`
 	State         string                 `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
-	Pid           int32                  `protobuf:"varint,5,opt,name=pid,proto3" json:"pid,omitempty"`
-	ProcessName   string                 `protobuf:"bytes,6,opt,name=process_name,json=processName,proto3" json:"process_name,omitempty"`
+	LocalAddr     *string                `protobuf:"bytes,2,opt,name=local_addr,json=localAddr,proto3,oneof" json:"local_addr,omitempty"`
+	RemoteAddr    *string                `protobuf:"bytes,3,opt,name=remote_addr,json=remoteAddr,proto3,oneof" json:"remote_addr,omitempty"`
+	Pid           *int32                 `protobuf:"varint,5,opt,name=pid,proto3,oneof" json:"pid,omitempty"`
+	ProcessName   *string                `protobuf:"bytes,6,opt,name=process_name,json=processName,proto3,oneof" json:"process_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ConnectionInfo) Reset() {
 	*x = ConnectionInfo{}
-	mi := &file_telemetry_proto_msgTypes[11]
+	mi := &file_telemetry_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1154,7 +1463,7 @@ func (x *ConnectionInfo) String() string {
 func (*ConnectionInfo) ProtoMessage() {}
 
 func (x *ConnectionInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[11]
+	mi := &file_telemetry_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1167,26 +1476,12 @@ func (x *ConnectionInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConnectionInfo.ProtoReflect.Descriptor instead.
 func (*ConnectionInfo) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{11}
+	return file_telemetry_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ConnectionInfo) GetProto() string {
 	if x != nil {
 		return x.Proto
-	}
-	return ""
-}
-
-func (x *ConnectionInfo) GetLocalAddr() string {
-	if x != nil {
-		return x.LocalAddr
-	}
-	return ""
-}
-
-func (x *ConnectionInfo) GetRemoteAddr() string {
-	if x != nil {
-		return x.RemoteAddr
 	}
 	return ""
 }
@@ -1198,16 +1493,30 @@ func (x *ConnectionInfo) GetState() string {
 	return ""
 }
 
+func (x *ConnectionInfo) GetLocalAddr() string {
+	if x != nil && x.LocalAddr != nil {
+		return *x.LocalAddr
+	}
+	return ""
+}
+
+func (x *ConnectionInfo) GetRemoteAddr() string {
+	if x != nil && x.RemoteAddr != nil {
+		return *x.RemoteAddr
+	}
+	return ""
+}
+
 func (x *ConnectionInfo) GetPid() int32 {
-	if x != nil {
-		return x.Pid
+	if x != nil && x.Pid != nil {
+		return *x.Pid
 	}
 	return 0
 }
 
 func (x *ConnectionInfo) GetProcessName() string {
-	if x != nil {
-		return x.ProcessName
+	if x != nil && x.ProcessName != nil {
+		return *x.ProcessName
 	}
 	return ""
 }
@@ -1226,7 +1535,7 @@ type TelemetryAck struct {
 
 func (x *TelemetryAck) Reset() {
 	*x = TelemetryAck{}
-	mi := &file_telemetry_proto_msgTypes[12]
+	mi := &file_telemetry_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1238,7 +1547,7 @@ func (x *TelemetryAck) String() string {
 func (*TelemetryAck) ProtoMessage() {}
 
 func (x *TelemetryAck) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[12]
+	mi := &file_telemetry_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1251,7 +1560,7 @@ func (x *TelemetryAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TelemetryAck.ProtoReflect.Descriptor instead.
 func (*TelemetryAck) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{12}
+	return file_telemetry_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *TelemetryAck) GetHighestSequence() uint64 {
@@ -1283,7 +1592,7 @@ type DesiredState struct {
 
 func (x *DesiredState) Reset() {
 	*x = DesiredState{}
-	mi := &file_telemetry_proto_msgTypes[13]
+	mi := &file_telemetry_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1295,7 +1604,7 @@ func (x *DesiredState) String() string {
 func (*DesiredState) ProtoMessage() {}
 
 func (x *DesiredState) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[13]
+	mi := &file_telemetry_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1308,7 +1617,7 @@ func (x *DesiredState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DesiredState.ProtoReflect.Descriptor instead.
 func (*DesiredState) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{13}
+	return file_telemetry_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *DesiredState) GetConfigVersion() int32 {
@@ -1332,19 +1641,20 @@ func (x *DesiredState) GetIntervals() *Intervals {
 	return nil
 }
 
-// SnapshotRequest mirrors config.SnapshotRequest.
+// SnapshotRequest mirrors config.SnapshotRequest. Fields 2-3 (want_processes,
+// want_connections) were removed when snapshots became scope-based and are
+// reserved.
 type SnapshotRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	RequestId       string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	WantProcesses   bool                   `protobuf:"varint,2,opt,name=want_processes,json=wantProcesses,proto3" json:"want_processes,omitempty"`
-	WantConnections bool                   `protobuf:"varint,3,opt,name=want_connections,json=wantConnections,proto3" json:"want_connections,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Scopes        []string               `protobuf:"bytes,4,rep,name=scopes,proto3" json:"scopes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SnapshotRequest) Reset() {
 	*x = SnapshotRequest{}
-	mi := &file_telemetry_proto_msgTypes[14]
+	mi := &file_telemetry_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1356,7 +1666,7 @@ func (x *SnapshotRequest) String() string {
 func (*SnapshotRequest) ProtoMessage() {}
 
 func (x *SnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[14]
+	mi := &file_telemetry_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1369,7 +1679,7 @@ func (x *SnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotRequest.ProtoReflect.Descriptor instead.
 func (*SnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{14}
+	return file_telemetry_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *SnapshotRequest) GetRequestId() string {
@@ -1379,18 +1689,11 @@ func (x *SnapshotRequest) GetRequestId() string {
 	return ""
 }
 
-func (x *SnapshotRequest) GetWantProcesses() bool {
+func (x *SnapshotRequest) GetScopes() []string {
 	if x != nil {
-		return x.WantProcesses
+		return x.Scopes
 	}
-	return false
-}
-
-func (x *SnapshotRequest) GetWantConnections() bool {
-	if x != nil {
-		return x.WantConnections
-	}
-	return false
+	return nil
 }
 
 // ProbeTarget mirrors config.ProbeTarget. Field 3 (tier) was removed and is
@@ -1410,7 +1713,7 @@ type ProbeTarget struct {
 
 func (x *ProbeTarget) Reset() {
 	*x = ProbeTarget{}
-	mi := &file_telemetry_proto_msgTypes[15]
+	mi := &file_telemetry_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1422,7 +1725,7 @@ func (x *ProbeTarget) String() string {
 func (*ProbeTarget) ProtoMessage() {}
 
 func (x *ProbeTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[15]
+	mi := &file_telemetry_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1435,7 +1738,7 @@ func (x *ProbeTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProbeTarget.ProtoReflect.Descriptor instead.
 func (*ProbeTarget) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{15}
+	return file_telemetry_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ProbeTarget) GetKind() string {
@@ -1508,7 +1811,7 @@ type ProbeParams struct {
 
 func (x *ProbeParams) Reset() {
 	*x = ProbeParams{}
-	mi := &file_telemetry_proto_msgTypes[16]
+	mi := &file_telemetry_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1520,7 +1823,7 @@ func (x *ProbeParams) String() string {
 func (*ProbeParams) ProtoMessage() {}
 
 func (x *ProbeParams) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[16]
+	mi := &file_telemetry_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1533,7 +1836,7 @@ func (x *ProbeParams) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProbeParams.ProtoReflect.Descriptor instead.
 func (*ProbeParams) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{16}
+	return file_telemetry_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ProbeParams) GetIntervalSeconds() int32 {
@@ -1722,7 +2025,7 @@ type Intervals struct {
 
 func (x *Intervals) Reset() {
 	*x = Intervals{}
-	mi := &file_telemetry_proto_msgTypes[17]
+	mi := &file_telemetry_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1734,7 +2037,7 @@ func (x *Intervals) String() string {
 func (*Intervals) ProtoMessage() {}
 
 func (x *Intervals) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[17]
+	mi := &file_telemetry_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1747,7 +2050,7 @@ func (x *Intervals) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Intervals.ProtoReflect.Descriptor instead.
 func (*Intervals) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{17}
+	return file_telemetry_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *Intervals) GetBaseSeconds() int32 {
@@ -1768,18 +2071,38 @@ var File_telemetry_proto protoreflect.FileDescriptor
 
 const file_telemetry_proto_rawDesc = "" +
 	"\n" +
-	"\x0ftelemetry.proto\x12\x0fnettact.wire.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe7\x01\n" +
+	"\x0ftelemetry.proto\x12\x0fnettact.wire.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9c\x02\n" +
 	"\x05Hello\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\x05R\rschemaVersion\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x1a\n" +
 	"\bplatform\x18\x03 \x01(\tR\bplatform\x12#\n" +
-	"\ragent_version\x18\x04 \x01(\tR\fagentVersion\x12\"\n" +
-	"\fcapabilities\x18\x05 \x03(\tR\fcapabilities\x126\n" +
-	"\x17reported_config_version\x18\x06 \x01(\x05R\x15reportedConfigVersion\"\xff\x02\n" +
+	"\ragent_version\x18\x04 \x01(\tR\fagentVersion\x126\n" +
+	"\x17reported_config_version\x18\x06 \x01(\x05R\x15reportedConfigVersion\x12C\n" +
+	"\vpermissions\x18\a \x01(\v2!.nettact.wire.v1.PermissionReportR\vpermissionsJ\x04\b\x05\x10\x06R\fcapabilities\"\xa1\x01\n" +
+	"\x10PermissionReport\x12\x1c\n" +
+	"\tsupported\x18\x01 \x03(\tR\tsupported\x12\x18\n" +
+	"\agranted\x18\x02 \x03(\tR\agranted\x12\x1c\n" +
+	"\teffective\x18\x03 \x03(\tR\teffective\x12\x16\n" +
+	"\x06source\x18\x04 \x01(\tR\x06source\x12\x1f\n" +
+	"\vpolicy_hash\x18\x05 \x01(\tR\n" +
+	"policyHash\"\x98\x01\n" +
+	"\rMonitorStatus\x12%\n" +
+	"\x0econfig_version\x18\x01 \x01(\x05R\rconfigVersion\x12\x1f\n" +
+	"\vpolicy_hash\x18\x02 \x01(\tR\n" +
+	"policyHash\x12?\n" +
+	"\bstatuses\x18\x03 \x03(\v2#.nettact.wire.v1.MonitorStatusEntryR\bstatuses\"\xbf\x01\n" +
+	"\x12MonitorStatusEntry\x12\x1d\n" +
+	"\n" +
+	"monitor_id\x18\x01 \x01(\tR\tmonitorId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12/\n" +
+	"\x13missing_permissions\x18\x03 \x03(\tR\x12missingPermissions\x12)\n" +
+	"\x10matched_selector\x18\x04 \x01(\tR\x0fmatchedSelector\x12\x16\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\"\xc8\x03\n" +
 	"\x05Frame\x12.\n" +
 	"\x05hello\x18\x01 \x01(\v2\x16.nettact.wire.v1.HelloH\x00R\x05hello\x121\n" +
 	"\x06packet\x18\x02 \x01(\v2\x17.nettact.wire.v1.PacketH\x00R\x06packet\x12D\n" +
-	"\rhost_snapshot\x18\x03 \x01(\v2\x1d.nettact.wire.v1.HostSnapshotH\x00R\fhostSnapshot\x121\n" +
+	"\rhost_snapshot\x18\x03 \x01(\v2\x1d.nettact.wire.v1.HostSnapshotH\x00R\fhostSnapshot\x12G\n" +
+	"\x0emonitor_status\x18\a \x01(\v2\x1e.nettact.wire.v1.MonitorStatusH\x00R\rmonitorStatus\x121\n" +
 	"\x03ack\x18\x04 \x01(\v2\x1d.nettact.wire.v1.TelemetryAckH\x00R\x03ack\x12D\n" +
 	"\rdesired_state\x18\x05 \x01(\v2\x1d.nettact.wire.v1.DesiredStateH\x00R\fdesiredState\x12M\n" +
 	"\x10snapshot_request\x18\x06 \x01(\v2 .nettact.wire.v1.SnapshotRequestH\x00R\x0fsnapshotRequestB\x05\n" +
@@ -1854,36 +2177,55 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x12\n" +
 	"\x04ssid\x18\x03 \x01(\tR\x04ssid\x12\x12\n" +
 	"\x04band\x18\x04 \x01(\tR\x04band\x12\x18\n" +
-	"\achannel\x18\x05 \x01(\x05R\achannel\"\xfd\x01\n" +
+	"\achannel\x18\x05 \x01(\x05R\achannel\"\xd2\x02\n" +
 	"\fHostSnapshot\x12*\n" +
 	"\x02ts\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x02 \x01(\tR\trequestId\x12#\n" +
-	"\rprocess_total\x18\x03 \x01(\x05R\fprocessTotal\x12:\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\x12(\n" +
+	"\rprocess_total\x18\x03 \x01(\x05H\x00R\fprocessTotal\x88\x01\x01\x12:\n" +
 	"\tprocesses\x18\x04 \x03(\v2\x1c.nettact.wire.v1.ProcessInfoR\tprocesses\x12A\n" +
-	"\vconnections\x18\x05 \x03(\v2\x1f.nettact.wire.v1.ConnectionInfoR\vconnections\"\xb0\x02\n" +
+	"\vconnections\x18\x05 \x03(\v2\x1f.nettact.wire.v1.ConnectionInfoR\vconnections\x12<\n" +
+	"\x06scopes\x18\x06 \x03(\v2$.nettact.wire.v1.SnapshotScopeResultR\x06scopesB\x10\n" +
+	"\x0e_process_total\"[\n" +
+	"\x13SnapshotScopeResult\x12\x14\n" +
+	"\x05scope\x18\x01 \x01(\tR\x05scope\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"\xc3\x03\n" +
 	"\vProcessInfo\x12\x10\n" +
 	"\x03pid\x18\x01 \x01(\x05R\x03pid\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
-	"\x04user\x18\x03 \x01(\tR\x04user\x12\x16\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12\x17\n" +
-	"\acpu_pct\x18\x05 \x01(\x01R\x06cpuPct\x12\x1b\n" +
-	"\trss_bytes\x18\x06 \x01(\x04R\brssBytes\x12\x1d\n" +
+	"\x04user\x18\x03 \x01(\tH\x00R\x04user\x88\x01\x01\x12\x1c\n" +
+	"\acpu_pct\x18\x05 \x01(\x01H\x01R\x06cpuPct\x88\x01\x01\x12 \n" +
+	"\trss_bytes\x18\x06 \x01(\x04H\x02R\brssBytes\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"virt_bytes\x18\a \x01(\x04R\tvirtBytes\x12&\n" +
-	"\x0fdisk_read_bytes\x18\b \x01(\x04R\rdiskReadBytes\x12(\n" +
-	"\x10disk_write_bytes\x18\t \x01(\x04R\x0ediskWriteBytes\x12(\n" +
+	"virt_bytes\x18\a \x01(\x04H\x03R\tvirtBytes\x88\x01\x01\x12+\n" +
+	"\x0fdisk_read_bytes\x18\b \x01(\x04H\x04R\rdiskReadBytes\x88\x01\x01\x12-\n" +
+	"\x10disk_write_bytes\x18\t \x01(\x04H\x05R\x0ediskWriteBytes\x88\x01\x01\x12-\n" +
 	"\x10run_time_seconds\x18\n" +
-	" \x01(\x01R\x0erunTimeSeconds\"\xb1\x01\n" +
-	"\x0eConnectionInfo\x12\x14\n" +
-	"\x05proto\x18\x01 \x01(\tR\x05proto\x12\x1d\n" +
+	" \x01(\x01H\x06R\x0erunTimeSeconds\x88\x01\x01B\a\n" +
+	"\x05_userB\n" +
 	"\n" +
-	"local_addr\x18\x02 \x01(\tR\tlocalAddr\x12\x1f\n" +
-	"\vremote_addr\x18\x03 \x01(\tR\n" +
-	"remoteAddr\x12\x14\n" +
-	"\x05state\x18\x04 \x01(\tR\x05state\x12\x10\n" +
-	"\x03pid\x18\x05 \x01(\x05R\x03pid\x12!\n" +
-	"\fprocess_name\x18\x06 \x01(\tR\vprocessName\"\xa1\x01\n" +
+	"\b_cpu_pctB\f\n" +
+	"\n" +
+	"_rss_bytesB\r\n" +
+	"\v_virt_bytesB\x12\n" +
+	"\x10_disk_read_bytesB\x13\n" +
+	"\x11_disk_write_bytesB\x13\n" +
+	"\x11_run_time_seconds\"\xfd\x01\n" +
+	"\x0eConnectionInfo\x12\x14\n" +
+	"\x05proto\x18\x01 \x01(\tR\x05proto\x12\x14\n" +
+	"\x05state\x18\x04 \x01(\tR\x05state\x12\"\n" +
+	"\n" +
+	"local_addr\x18\x02 \x01(\tH\x00R\tlocalAddr\x88\x01\x01\x12$\n" +
+	"\vremote_addr\x18\x03 \x01(\tH\x01R\n" +
+	"remoteAddr\x88\x01\x01\x12\x15\n" +
+	"\x03pid\x18\x05 \x01(\x05H\x02R\x03pid\x88\x01\x01\x12&\n" +
+	"\fprocess_name\x18\x06 \x01(\tH\x03R\vprocessName\x88\x01\x01B\r\n" +
+	"\v_local_addrB\x0e\n" +
+	"\f_remote_addrB\x06\n" +
+	"\x04_pidB\x0f\n" +
+	"\r_process_name\"\xa1\x01\n" +
 	"\fTelemetryAck\x12)\n" +
 	"\x10highest_sequence\x18\x01 \x01(\x04R\x0fhighestSequence\x12;\n" +
 	"\vserver_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
@@ -1891,12 +2233,11 @@ const file_telemetry_proto_rawDesc = "" +
 	"\fDesiredState\x12%\n" +
 	"\x0econfig_version\x18\x01 \x01(\x05R\rconfigVersion\x12A\n" +
 	"\rprobe_targets\x18\x02 \x03(\v2\x1c.nettact.wire.v1.ProbeTargetR\fprobeTargets\x128\n" +
-	"\tintervals\x18\x03 \x01(\v2\x1a.nettact.wire.v1.IntervalsR\tintervalsJ\x04\b\x04\x10\x05R\x10snapshot_request\"\x82\x01\n" +
+	"\tintervals\x18\x03 \x01(\v2\x1a.nettact.wire.v1.IntervalsR\tintervalsJ\x04\b\x04\x10\x05R\x10snapshot_request\"v\n" +
 	"\x0fSnapshotRequest\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x01 \x01(\tR\trequestId\x12%\n" +
-	"\x0ewant_processes\x18\x02 \x01(\bR\rwantProcesses\x12)\n" +
-	"\x10want_connections\x18\x03 \x01(\bR\x0fwantConnections\"\xae\x01\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x16\n" +
+	"\x06scopes\x18\x04 \x03(\tR\x06scopesJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04R\x0ewant_processesR\x10want_connections\"\xae\x01\n" +
 	"\vProbeTarget\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x124\n" +
@@ -1954,64 +2295,72 @@ func file_telemetry_proto_rawDescGZIP() []byte {
 	return file_telemetry_proto_rawDescData
 }
 
-var file_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_telemetry_proto_goTypes = []any{
 	(*Hello)(nil),                 // 0: nettact.wire.v1.Hello
-	(*Frame)(nil),                 // 1: nettact.wire.v1.Frame
-	(*Packet)(nil),                // 2: nettact.wire.v1.Packet
-	(*Metric)(nil),                // 3: nettact.wire.v1.Metric
-	(*Event)(nil),                 // 4: nettact.wire.v1.Event
-	(*InventoryItem)(nil),         // 5: nettact.wire.v1.InventoryItem
-	(*InterfaceSnapshot)(nil),     // 6: nettact.wire.v1.InterfaceSnapshot
-	(*InterfaceState)(nil),        // 7: nettact.wire.v1.InterfaceState
-	(*WiFiInfo)(nil),              // 8: nettact.wire.v1.WiFiInfo
-	(*HostSnapshot)(nil),          // 9: nettact.wire.v1.HostSnapshot
-	(*ProcessInfo)(nil),           // 10: nettact.wire.v1.ProcessInfo
-	(*ConnectionInfo)(nil),        // 11: nettact.wire.v1.ConnectionInfo
-	(*TelemetryAck)(nil),          // 12: nettact.wire.v1.TelemetryAck
-	(*DesiredState)(nil),          // 13: nettact.wire.v1.DesiredState
-	(*SnapshotRequest)(nil),       // 14: nettact.wire.v1.SnapshotRequest
-	(*ProbeTarget)(nil),           // 15: nettact.wire.v1.ProbeTarget
-	(*ProbeParams)(nil),           // 16: nettact.wire.v1.ProbeParams
-	(*Intervals)(nil),             // 17: nettact.wire.v1.Intervals
-	nil,                           // 18: nettact.wire.v1.Metric.LabelsEntry
-	nil,                           // 19: nettact.wire.v1.Event.AttrsEntry
-	nil,                           // 20: nettact.wire.v1.ProbeParams.HeadersEntry
-	(*timestamppb.Timestamp)(nil), // 21: google.protobuf.Timestamp
+	(*PermissionReport)(nil),      // 1: nettact.wire.v1.PermissionReport
+	(*MonitorStatus)(nil),         // 2: nettact.wire.v1.MonitorStatus
+	(*MonitorStatusEntry)(nil),    // 3: nettact.wire.v1.MonitorStatusEntry
+	(*Frame)(nil),                 // 4: nettact.wire.v1.Frame
+	(*Packet)(nil),                // 5: nettact.wire.v1.Packet
+	(*Metric)(nil),                // 6: nettact.wire.v1.Metric
+	(*Event)(nil),                 // 7: nettact.wire.v1.Event
+	(*InventoryItem)(nil),         // 8: nettact.wire.v1.InventoryItem
+	(*InterfaceSnapshot)(nil),     // 9: nettact.wire.v1.InterfaceSnapshot
+	(*InterfaceState)(nil),        // 10: nettact.wire.v1.InterfaceState
+	(*WiFiInfo)(nil),              // 11: nettact.wire.v1.WiFiInfo
+	(*HostSnapshot)(nil),          // 12: nettact.wire.v1.HostSnapshot
+	(*SnapshotScopeResult)(nil),   // 13: nettact.wire.v1.SnapshotScopeResult
+	(*ProcessInfo)(nil),           // 14: nettact.wire.v1.ProcessInfo
+	(*ConnectionInfo)(nil),        // 15: nettact.wire.v1.ConnectionInfo
+	(*TelemetryAck)(nil),          // 16: nettact.wire.v1.TelemetryAck
+	(*DesiredState)(nil),          // 17: nettact.wire.v1.DesiredState
+	(*SnapshotRequest)(nil),       // 18: nettact.wire.v1.SnapshotRequest
+	(*ProbeTarget)(nil),           // 19: nettact.wire.v1.ProbeTarget
+	(*ProbeParams)(nil),           // 20: nettact.wire.v1.ProbeParams
+	(*Intervals)(nil),             // 21: nettact.wire.v1.Intervals
+	nil,                           // 22: nettact.wire.v1.Metric.LabelsEntry
+	nil,                           // 23: nettact.wire.v1.Event.AttrsEntry
+	nil,                           // 24: nettact.wire.v1.ProbeParams.HeadersEntry
+	(*timestamppb.Timestamp)(nil), // 25: google.protobuf.Timestamp
 }
 var file_telemetry_proto_depIdxs = []int32{
-	0,  // 0: nettact.wire.v1.Frame.hello:type_name -> nettact.wire.v1.Hello
-	2,  // 1: nettact.wire.v1.Frame.packet:type_name -> nettact.wire.v1.Packet
-	9,  // 2: nettact.wire.v1.Frame.host_snapshot:type_name -> nettact.wire.v1.HostSnapshot
-	12, // 3: nettact.wire.v1.Frame.ack:type_name -> nettact.wire.v1.TelemetryAck
-	13, // 4: nettact.wire.v1.Frame.desired_state:type_name -> nettact.wire.v1.DesiredState
-	14, // 5: nettact.wire.v1.Frame.snapshot_request:type_name -> nettact.wire.v1.SnapshotRequest
-	21, // 6: nettact.wire.v1.Packet.sent_at:type_name -> google.protobuf.Timestamp
-	3,  // 7: nettact.wire.v1.Packet.metrics:type_name -> nettact.wire.v1.Metric
-	4,  // 8: nettact.wire.v1.Packet.events:type_name -> nettact.wire.v1.Event
-	5,  // 9: nettact.wire.v1.Packet.inventory_delta:type_name -> nettact.wire.v1.InventoryItem
-	6,  // 10: nettact.wire.v1.Packet.interface_snapshots:type_name -> nettact.wire.v1.InterfaceSnapshot
-	21, // 11: nettact.wire.v1.Metric.ts:type_name -> google.protobuf.Timestamp
-	18, // 12: nettact.wire.v1.Metric.labels:type_name -> nettact.wire.v1.Metric.LabelsEntry
-	21, // 13: nettact.wire.v1.Event.ts:type_name -> google.protobuf.Timestamp
-	19, // 14: nettact.wire.v1.Event.attrs:type_name -> nettact.wire.v1.Event.AttrsEntry
-	21, // 15: nettact.wire.v1.InventoryItem.last_seen:type_name -> google.protobuf.Timestamp
-	21, // 16: nettact.wire.v1.InterfaceSnapshot.sampled_at:type_name -> google.protobuf.Timestamp
-	7,  // 17: nettact.wire.v1.InterfaceSnapshot.interfaces:type_name -> nettact.wire.v1.InterfaceState
-	8,  // 18: nettact.wire.v1.InterfaceState.wifi:type_name -> nettact.wire.v1.WiFiInfo
-	21, // 19: nettact.wire.v1.HostSnapshot.ts:type_name -> google.protobuf.Timestamp
-	10, // 20: nettact.wire.v1.HostSnapshot.processes:type_name -> nettact.wire.v1.ProcessInfo
-	11, // 21: nettact.wire.v1.HostSnapshot.connections:type_name -> nettact.wire.v1.ConnectionInfo
-	21, // 22: nettact.wire.v1.TelemetryAck.server_time:type_name -> google.protobuf.Timestamp
-	15, // 23: nettact.wire.v1.DesiredState.probe_targets:type_name -> nettact.wire.v1.ProbeTarget
-	17, // 24: nettact.wire.v1.DesiredState.intervals:type_name -> nettact.wire.v1.Intervals
-	16, // 25: nettact.wire.v1.ProbeTarget.params:type_name -> nettact.wire.v1.ProbeParams
-	20, // 26: nettact.wire.v1.ProbeParams.headers:type_name -> nettact.wire.v1.ProbeParams.HeadersEntry
-	27, // [27:27] is the sub-list for method output_type
-	27, // [27:27] is the sub-list for method input_type
-	27, // [27:27] is the sub-list for extension type_name
-	27, // [27:27] is the sub-list for extension extendee
-	0,  // [0:27] is the sub-list for field type_name
+	1,  // 0: nettact.wire.v1.Hello.permissions:type_name -> nettact.wire.v1.PermissionReport
+	3,  // 1: nettact.wire.v1.MonitorStatus.statuses:type_name -> nettact.wire.v1.MonitorStatusEntry
+	0,  // 2: nettact.wire.v1.Frame.hello:type_name -> nettact.wire.v1.Hello
+	5,  // 3: nettact.wire.v1.Frame.packet:type_name -> nettact.wire.v1.Packet
+	12, // 4: nettact.wire.v1.Frame.host_snapshot:type_name -> nettact.wire.v1.HostSnapshot
+	2,  // 5: nettact.wire.v1.Frame.monitor_status:type_name -> nettact.wire.v1.MonitorStatus
+	16, // 6: nettact.wire.v1.Frame.ack:type_name -> nettact.wire.v1.TelemetryAck
+	17, // 7: nettact.wire.v1.Frame.desired_state:type_name -> nettact.wire.v1.DesiredState
+	18, // 8: nettact.wire.v1.Frame.snapshot_request:type_name -> nettact.wire.v1.SnapshotRequest
+	25, // 9: nettact.wire.v1.Packet.sent_at:type_name -> google.protobuf.Timestamp
+	6,  // 10: nettact.wire.v1.Packet.metrics:type_name -> nettact.wire.v1.Metric
+	7,  // 11: nettact.wire.v1.Packet.events:type_name -> nettact.wire.v1.Event
+	8,  // 12: nettact.wire.v1.Packet.inventory_delta:type_name -> nettact.wire.v1.InventoryItem
+	9,  // 13: nettact.wire.v1.Packet.interface_snapshots:type_name -> nettact.wire.v1.InterfaceSnapshot
+	25, // 14: nettact.wire.v1.Metric.ts:type_name -> google.protobuf.Timestamp
+	22, // 15: nettact.wire.v1.Metric.labels:type_name -> nettact.wire.v1.Metric.LabelsEntry
+	25, // 16: nettact.wire.v1.Event.ts:type_name -> google.protobuf.Timestamp
+	23, // 17: nettact.wire.v1.Event.attrs:type_name -> nettact.wire.v1.Event.AttrsEntry
+	25, // 18: nettact.wire.v1.InventoryItem.last_seen:type_name -> google.protobuf.Timestamp
+	25, // 19: nettact.wire.v1.InterfaceSnapshot.sampled_at:type_name -> google.protobuf.Timestamp
+	10, // 20: nettact.wire.v1.InterfaceSnapshot.interfaces:type_name -> nettact.wire.v1.InterfaceState
+	11, // 21: nettact.wire.v1.InterfaceState.wifi:type_name -> nettact.wire.v1.WiFiInfo
+	25, // 22: nettact.wire.v1.HostSnapshot.ts:type_name -> google.protobuf.Timestamp
+	14, // 23: nettact.wire.v1.HostSnapshot.processes:type_name -> nettact.wire.v1.ProcessInfo
+	15, // 24: nettact.wire.v1.HostSnapshot.connections:type_name -> nettact.wire.v1.ConnectionInfo
+	13, // 25: nettact.wire.v1.HostSnapshot.scopes:type_name -> nettact.wire.v1.SnapshotScopeResult
+	25, // 26: nettact.wire.v1.TelemetryAck.server_time:type_name -> google.protobuf.Timestamp
+	19, // 27: nettact.wire.v1.DesiredState.probe_targets:type_name -> nettact.wire.v1.ProbeTarget
+	21, // 28: nettact.wire.v1.DesiredState.intervals:type_name -> nettact.wire.v1.Intervals
+	20, // 29: nettact.wire.v1.ProbeTarget.params:type_name -> nettact.wire.v1.ProbeParams
+	24, // 30: nettact.wire.v1.ProbeParams.headers:type_name -> nettact.wire.v1.ProbeParams.HeadersEntry
+	31, // [31:31] is the sub-list for method output_type
+	31, // [31:31] is the sub-list for method input_type
+	31, // [31:31] is the sub-list for extension type_name
+	31, // [31:31] is the sub-list for extension extendee
+	0,  // [0:31] is the sub-list for field type_name
 }
 
 func init() { file_telemetry_proto_init() }
@@ -2019,21 +2368,25 @@ func file_telemetry_proto_init() {
 	if File_telemetry_proto != nil {
 		return
 	}
-	file_telemetry_proto_msgTypes[1].OneofWrappers = []any{
+	file_telemetry_proto_msgTypes[4].OneofWrappers = []any{
 		(*Frame_Hello)(nil),
 		(*Frame_Packet)(nil),
 		(*Frame_HostSnapshot)(nil),
+		(*Frame_MonitorStatus)(nil),
 		(*Frame_Ack)(nil),
 		(*Frame_DesiredState)(nil),
 		(*Frame_SnapshotRequest)(nil),
 	}
+	file_telemetry_proto_msgTypes[12].OneofWrappers = []any{}
+	file_telemetry_proto_msgTypes[14].OneofWrappers = []any{}
+	file_telemetry_proto_msgTypes[15].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_telemetry_proto_rawDesc), len(file_telemetry_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   21,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

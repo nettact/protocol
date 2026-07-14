@@ -1,6 +1,6 @@
 // Package protocol defines the shared wire contract used by the agent,
 // server-lite, and (later) the cloud server. The type packages (telemetry,
-// config, enroll, capability) deliberately have no external dependencies so
+// config, enroll, permission) deliberately have no external dependencies so
 // every consumer can import them without pulling in server or agent code
 // (architecture §15.2-3: one shared protocol, no forks).
 //
@@ -15,7 +15,7 @@ import "fmt"
 // SchemaVersion is the current wire schema version. Bump the major only for
 // breaking changes; additive changes (new optional fields, new string enum
 // values) keep the same version and must be tolerated by older consumers.
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 // ValidateSchema reports whether v is a schema version this build understands.
 // The server calls this at ingress so old servers / new agents degrade

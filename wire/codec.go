@@ -6,7 +6,7 @@
 // Unlike the rest of the protocol module (which is deliberately stdlib-only),
 // this package imports google.golang.org/protobuf. Consumers that stay on JSON
 // need not import it — the protocol/telemetry, protocol/config, protocol/enroll
-// and protocol/capability type packages remain dependency-free.
+// and protocol/permission type packages remain dependency-free.
 package wire
 
 import (

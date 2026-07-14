@@ -1,12 +1,12 @@
 # protocol
 
-NetTact 的共享线缆协议（telemetry / capability / …）。**Apache-2.0**，由 agent、server-core、server-lite 与未来 Cloud 共用——同一套协议，不 fork（架构 §15.2-3）。
+NetTact 的共享线缆协议（telemetry / permission / …）。**Apache-2.0**，由 agent、server-core、server-lite 与未来 Cloud 共用——同一套协议，不 fork（架构 §15.2-3）。
 
-类型包（`telemetry` / `config` / `enroll` / `capability`）**仅依赖 Go 标准库**；唯一例外是可选的 `wire` 编解码包，它额外引入 `google.golang.org/protobuf`——只有导入 `wire` 的消费者才会拉入该依赖。
+类型包（`telemetry` / `config` / `enroll` / `permission`）**仅依赖 Go 标准库**；唯一例外是可选的 `wire` 编解码包，它额外引入 `google.golang.org/protobuf`——只有导入 `wire` 的消费者才会拉入该依赖。
 
 - `version.go` — `SchemaVersion` + `ValidateSchema`
 - `telemetry/` — `Packet` / `Metric` / `Event` / `InventoryItem` / `HealthLayer`
-- `capability/` — Agent 能力枚举（§3.4）
+- `permission/` — 类型化、不可变的本地权限模型（supported / granted / effective 三视图 + `PermissionReport`），由 agent 强制执行、server 摄取与预检、desktop 全权限例外共用（§3）
 - `wire/` — telemetry 上行包与其 ack 的 **JSON / Protobuf** 双格式编解码（按 HTTP `Content-Type` / `Accept` 协商，默认回退 JSON）。Protobuf 显著减小上行流量（架构 §5.1：JSON/Gzip → Protobuf）。
 
 ```

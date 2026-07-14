@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/nettact/protocol/config"
+	"github.com/nettact/protocol/permission"
 	"github.com/nettact/protocol/telemetry"
 	"github.com/nettact/protocol/wire/pb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -284,11 +285,35 @@ func wifiInfoFromProto(w *pb.WiFiInfo) *telemetry.WiFiInfo {
 
 // ---- HostSnapshot ----
 
+// intPtrToInt32Ptr / int32PtrToIntPtr bridge the Go *int (ProcessTotal) and the
+// generated *int32 while preserving nil (absence).
+func intPtrToInt32Ptr(p *int) *int32 {
+	if p == nil {
+		return nil
+	}
+	v := int32(*p)
+	return &v
+}
+
+func int32PtrToIntPtr(p *int32) *int {
+	if p == nil {
+		return nil
+	}
+	v := int(*p)
+	return &v
+}
+
 func hostSnapshotToProto(h telemetry.HostSnapshot) *pb.HostSnapshot {
 	out := &pb.HostSnapshot{
 		Ts:           tsToProto(h.TS),
 		RequestId:    h.RequestID,
-		ProcessTotal: int32(h.ProcessTotal),
+		ProcessTotal: intPtrToInt32Ptr(h.ProcessTotal),
+	}
+	if len(h.Scopes) > 0 {
+		out.Scopes = make([]*pb.SnapshotScopeResult, len(h.Scopes))
+		for i, s := range h.Scopes {
+			out.Scopes[i] = &pb.SnapshotScopeResult{Scope: s.Scope, Status: s.Status, Reason: s.Reason}
+		}
 	}
 	if len(h.Processes) > 0 {
 		out.Processes = make([]*pb.ProcessInfo, len(h.Processes))
@@ -296,8 +321,8 @@ func hostSnapshotToProto(h telemetry.HostSnapshot) *pb.HostSnapshot {
 			out.Processes[i] = &pb.ProcessInfo{
 				Pid:            p.PID,
 				Name:           p.Name,
-				User:           p.User,
 				Status:         p.Status,
+				User:           p.User,
 				CpuPct:         p.CPUPct,
 				RssBytes:       p.RSSBytes,
 				VirtBytes:      p.VirtBytes,
@@ -312,9 +337,9 @@ func hostSnapshotToProto(h telemetry.HostSnapshot) *pb.HostSnapshot {
 		for i, c := range h.Connections {
 			out.Connections[i] = &pb.ConnectionInfo{
 				Proto:       c.Proto,
+				State:       c.State,
 				LocalAddr:   c.LocalAddr,
 				RemoteAddr:  c.RemoteAddr,
-				State:       c.State,
 				Pid:         c.PID,
 				ProcessName: c.ProcessName,
 			}
@@ -327,7 +352,13 @@ func hostSnapshotFromProto(h *pb.HostSnapshot) telemetry.HostSnapshot {
 	out := telemetry.HostSnapshot{
 		TS:           tsFromProto(h.Ts),
 		RequestID:    h.RequestId,
-		ProcessTotal: int(h.ProcessTotal),
+		ProcessTotal: int32PtrToIntPtr(h.ProcessTotal),
+	}
+	if len(h.Scopes) > 0 {
+		out.Scopes = make([]telemetry.SnapshotScopeResult, len(h.Scopes))
+		for i, s := range h.Scopes {
+			out.Scopes[i] = telemetry.SnapshotScopeResult{Scope: s.Scope, Status: s.Status, Reason: s.Reason}
+		}
 	}
 	if len(h.Processes) > 0 {
 		out.Processes = make([]telemetry.ProcessInfo, len(h.Processes))
@@ -335,8 +366,8 @@ func hostSnapshotFromProto(h *pb.HostSnapshot) telemetry.HostSnapshot {
 			out.Processes[i] = telemetry.ProcessInfo{
 				PID:            p.Pid,
 				Name:           p.Name,
-				User:           p.User,
 				Status:         p.Status,
+				User:           p.User,
 				CPUPct:         p.CpuPct,
 				RSSBytes:       p.RssBytes,
 				VirtBytes:      p.VirtBytes,
@@ -351,15 +382,85 @@ func hostSnapshotFromProto(h *pb.HostSnapshot) telemetry.HostSnapshot {
 		for i, c := range h.Connections {
 			out.Connections[i] = telemetry.ConnectionInfo{
 				Proto:       c.Proto,
+				State:       c.State,
 				LocalAddr:   c.LocalAddr,
 				RemoteAddr:  c.RemoteAddr,
-				State:       c.State,
 				PID:         c.Pid,
 				ProcessName: c.ProcessName,
 			}
 		}
 	}
 	return out
+}
+
+// ---- MonitorStatus ----
+
+func monitorStatusToProto(m MonitorStatus) *pb.MonitorStatus {
+	out := &pb.MonitorStatus{
+		ConfigVersion: int32(m.ConfigVersion),
+		PolicyHash:    m.PolicyHash,
+	}
+	if len(m.Statuses) > 0 {
+		out.Statuses = make([]*pb.MonitorStatusEntry, len(m.Statuses))
+		for i, e := range m.Statuses {
+			out.Statuses[i] = &pb.MonitorStatusEntry{
+				MonitorId:          e.MonitorID,
+				Status:             e.Status,
+				MissingPermissions: e.MissingPermissions,
+				MatchedSelector:    e.MatchedSelector,
+				Reason:             e.Reason,
+			}
+		}
+	}
+	return out
+}
+
+func monitorStatusFromProto(m *pb.MonitorStatus) MonitorStatus {
+	if m == nil {
+		return MonitorStatus{}
+	}
+	out := MonitorStatus{
+		ConfigVersion: int(m.ConfigVersion),
+		PolicyHash:    m.PolicyHash,
+	}
+	if len(m.Statuses) > 0 {
+		out.Statuses = make([]MonitorStatusEntry, len(m.Statuses))
+		for i, e := range m.Statuses {
+			out.Statuses[i] = MonitorStatusEntry{
+				MonitorID:          e.MonitorId,
+				Status:             e.Status,
+				MissingPermissions: e.MissingPermissions,
+				MatchedSelector:    e.MatchedSelector,
+				Reason:             e.Reason,
+			}
+		}
+	}
+	return out
+}
+
+// ---- PermissionReport ----
+
+func permissionReportToProto(r permission.PermissionReport) *pb.PermissionReport {
+	return &pb.PermissionReport{
+		Supported:  r.Supported,
+		Granted:    r.Granted,
+		Effective:  r.Effective,
+		Source:     r.Source,
+		PolicyHash: r.PolicyHash,
+	}
+}
+
+func permissionReportFromProto(r *pb.PermissionReport) permission.PermissionReport {
+	if r == nil {
+		return permission.PermissionReport{}
+	}
+	return permission.PermissionReport{
+		Supported:  r.Supported,
+		Granted:    r.Granted,
+		Effective:  r.Effective,
+		Source:     r.Source,
+		PolicyHash: r.PolicyHash,
+	}
 }
 
 // ---- Ack / DesiredState ----
@@ -488,9 +589,8 @@ func desiredStateFromProto(d *pb.DesiredState) config.DesiredState {
 
 func snapshotRequestToProto(r config.SnapshotRequest) *pb.SnapshotRequest {
 	return &pb.SnapshotRequest{
-		RequestId:       r.RequestID,
-		WantProcesses:   r.WantProcesses,
-		WantConnections: r.WantConnections,
+		RequestId: r.RequestID,
+		Scopes:    r.Scopes,
 	}
 }
 
@@ -499,9 +599,8 @@ func snapshotRequestFromProto(r *pb.SnapshotRequest) config.SnapshotRequest {
 		return config.SnapshotRequest{}
 	}
 	return config.SnapshotRequest{
-		RequestID:       r.RequestId,
-		WantProcesses:   r.WantProcesses,
-		WantConnections: r.WantConnections,
+		RequestID: r.RequestId,
+		Scopes:    r.Scopes,
 	}
 }
 
@@ -513,8 +612,8 @@ func helloToProto(h Hello) *pb.Hello {
 		Hostname:              h.Hostname,
 		Platform:              h.Platform,
 		AgentVersion:          h.AgentVersion,
-		Capabilities:          h.Capabilities,
 		ReportedConfigVersion: int32(h.ReportedConfigVersion),
+		Permissions:           permissionReportToProto(h.Permissions),
 	}
 }
 
@@ -527,8 +626,8 @@ func helloFromProto(h *pb.Hello) Hello {
 		Hostname:              h.Hostname,
 		Platform:              h.Platform,
 		AgentVersion:          h.AgentVersion,
-		Capabilities:          h.Capabilities,
 		ReportedConfigVersion: int(h.ReportedConfigVersion),
+		Permissions:           permissionReportFromProto(h.Permissions),
 	}
 }
 
@@ -543,6 +642,8 @@ func frameToProto(f Frame) *pb.Frame {
 		out.Msg = &pb.Frame_Packet{Packet: packetToProto(*f.Packet)}
 	case f.HostSnapshot != nil:
 		out.Msg = &pb.Frame_HostSnapshot{HostSnapshot: hostSnapshotToProto(*f.HostSnapshot)}
+	case f.MonitorStatus != nil:
+		out.Msg = &pb.Frame_MonitorStatus{MonitorStatus: monitorStatusToProto(*f.MonitorStatus)}
 	case f.Ack != nil:
 		out.Msg = &pb.Frame_Ack{Ack: ackToProto(*f.Ack)}
 	case f.DesiredState != nil:
@@ -568,6 +669,9 @@ func frameFromProto(f *pb.Frame) Frame {
 	case *pb.Frame_HostSnapshot:
 		hs := hostSnapshotFromProto(m.HostSnapshot)
 		out.HostSnapshot = &hs
+	case *pb.Frame_MonitorStatus:
+		ms := monitorStatusFromProto(m.MonitorStatus)
+		out.MonitorStatus = &ms
 	case *pb.Frame_Ack:
 		a := ackFromProto(m.Ack)
 		out.Ack = &a

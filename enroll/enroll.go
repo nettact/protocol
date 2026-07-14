@@ -7,20 +7,20 @@ package enroll
 import (
 	"time"
 
-	"github.com/nettact/protocol/capability"
+	"github.com/nettact/protocol/permission"
 )
 
 // EnrollRequest is posted by the agent to /api/v1/enroll on first run.
 type EnrollRequest struct {
-	SchemaVersion   int                     `json:"schema_version"`
-	EnrollmentToken string                  `json:"enrollment_token"`
-	PublicKey       []byte                  `json:"public_key"` // ed25519 public key (32 bytes)
-	Nonce           string                  `json:"nonce"`      // random, signed to prove key possession
-	Signature       []byte                  `json:"signature"`  // ed25519 signature over Nonce bytes
-	Hostname        string                  `json:"hostname"`
-	Platform        string                  `json:"platform"`
-	AgentVersion    string                  `json:"agent_version"`
-	Capabilities    []capability.Capability `json:"capabilities"`
+	SchemaVersion   int                         `json:"schema_version"`
+	EnrollmentToken string                      `json:"enrollment_token"`
+	PublicKey       []byte                      `json:"public_key"` // ed25519 public key (32 bytes)
+	Nonce           string                      `json:"nonce"`      // random, signed to prove key possession
+	Signature       []byte                      `json:"signature"`  // ed25519 signature over Nonce bytes
+	Hostname        string                      `json:"hostname"`
+	Platform        string                      `json:"platform"`
+	AgentVersion    string                      `json:"agent_version"`
+	Permissions     permission.PermissionReport `json:"permissions"`
 }
 
 // EnrollResponse is returned once on successful enrollment. AgentToken is shown

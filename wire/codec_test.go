@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/nettact/protocol/config"
+	"github.com/nettact/protocol/permission"
 	"github.com/nettact/protocol/telemetry"
 )
 
@@ -53,13 +54,34 @@ func samplePacket() telemetry.Packet {
 
 func sampleHostSnapshot() telemetry.HostSnapshot {
 	ts := time.Date(2026, 7, 11, 12, 30, 45, 0, time.UTC)
+	total := 2
+	user := "root"
+	var cpu float64 = 1.5
+	var rss uint64 = 1 << 20
+	var virt uint64 = 1 << 21
+	var dr uint64 = 100
+	var dw uint64 = 200
+	var rt float64 = 3600.5
+	local := "10.0.0.2:80"
+	remote := "1.2.3.4:5555"
+	var pid int32 = 42
+	pname := "nginx"
 	return telemetry.HostSnapshot{
-		TS: ts, RequestID: "req-1", ProcessTotal: 2,
+		TS: ts, RequestID: "req-1", ProcessTotal: &total,
+		Scopes: []telemetry.SnapshotScopeResult{
+			{Scope: "host.process.basic.read", Status: telemetry.ScopeCollected},
+			{Scope: "host.process.owner.read", Status: telemetry.ScopeDenied, Reason: "unsatisfied_dependency"},
+			{Scope: "host.connection.summary.read", Status: telemetry.ScopeCollected},
+		},
 		Processes: []telemetry.ProcessInfo{
-			{PID: 42, Name: "nginx", User: "root", Status: "Running", CPUPct: 1.5, RSSBytes: 1 << 20, VirtBytes: 1 << 21, DiskReadBytes: 100, DiskWriteBytes: 200, RunTimeSeconds: 3600.5},
+			{PID: 42, Name: "nginx", Status: "Running", User: &user, CPUPct: &cpu, RSSBytes: &rss, VirtBytes: &virt, DiskReadBytes: &dr, DiskWriteBytes: &dw, RunTimeSeconds: &rt},
+			// A basic-only row: every optional pointer stays nil (must survive round-trip as nil).
+			{PID: 7, Name: "sshd", Status: "Sleeping"},
 		},
 		Connections: []telemetry.ConnectionInfo{
-			{Proto: "tcp", LocalAddr: "10.0.0.2:80", RemoteAddr: "1.2.3.4:5555", State: "ESTABLISHED", PID: 42, ProcessName: "nginx"},
+			{Proto: "tcp", State: "ESTABLISHED", LocalAddr: &local, RemoteAddr: &remote, PID: &pid, ProcessName: &pname},
+			// A summary-only row: local/remote/owner pointers stay nil.
+			{Proto: "udp", State: "NONE"},
 		},
 	}
 }
@@ -147,15 +169,31 @@ func TestFrameRoundTrip(t *testing.T) {
 	snap := sampleHostSnapshot()
 	ack := sampleAck()
 	ds := sampleDesiredState()
-	sr := config.SnapshotRequest{RequestID: "req-1", WantProcesses: true, WantConnections: false}
+	sr := config.SnapshotRequest{RequestID: "req-1", Scopes: []string{"host.process.basic.read", "host.connection.summary.read"}}
 	hello := Hello{
-		SchemaVersion: 1, Hostname: "host-1", Platform: "windows", AgentVersion: "0.3.0",
-		Capabilities: []string{"probe.icmp", "host.stat.read"}, ReportedConfigVersion: 7,
+		SchemaVersion: 2, Hostname: "host-1", Platform: "windows", AgentVersion: "0.3.0",
+		Permissions: permission.PermissionReport{
+			Supported:  []string{"probe.icmp", "probe.dns"},
+			Granted:    []string{"probe.icmp", "probe.dns"},
+			Effective:  []string{"probe.icmp"},
+			Source:     "environment",
+			PolicyHash: "abc123",
+		},
+		ReportedConfigVersion: 7,
+	}
+	ms := MonitorStatus{
+		ConfigVersion: 8, PolicyHash: "abc123",
+		Statuses: []MonitorStatusEntry{
+			{MonitorID: "probe_mon1", Status: MonitorStatusActive},
+			{MonitorID: "probe_mon2", Status: MonitorStatusPermissionBlocked, MissingPermissions: []string{"probe.http.extended"}, Reason: "method_requires_extended"},
+			{MonitorID: "probe_mon3", Status: MonitorStatusTargetBlocked, MatchedSelector: "scope:loopback", Reason: "literal_denied"},
+		},
 	}
 	frames := map[string]Frame{
 		"hello":            {Hello: &hello},
 		"packet":           {Packet: &pkt},
 		"host_snapshot":    {HostSnapshot: &snap},
+		"monitor_status":   {MonitorStatus: &ms},
 		"ack":              {Ack: &ack},
 		"desired_state":    {DesiredState: &ds},
 		"snapshot_request": {SnapshotRequest: &sr},

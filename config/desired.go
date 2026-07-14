@@ -15,13 +15,13 @@ type DesiredState struct {
 
 // SnapshotRequest is a one-shot ask for a live host snapshot, pushed to the
 // agent as a standalone frame. Not versioned into ConfigVersion — it is
-// transient and cleared once the matching snapshot arrives. The agent honors
-// it only for caps it was started with; a request for a disabled cap is
-// dropped before any collection happens.
+// transient and cleared once the matching snapshot arrives. Scopes are the
+// requested process/connection permission IDs (e.g. host.process.basic.read);
+// the agent evaluates each against its effective policy and always answers,
+// reporting collected/denied/unsupported/failed per scope.
 type SnapshotRequest struct {
-	RequestID       string `json:"request_id"`
-	WantProcesses   bool   `json:"want_processes,omitempty"`
-	WantConnections bool   `json:"want_connections,omitempty"`
+	RequestID string   `json:"request_id"`
+	Scopes    []string `json:"scopes,omitempty"`
 }
 
 // ProbeTarget is one monitoring target pushed to the agent.

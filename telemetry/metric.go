@@ -64,9 +64,9 @@ const (
 	AgentUptime     MetricKind = "agent.uptime_s"
 	AgentWALPending MetricKind = "agent.wal_pending"
 
-	// Host / system metrics (LayerLocal). Emitted only when the agent is started
-	// with --report-host; stored as ordinary time-series so History graphs and
-	// the alert engine work unchanged. Modeled on the NeoHtop dashboard.
+	// Host / system metrics (LayerLocal). Emitted only when the agent is granted
+	// the matching host.* permission; stored as ordinary time-series so History
+	// graphs and the alert engine work unchanged. Modeled on the NeoHtop dashboard.
 	HostCPUPct     MetricKind = "host.cpu.pct"      // overall CPU utilization, Target="host"
 	HostCPUCorePct MetricKind = "host.cpu.core.pct" // per-core, Target="core0","core1",…
 	HostMemPct     MetricKind = "host.mem.pct"

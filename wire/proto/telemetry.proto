@@ -20,13 +20,45 @@ option go_package = "github.com/nettact/protocol/wire/pb;pb";
 // Hello is the first frame an agent sends after the WebSocket upgrade. It
 // replaces the per-request X-Agent-* headers of the old POST transport and
 // carries the config watermark so the server knows what to push on connect.
+// Field 5 (capabilities) was removed when the flat capability list became the
+// three-view PermissionReport and is reserved.
 message Hello {
+  reserved 5;
+  reserved "capabilities";
   int32 schema_version = 1;
   string hostname = 2;
   string platform = 3;
   string agent_version = 4;
-  repeated string capabilities = 5;
   int32 reported_config_version = 6;
+  PermissionReport permissions = 7;
+}
+
+// PermissionReport mirrors permission.PermissionReport — the agent's
+// authoritative supported/granted/effective permission views plus policy source
+// and hash. Carried by both Hello and (at enrollment) the HTTP EnrollRequest.
+message PermissionReport {
+  repeated string supported = 1;
+  repeated string granted = 2;
+  repeated string effective = 3;
+  string source = 4;
+  string policy_hash = 5;
+}
+
+// MonitorStatus mirrors wire.MonitorStatus — the agent's full-state evaluation
+// of every pushed monitor for one ConfigVersion.
+message MonitorStatus {
+  int32 config_version = 1;
+  string policy_hash = 2;
+  repeated MonitorStatusEntry statuses = 3;
+}
+
+// MonitorStatusEntry mirrors wire.MonitorStatusEntry.
+message MonitorStatusEntry {
+  string monitor_id = 1;
+  string status = 2; // active | permission_blocked | target_blocked | unsupported
+  repeated string missing_permissions = 3;
+  string matched_selector = 4;
+  string reason = 5;
 }
 
 // Frame is the envelope for every message on the agent <-> server WebSocket.
@@ -37,6 +69,7 @@ message Frame {
     Hello hello = 1;
     Packet packet = 2;
     HostSnapshot host_snapshot = 3;
+    MonitorStatus monitor_status = 7;
     // server -> agent
     TelemetryAck ack = 4;
     DesiredState desired_state = 5;
@@ -136,37 +169,49 @@ message WiFiInfo {
   int32 channel = 5;
 }
 
-// HostSnapshot mirrors telemetry.HostSnapshot (ephemeral, on-demand).
+// HostSnapshot mirrors telemetry.HostSnapshot (ephemeral, on-demand). Fields
+// use proto3 presence so a scope-denied field stays absent, matching the Go
+// pointer structs. Scopes carries one result per requested scope.
 message HostSnapshot {
   google.protobuf.Timestamp ts = 1;
   string request_id = 2;
-  int32 process_total = 3;
+  optional int32 process_total = 3;
   repeated ProcessInfo processes = 4;
   repeated ConnectionInfo connections = 5;
+  repeated SnapshotScopeResult scopes = 6;
 }
 
-// ProcessInfo mirrors telemetry.ProcessInfo.
+// SnapshotScopeResult mirrors telemetry.SnapshotScopeResult.
+message SnapshotScopeResult {
+  string scope = 1;
+  string status = 2; // collected | denied | unsupported | failed
+  string reason = 3;
+}
+
+// ProcessInfo mirrors telemetry.ProcessInfo. Basic fields (pid/name/status) are
+// always present when a row exists; the rest use presence per scope.
 message ProcessInfo {
   int32 pid = 1;
   string name = 2;
-  string user = 3;
   string status = 4;
-  double cpu_pct = 5;
-  uint64 rss_bytes = 6;
-  uint64 virt_bytes = 7;
-  uint64 disk_read_bytes = 8;
-  uint64 disk_write_bytes = 9;
-  double run_time_seconds = 10;
+  optional string user = 3;
+  optional double cpu_pct = 5;
+  optional uint64 rss_bytes = 6;
+  optional uint64 virt_bytes = 7;
+  optional uint64 disk_read_bytes = 8;
+  optional uint64 disk_write_bytes = 9;
+  optional double run_time_seconds = 10;
 }
 
-// ConnectionInfo mirrors telemetry.ConnectionInfo.
+// ConnectionInfo mirrors telemetry.ConnectionInfo. Summary fields (proto/state)
+// are always present when a row exists; the rest use presence per scope.
 message ConnectionInfo {
   string proto = 1;
-  string local_addr = 2;
-  string remote_addr = 3;
   string state = 4;
-  int32 pid = 5;
-  string process_name = 6;
+  optional string local_addr = 2;
+  optional string remote_addr = 3;
+  optional int32 pid = 5;
+  optional string process_name = 6;
 }
 
 // TelemetryAck is the server -> agent acknowledgment for one Packet frame:
@@ -192,11 +237,14 @@ message DesiredState {
   Intervals intervals = 3;
 }
 
-// SnapshotRequest mirrors config.SnapshotRequest.
+// SnapshotRequest mirrors config.SnapshotRequest. Fields 2-3 (want_processes,
+// want_connections) were removed when snapshots became scope-based and are
+// reserved.
 message SnapshotRequest {
+  reserved 2, 3;
+  reserved "want_processes", "want_connections";
   string request_id = 1;
-  bool want_processes = 2;
-  bool want_connections = 3;
+  repeated string scopes = 4;
 }
 
 // ProbeTarget mirrors config.ProbeTarget. Field 3 (tier) was removed and is

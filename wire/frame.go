@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/nettact/protocol/config"
+	"github.com/nettact/protocol/permission"
 	"github.com/nettact/protocol/telemetry"
 	"github.com/nettact/protocol/wire/pb"
 	"google.golang.org/protobuf/proto"
@@ -13,22 +14,54 @@ import (
 // Hello is the first frame an agent sends after the WebSocket upgrade. It
 // replaces the per-request X-Agent-* headers of the old POST transport and
 // carries the config watermark so the server knows what to push on connect.
+// Permissions is the agent's authoritative supported/granted/effective view,
+// refreshed on every (re)connect.
 type Hello struct {
-	SchemaVersion         int      `json:"schema_version"`
-	Hostname              string   `json:"hostname"`
-	Platform              string   `json:"platform"`
-	AgentVersion          string   `json:"agent_version"`
-	Capabilities          []string `json:"capabilities,omitempty"`
-	ReportedConfigVersion int      `json:"reported_config_version"`
+	SchemaVersion         int                         `json:"schema_version"`
+	Hostname              string                      `json:"hostname"`
+	Platform              string                      `json:"platform"`
+	AgentVersion          string                      `json:"agent_version"`
+	Permissions           permission.PermissionReport `json:"permissions"`
+	ReportedConfigVersion int                         `json:"reported_config_version"`
 }
+
+// MonitorStatus is the agent's full-state report of how it evaluated every
+// pushed monitor against its effective permissions and target-access policy. It
+// is always the complete set for the given ConfigVersion (never a delta): the
+// server upserts these rows and deletes any monitor absent from the frame. The
+// agent sends it after every DesiredState apply and on any runtime transition
+// (DNS flip, redirect block, recovery), coalesced latest-wins.
+type MonitorStatus struct {
+	ConfigVersion int                  `json:"config_version"`
+	PolicyHash    string               `json:"policy_hash"`
+	Statuses      []MonitorStatusEntry `json:"statuses"`
+}
+
+// MonitorStatusEntry is one monitor's execution status.
+type MonitorStatusEntry struct {
+	MonitorID          string   `json:"monitor_id"`
+	Status             string   `json:"status"` // active | permission_blocked | target_blocked | unsupported
+	MissingPermissions []string `json:"missing_permissions,omitempty"`
+	MatchedSelector    string   `json:"matched_selector,omitempty"`
+	Reason             string   `json:"reason,omitempty"` // literal_denied | resolved_denied | redirect_denied | method_requires_extended | …
+}
+
+// Monitor execution status values (MonitorStatusEntry.Status).
+const (
+	MonitorStatusActive            = "active"
+	MonitorStatusPermissionBlocked = "permission_blocked"
+	MonitorStatusTargetBlocked     = "target_blocked"
+	MonitorStatusUnsupported       = "unsupported"
+)
 
 // Frame is the envelope for every message on the agent <-> server WebSocket.
 // Exactly one field is non-nil; MarshalFrame/UnmarshalFrame enforce this.
 type Frame struct {
 	// agent -> server
-	Hello        *Hello                  `json:"hello,omitempty"`
-	Packet       *telemetry.Packet       `json:"packet,omitempty"`
-	HostSnapshot *telemetry.HostSnapshot `json:"host_snapshot,omitempty"`
+	Hello         *Hello                  `json:"hello,omitempty"`
+	Packet        *telemetry.Packet       `json:"packet,omitempty"`
+	HostSnapshot  *telemetry.HostSnapshot `json:"host_snapshot,omitempty"`
+	MonitorStatus *MonitorStatus          `json:"monitor_status,omitempty"`
 	// server -> agent
 	Ack             *Ack                    `json:"ack,omitempty"`
 	DesiredState    *config.DesiredState    `json:"desired_state,omitempty"`
@@ -42,7 +75,7 @@ var ErrFrameVariant = errors.New("wire: frame must carry exactly one payload")
 func (f Frame) variants() int {
 	n := 0
 	for _, set := range []bool{
-		f.Hello != nil, f.Packet != nil, f.HostSnapshot != nil,
+		f.Hello != nil, f.Packet != nil, f.HostSnapshot != nil, f.MonitorStatus != nil,
 		f.Ack != nil, f.DesiredState != nil, f.SnapshotRequest != nil,
 	} {
 		if set {
