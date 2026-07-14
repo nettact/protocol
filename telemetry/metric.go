@@ -25,16 +25,33 @@ type Metric struct {
 type MetricKind string
 
 const (
-	ICMPRTTms    MetricKind = "probe.icmp.rtt_ms"
-	ICMPLoss     MetricKind = "probe.icmp.loss_pct"
-	ICMPJitter   MetricKind = "probe.icmp.jitter_ms"
-	DNSResolve   MetricKind = "probe.dns.resolve_ms"
-	DNSOK        MetricKind = "probe.dns.ok"
-	HTTPStatus   MetricKind = "probe.http.status"
-	HTTPLat      MetricKind = "probe.http.latency_ms"
-	HTTPOK       MetricKind = "probe.http.ok"
-	TCPOK        MetricKind = "probe.tcp.ok"
-	TCPConnectMs MetricKind = "probe.tcp.connect_ms"
+	// ICMP probe results. One ping cycle sends packet_count echoes (default 5)
+	// and emits the loss, the distribution over RECEIVED echoes (avg/min/max), and
+	// the count received — all sharing one TS+Target+MonitorID. Errors/timeouts are
+	// NEVER recorded as zero-latency: rtt/min/max/jitter are emitted only when the
+	// corresponding samples exist, so loss/sample-count carry the failures instead.
+	ICMPRTTms   MetricKind = "probe.icmp.rtt_ms"     // mean RTT over received echoes
+	ICMPLoss    MetricKind = "probe.icmp.loss_pct"   // (sent-received)/sent*100
+	ICMPRTTMin  MetricKind = "probe.icmp.rtt_min_ms" // min RTT over received echoes
+	ICMPRTTMax  MetricKind = "probe.icmp.rtt_max_ms" // max RTT over received echoes
+	ICMPJitter  MetricKind = "probe.icmp.jitter_ms"  // IPDV: mean |Δ| of adjacent received RTTs (emitted only when received>=2)
+	ICMPSamples MetricKind = "probe.icmp.samples"    // count: echoes received this cycle (with loss ⇒ sent)
+
+	DNSResolve MetricKind = "probe.dns.resolve_ms"
+	DNSOK      MetricKind = "probe.dns.ok"
+	HTTPStatus MetricKind = "probe.http.status"
+	HTTPLat    MetricKind = "probe.http.latency_ms"
+	HTTPOK     MetricKind = "probe.http.ok"
+
+	// TCP probe results (single connect per cycle). The dial is split into distinct
+	// timed segments so a slow-DNS vs slow-connect vs slow-TLS problem is separable,
+	// and the failure is classified by error_class. connect_ms is the PURE TCP
+	// connect only (DNS and TLS are separate) and is emitted only on success.
+	TCPOK         MetricKind = "probe.tcp.ok"          // bool: connect (+ optional TLS) succeeded
+	TCPDNSms      MetricKind = "probe.tcp.dns_ms"      // hostname resolution time (omitted for literal-IP targets)
+	TCPConnectMs  MetricKind = "probe.tcp.connect_ms"  // pure TCP connect time (success only)
+	TCPTLSms      MetricKind = "probe.tcp.tls_ms"      // TLS handshake time (only when TLS enabled and connect succeeded)
+	TCPErrorClass MetricKind = "probe.tcp.error_class" // code: 0 none,1 timeout,2 refused,3 unreachable,4 dns,5 tls,9 other
 
 	// NAT / STUN behavior discovery (LayerWAN). Categorical results are encoded as
 	// stable numeric codes in Value (Unit=UnitCode), ordered so a higher code is a
@@ -98,4 +115,17 @@ const (
 	UnitLoad  = "load" // load average (dimensionless)
 	UnitDBm   = "dbm"  // signal strength in decibel-milliwatts
 	UnitMbps  = "mbps" // link rate in megabits per second
+)
+
+// TCP error-class codes carried in probe.tcp.error_class (Unit=UnitCode). Stable
+// numeric codes shared by the producing agent and the consuming server/UI so the
+// meaning never drifts. Emitted every cycle (TCPErrNone on success).
+const (
+	TCPErrNone        = 0 // connect (+ optional TLS) succeeded
+	TCPErrTimeout     = 1 // no answer within the deadline
+	TCPErrRefused     = 2 // connection actively refused (host up, port closed)
+	TCPErrUnreachable = 3 // host/network unreachable (no route)
+	TCPErrDNS         = 4 // hostname resolution failed
+	TCPErrTLS         = 5 // TCP connected but the TLS handshake failed
+	TCPErrOther       = 9 // any other connect error
 )
