@@ -604,6 +604,328 @@ func snapshotRequestFromProto(r *pb.SnapshotRequest) config.SnapshotRequest {
 	}
 }
 
+// ---- IncidentSnapshotRequest / TraceRequest (server->agent push frames) ----
+
+func incidentSnapshotRequestToProto(r config.IncidentSnapshotRequest) *pb.IncidentSnapshotRequest {
+	out := &pb.IncidentSnapshotRequest{
+		RequestId:  r.RequestID,
+		IncidentId: r.IncidentID,
+		Deadline:   tsToProto(r.Deadline),
+	}
+	if len(r.Targets) > 0 {
+		out.Targets = make([]*pb.SnapshotTargetRef, len(r.Targets))
+		for i, t := range r.Targets {
+			out.Targets[i] = &pb.SnapshotTargetRef{
+				MonitorId: t.MonitorID,
+				Kind:      t.Kind,
+				Target:    t.Target,
+				Port:      int32(t.Port),
+			}
+		}
+	}
+	return out
+}
+
+func incidentSnapshotRequestFromProto(r *pb.IncidentSnapshotRequest) config.IncidentSnapshotRequest {
+	if r == nil {
+		return config.IncidentSnapshotRequest{}
+	}
+	out := config.IncidentSnapshotRequest{
+		RequestID:  r.RequestId,
+		IncidentID: r.IncidentId,
+		Deadline:   tsFromProto(r.Deadline),
+	}
+	if len(r.Targets) > 0 {
+		out.Targets = make([]config.SnapshotTargetRef, len(r.Targets))
+		for i, t := range r.Targets {
+			out.Targets[i] = config.SnapshotTargetRef{
+				MonitorID: t.MonitorId,
+				Kind:      t.Kind,
+				Target:    t.Target,
+				Port:      int(t.Port),
+			}
+		}
+	}
+	return out
+}
+
+func traceRequestToProto(r config.TraceRequest) *pb.TraceRequest {
+	return &pb.TraceRequest{
+		ReportId:            r.ReportID,
+		Mode:                r.Mode,
+		DestinationHost:     r.DestinationHost,
+		TcpPort:             int32(r.TCPPort),
+		MaxHops:             int32(r.MaxHops),
+		AttemptsPerHop:      int32(r.AttemptsPerHop),
+		TotalTimeoutMs:      int32(r.TotalTimeoutMs),
+		ResolveHopHostnames: r.ResolveHopHostnames,
+		Deadline:            tsToProto(r.Deadline),
+	}
+}
+
+func traceRequestFromProto(r *pb.TraceRequest) config.TraceRequest {
+	if r == nil {
+		return config.TraceRequest{}
+	}
+	return config.TraceRequest{
+		ReportID:            r.ReportId,
+		Mode:                r.Mode,
+		DestinationHost:     r.DestinationHost,
+		TCPPort:             int(r.TcpPort),
+		MaxHops:             int(r.MaxHops),
+		AttemptsPerHop:      int(r.AttemptsPerHop),
+		TotalTimeoutMs:      int(r.TotalTimeoutMs),
+		ResolveHopHostnames: r.ResolveHopHostnames,
+		Deadline:            tsFromProto(r.Deadline),
+	}
+}
+
+// ---- IncidentSnapshot (agent->server result) ----
+
+func incidentSnapshotToProto(s telemetry.IncidentSnapshot) *pb.IncidentSnapshot {
+	out := &pb.IncidentSnapshot{
+		RequestId:   s.RequestID,
+		IncidentId:  s.IncidentID,
+		CollectedAt: tsToProto(s.CollectedAt),
+		Network:     snapshotNetworkToProto(s.Network),
+		Agent:       snapshotAgentInfoToProto(s.Agent),
+		Resources:   snapshotResourcesToProto(s.Resources),
+	}
+	if len(s.Groups) > 0 {
+		out.Groups = make([]*pb.SnapshotGroupResult, len(s.Groups))
+		for i, g := range s.Groups {
+			out.Groups[i] = &pb.SnapshotGroupResult{
+				Group:       g.Group,
+				Status:      g.Status,
+				Reason:      g.Reason,
+				CollectedAt: tsToProto(g.CollectedAt),
+			}
+		}
+	}
+	if len(s.Targets) > 0 {
+		out.Targets = make([]*pb.SnapshotTargetResult, len(s.Targets))
+		for i, t := range s.Targets {
+			out.Targets[i] = &pb.SnapshotTargetResult{
+				MonitorId:   t.MonitorID,
+				Kind:        t.Kind,
+				Target:      t.Target,
+				ResolvedIps: t.ResolvedIPs,
+				Endpoints:   t.Endpoints,
+				ErrorClass:  t.ErrorClass,
+			}
+		}
+	}
+	return out
+}
+
+func incidentSnapshotFromProto(s *pb.IncidentSnapshot) telemetry.IncidentSnapshot {
+	if s == nil {
+		return telemetry.IncidentSnapshot{}
+	}
+	out := telemetry.IncidentSnapshot{
+		RequestID:   s.RequestId,
+		IncidentID:  s.IncidentId,
+		CollectedAt: tsFromProto(s.CollectedAt),
+		Network:     snapshotNetworkFromProto(s.Network),
+		Agent:       snapshotAgentInfoFromProto(s.Agent),
+		Resources:   snapshotResourcesFromProto(s.Resources),
+	}
+	if len(s.Groups) > 0 {
+		out.Groups = make([]telemetry.SnapshotGroupResult, len(s.Groups))
+		for i, g := range s.Groups {
+			out.Groups[i] = telemetry.SnapshotGroupResult{
+				Group:       g.Group,
+				Status:      g.Status,
+				Reason:      g.Reason,
+				CollectedAt: tsFromProto(g.CollectedAt),
+			}
+		}
+	}
+	if len(s.Targets) > 0 {
+		out.Targets = make([]telemetry.SnapshotTargetResult, len(s.Targets))
+		for i, t := range s.Targets {
+			out.Targets[i] = telemetry.SnapshotTargetResult{
+				MonitorID:   t.MonitorId,
+				Kind:        t.Kind,
+				Target:      t.Target,
+				ResolvedIPs: t.ResolvedIps,
+				Endpoints:   t.Endpoints,
+				ErrorClass:  t.ErrorClass,
+			}
+		}
+	}
+	return out
+}
+
+func snapshotNetworkToProto(n *telemetry.SnapshotNetwork) *pb.SnapshotNetwork {
+	if n == nil {
+		return nil
+	}
+	out := &pb.SnapshotNetwork{DnsServers: n.DNSServers}
+	if len(n.Interfaces) > 0 {
+		out.Interfaces = make([]*pb.SnapshotInterface, len(n.Interfaces))
+		for i, ifc := range n.Interfaces {
+			out.Interfaces[i] = &pb.SnapshotInterface{
+				Name:       ifc.Name,
+				Addrs:      ifc.Addrs,
+				Up:         ifc.Up,
+				IsWireless: ifc.IsWireless,
+			}
+		}
+	}
+	if n.DefaultRoute != nil {
+		out.DefaultRoute = &pb.SnapshotRoute{
+			Gateway:   n.DefaultRoute.Gateway,
+			Interface: n.DefaultRoute.Interface,
+		}
+	}
+	return out
+}
+
+func snapshotNetworkFromProto(n *pb.SnapshotNetwork) *telemetry.SnapshotNetwork {
+	if n == nil {
+		return nil
+	}
+	out := &telemetry.SnapshotNetwork{DNSServers: n.DnsServers}
+	if len(n.Interfaces) > 0 {
+		out.Interfaces = make([]telemetry.SnapshotInterface, len(n.Interfaces))
+		for i, ifc := range n.Interfaces {
+			out.Interfaces[i] = telemetry.SnapshotInterface{
+				Name:       ifc.Name,
+				Addrs:      ifc.Addrs,
+				Up:         ifc.Up,
+				IsWireless: ifc.IsWireless,
+			}
+		}
+	}
+	if n.DefaultRoute != nil {
+		out.DefaultRoute = &telemetry.SnapshotRoute{
+			Gateway:   n.DefaultRoute.Gateway,
+			Interface: n.DefaultRoute.Interface,
+		}
+	}
+	return out
+}
+
+func snapshotAgentInfoToProto(a *telemetry.SnapshotAgentInfo) *pb.SnapshotAgentInfo {
+	if a == nil {
+		return nil
+	}
+	return &pb.SnapshotAgentInfo{
+		AgentId:      a.AgentID,
+		Hostname:     a.Hostname,
+		Platform:     a.Platform,
+		AgentVersion: a.AgentVersion,
+	}
+}
+
+func snapshotAgentInfoFromProto(a *pb.SnapshotAgentInfo) *telemetry.SnapshotAgentInfo {
+	if a == nil {
+		return nil
+	}
+	return &telemetry.SnapshotAgentInfo{
+		AgentID:      a.AgentId,
+		Hostname:     a.Hostname,
+		Platform:     a.Platform,
+		AgentVersion: a.AgentVersion,
+	}
+}
+
+// snapshotResources pointer fields (*float64/*uint64) map directly to the
+// generated proto3-optional pointers, so nil (unreadable) stays nil.
+func snapshotResourcesToProto(r *telemetry.SnapshotResources) *pb.SnapshotResources {
+	if r == nil {
+		return nil
+	}
+	return &pb.SnapshotResources{
+		CpuPercent:       r.CPUPercent,
+		MemoryTotalBytes: r.MemoryTotalBytes,
+		MemoryUsedBytes:  r.MemoryUsedBytes,
+	}
+}
+
+func snapshotResourcesFromProto(r *pb.SnapshotResources) *telemetry.SnapshotResources {
+	if r == nil {
+		return nil
+	}
+	return &telemetry.SnapshotResources{
+		CPUPercent:       r.CpuPercent,
+		MemoryTotalBytes: r.MemoryTotalBytes,
+		MemoryUsedBytes:  r.MemoryUsedBytes,
+	}
+}
+
+// ---- TraceResult (agent->server result) ----
+
+func traceResultToProto(r telemetry.TraceResult) *pb.TraceResult {
+	out := &pb.TraceResult{
+		ReportId:      r.ReportID,
+		Mode:          r.Mode,
+		Status:        r.Status,
+		Reason:        r.Reason,
+		DestinationIp: r.DestinationIP,
+		Reached:       r.Reached,
+		ReachedTtl:    int32(r.ReachedTTL),
+		StartedAt:     tsToProto(r.StartedAt),
+		CompletedAt:   tsToProto(r.CompletedAt),
+	}
+	if len(r.Hops) > 0 {
+		out.Hops = make([]*pb.TraceHop, len(r.Hops))
+		for i, h := range r.Hops {
+			hop := &pb.TraceHop{Ttl: int32(h.TTL)}
+			if len(h.Attempts) > 0 {
+				hop.Attempts = make([]*pb.TraceAttempt, len(h.Attempts))
+				for j, a := range h.Attempts {
+					hop.Attempts[j] = &pb.TraceAttempt{
+						ResponderAddr: a.ResponderAddr,
+						Hostname:      a.Hostname,
+						RttMs:         a.RTTMs,
+						Timeout:       a.Timeout,
+					}
+				}
+			}
+			out.Hops[i] = hop
+		}
+	}
+	return out
+}
+
+func traceResultFromProto(r *pb.TraceResult) telemetry.TraceResult {
+	if r == nil {
+		return telemetry.TraceResult{}
+	}
+	out := telemetry.TraceResult{
+		ReportID:      r.ReportId,
+		Mode:          r.Mode,
+		Status:        r.Status,
+		Reason:        r.Reason,
+		DestinationIP: r.DestinationIp,
+		Reached:       r.Reached,
+		ReachedTTL:    int(r.ReachedTtl),
+		StartedAt:     tsFromProto(r.StartedAt),
+		CompletedAt:   tsFromProto(r.CompletedAt),
+	}
+	if len(r.Hops) > 0 {
+		out.Hops = make([]telemetry.TraceHop, len(r.Hops))
+		for i, h := range r.Hops {
+			hop := telemetry.TraceHop{TTL: int(h.Ttl)}
+			if len(h.Attempts) > 0 {
+				hop.Attempts = make([]telemetry.TraceAttempt, len(h.Attempts))
+				for j, a := range h.Attempts {
+					hop.Attempts[j] = telemetry.TraceAttempt{
+						ResponderAddr: a.ResponderAddr,
+						Hostname:      a.Hostname,
+						RTTMs:         a.RttMs,
+						Timeout:       a.Timeout,
+					}
+				}
+			}
+			out.Hops[i] = hop
+		}
+	}
+	return out
+}
+
 // ---- Hello / Frame ----
 
 func helloToProto(h Hello) *pb.Hello {
@@ -644,12 +966,20 @@ func frameToProto(f Frame) *pb.Frame {
 		out.Msg = &pb.Frame_HostSnapshot{HostSnapshot: hostSnapshotToProto(*f.HostSnapshot)}
 	case f.MonitorStatus != nil:
 		out.Msg = &pb.Frame_MonitorStatus{MonitorStatus: monitorStatusToProto(*f.MonitorStatus)}
+	case f.IncidentSnapshot != nil:
+		out.Msg = &pb.Frame_IncidentSnapshot{IncidentSnapshot: incidentSnapshotToProto(*f.IncidentSnapshot)}
+	case f.TraceResult != nil:
+		out.Msg = &pb.Frame_TraceResult{TraceResult: traceResultToProto(*f.TraceResult)}
 	case f.Ack != nil:
 		out.Msg = &pb.Frame_Ack{Ack: ackToProto(*f.Ack)}
 	case f.DesiredState != nil:
 		out.Msg = &pb.Frame_DesiredState{DesiredState: desiredStateToProto(*f.DesiredState)}
 	case f.SnapshotRequest != nil:
 		out.Msg = &pb.Frame_SnapshotRequest{SnapshotRequest: snapshotRequestToProto(*f.SnapshotRequest)}
+	case f.IncidentSnapshotRequest != nil:
+		out.Msg = &pb.Frame_IncidentSnapshotRequest{IncidentSnapshotRequest: incidentSnapshotRequestToProto(*f.IncidentSnapshotRequest)}
+	case f.TraceRequest != nil:
+		out.Msg = &pb.Frame_TraceRequest{TraceRequest: traceRequestToProto(*f.TraceRequest)}
 	}
 	return out
 }
@@ -672,6 +1002,12 @@ func frameFromProto(f *pb.Frame) Frame {
 	case *pb.Frame_MonitorStatus:
 		ms := monitorStatusFromProto(m.MonitorStatus)
 		out.MonitorStatus = &ms
+	case *pb.Frame_IncidentSnapshot:
+		is := incidentSnapshotFromProto(m.IncidentSnapshot)
+		out.IncidentSnapshot = &is
+	case *pb.Frame_TraceResult:
+		tr := traceResultFromProto(m.TraceResult)
+		out.TraceResult = &tr
 	case *pb.Frame_Ack:
 		a := ackFromProto(m.Ack)
 		out.Ack = &a
@@ -681,6 +1017,12 @@ func frameFromProto(f *pb.Frame) Frame {
 	case *pb.Frame_SnapshotRequest:
 		sr := snapshotRequestFromProto(m.SnapshotRequest)
 		out.SnapshotRequest = &sr
+	case *pb.Frame_IncidentSnapshotRequest:
+		isr := incidentSnapshotRequestFromProto(m.IncidentSnapshotRequest)
+		out.IncidentSnapshotRequest = &isr
+	case *pb.Frame_TraceRequest:
+		trq := traceRequestFromProto(m.TraceRequest)
+		out.TraceRequest = &trq
 	}
 	return out
 }

@@ -4,6 +4,8 @@
 // agent never listens, and users don't edit agent config files (low friction).
 package config
 
+import "time"
+
 // DesiredState is the monitoring configuration for one agent. The agent applies
 // it and echoes ConfigVersion back in reported_config_version so the server can
 // tell when it is up to date.
@@ -22,6 +24,54 @@ type DesiredState struct {
 type SnapshotRequest struct {
 	RequestID string   `json:"request_id"`
 	Scopes    []string `json:"scopes,omitempty"`
+}
+
+// IncidentSnapshotRequest is a one-shot server->agent ask for an immutable
+// incident scene snapshot (INCIDENT-002), pushed as a standalone frame. It is
+// transient — not versioned into ConfigVersion — and answered once with a
+// telemetry.IncidentSnapshot carrying the same RequestID and IncidentID. The
+// agent collects only the allowlisted evidence groups and stops at Deadline,
+// reporting per-group collected/denied/unsupported/failed either way.
+type IncidentSnapshotRequest struct {
+	RequestID  string              `json:"request_id"`        // stable snapshot request id (idempotency key with IncidentID + agent)
+	IncidentID string              `json:"incident_id"`       // the incident this snapshot belongs to
+	Deadline   time.Time           `json:"deadline"`          // absolute collection deadline; past it the agent stops and reports terminal group states
+	Targets    []SnapshotTargetRef `json:"targets,omitempty"` // monitor targets to resolve endpoints/error class for
+}
+
+// SnapshotTargetRef identifies one monitor target the incident snapshot should
+// resolve. It carries enough to key the result by monitor id, choose the probe
+// semantics (Kind), and reconstruct the endpoint (Target + Port).
+type SnapshotTargetRef struct {
+	MonitorID string `json:"monitor_id"`     // stable server-side monitor id (probe_tasks.id)
+	Kind      string `json:"kind"`           // "icmp" | "dns" | "http" | "tcp" | "nat" | "gateway"
+	Target    string `json:"target"`         // literal/host/URL as configured
+	Port      int    `json:"port,omitempty"` // TCP/UDP port when the kind carries one
+}
+
+// Traceroute modes (TraceRequest.Mode / telemetry.TraceResult.Mode). ICMP and
+// TCP are executed independently; there is no automatic fallback between them.
+const (
+	TraceModeICMP = "icmp"
+	TraceModeTCP  = "tcp"
+)
+
+// TraceRequest is a one-shot server->agent ask to run a single incident
+// traceroute (DIAG-001), pushed as a standalone frame. The detecting agent runs
+// exactly one trace per request and answers once with a telemetry.TraceResult
+// carrying the same ReportID. Deadline is the only validity window: past it the
+// agent must not start, and a running trace is bounded by TotalTimeoutMs. The
+// mode is fixed by the request — the agent never falls back to the other mode.
+type TraceRequest struct {
+	ReportID            string    `json:"report_id"`             // stable shared report/request id all referencing incidents read through
+	Mode                string    `json:"mode"`                  // TraceModeICMP | TraceModeTCP
+	DestinationHost     string    `json:"destination_host"`      // host or IP to trace toward
+	TCPPort             int       `json:"tcp_port,omitempty"`    // required for Mode == TraceModeTCP
+	MaxHops             int       `json:"max_hops"`              // TTL ceiling
+	AttemptsPerHop      int       `json:"attempts_per_hop"`      // probes sent per TTL
+	TotalTimeoutMs      int       `json:"total_timeout_ms"`      // overall wall-clock budget for the whole trace
+	ResolveHopHostnames bool      `json:"resolve_hop_hostnames"` // reverse-DNS each responder (default off)
+	Deadline            time.Time `json:"deadline"`              // absolute request validity window
 }
 
 // ProbeTarget is one monitoring target pushed to the agent.

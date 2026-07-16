@@ -7,7 +7,7 @@ import (
 	"github.com/nettact/protocol/config"
 )
 
-func TestDefaultStandaloneIsFrozenNinePermissionBaseline(t *testing.T) {
+func TestDefaultStandaloneIsFrozenBaseline(t *testing.T) {
 	want := []string{
 		"probe.icmp",
 		"probe.dns",
@@ -18,6 +18,8 @@ func TestDefaultStandaloneIsFrozenNinePermissionBaseline(t *testing.T) {
 		"network.interface.status.read",
 		"network.interface.address.read",
 		"network.wifi.status.read",
+		"diagnostic.traceroute.icmp",
+		"diagnostic.traceroute.tcp",
 	}
 	if got := DefaultStandalone().Strings(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("DefaultStandalone() = %v, want exactly %v", got, want)

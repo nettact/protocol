@@ -69,6 +69,14 @@ const (
 	HostConnectionOwnerRead   ID = "host.connection.owner.read"
 )
 
+// Diagnostic traceroute permissions. Each mode is gated independently so a
+// platform that can send ICMP echoes but lacks raw-socket TCP (or vice versa)
+// reports only the mode it can actually run in its supported/effective views.
+const (
+	DiagnosticTracerouteICMP ID = "diagnostic.traceroute.icmp"
+	DiagnosticTracerouteTCP  ID = "diagnostic.traceroute.tcp"
+)
+
 // canonicalOrder is the compiled registry in canonical (stable) order. Set.Sorted
 // and Strings emit IDs in this order; unknown IDs sort after all known ones. It
 // is the single source of truth for All().
@@ -81,6 +89,7 @@ var canonicalOrder = []ID{
 	HostCPURead, HostMemoryRead, HostDiskRead, HostLoadRead, HostUptimeRead, HostNetworkIORead,
 	HostProcessBasicRead, HostProcessOwnerRead, HostProcessResourceRead, HostProcessIORead,
 	HostConnectionSummaryRead, HostConnectionLocalRead, HostConnectionRemoteRead, HostConnectionOwnerRead,
+	DiagnosticTracerouteICMP, DiagnosticTracerouteTCP,
 }
 
 // orderIndex maps a known ID to its canonical rank for sorting.
@@ -256,6 +265,8 @@ func DefaultStandalone() Set {
 		NetIfaceStatusRead,
 		NetIfaceAddressRead,
 		NetWiFiStatusRead,
+		DiagnosticTracerouteICMP,
+		DiagnosticTracerouteTCP,
 	)
 }
 
