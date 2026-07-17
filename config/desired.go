@@ -84,6 +84,12 @@ type ProbeTarget struct {
 	Name      string      `json:"name,omitempty"` // human-friendly display name; optional
 	Target    string      `json:"target"`         // "1.1.1.1", "example.com", "https://…"
 	Params    ProbeParams `json:"params"`         // per-protocol probe settings (zero = collector defaults)
+	// ConfigSerial is this target's material config generation
+	// (probe_tasks.config_serial) at push time. The agent echoes it on every
+	// Metric (Metric.ConfigSerial) and MonitorStatusEntry (TargetConfigSerial)
+	// the target produces, so the server can reject obsolete-generation samples
+	// and distinguish a current-generation status report from a stale one.
+	ConfigSerial int `json:"config_serial,omitempty"`
 }
 
 // ProbeParams carries per-target, per-protocol probe settings. Zero values mean

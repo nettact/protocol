@@ -59,6 +59,15 @@ message MonitorStatusEntry {
   repeated string missing_permissions = 3;
   string matched_selector = 4;
   string reason = 5;
+  // Agent's actual effective per-target schedule for this monitor, so the server
+  // derives freshness from what the agent really runs (which the agent-local
+  // MinProbeInterval floor can raise well above the configured/default interval).
+  int32 effective_interval_seconds = 6;
+  int32 cycle_deadline_ms = 7;
+  // The ProbeTarget.config_serial the agent actually applied for this monitor —
+  // the per-target material generation echoed back so the server can distinguish
+  // a report for the current generation from a stale/obsolete one.
+  int32 target_config_serial = 8;
 }
 
 // Frame is the envelope for every message on the agent <-> server WebSocket.
@@ -109,8 +118,11 @@ message Metric {
   string unit = 6;
   map<string, string> labels = 7;
   // The user-created monitor (probe task) that produced this sample. Empty for
-  // system metrics (host.*, iface.up, agent.*, the built-in gateway probe).
+  // system metrics (host.*, iface.up, agent.*).
   string monitor_id = 8;
+  // The probe target's material config generation (probe_tasks.config_serial)
+  // this sample was produced under. 0 for system metrics (monitor_id == "").
+  int32 config_serial = 9;
 }
 
 // Event mirrors telemetry.Event.
@@ -263,6 +275,10 @@ message ProbeTarget {
   // Stable server-side id of this monitor (probe_tasks.id). The agent stamps it
   // onto every Metric the probe emits so the server can key series per monitor.
   string monitor_id = 6;
+  // The target's material config generation (probe_tasks.config_serial) at push.
+  // The agent echoes it on Metric.config_serial and MonitorStatusEntry
+  // .target_config_serial so the server can reject obsolete-generation samples.
+  int32 config_serial = 7;
 }
 
 // ProbeParams mirrors config.ProbeParams (zero == collector default).

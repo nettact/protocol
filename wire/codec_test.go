@@ -24,7 +24,7 @@ func samplePacket() telemetry.Packet {
 		Metrics: []telemetry.Metric{
 			// One monitor-stamped probe metric and one id-less system metric, so the
 			// round-trip covers both monitor_id shapes.
-			{TS: ts, Kind: telemetry.ICMPRTTms, Target: "1.1.1.1", Layer: telemetry.HealthLayer("internet"), Value: 12.5, Unit: telemetry.UnitMs, Labels: map[string]string{"iface": "eth0", "region": "us"}, MonitorID: "probe_mon1"},
+			{TS: ts, Kind: telemetry.ICMPRTTms, Target: "1.1.1.1", Layer: telemetry.HealthLayer("internet"), Value: 12.5, Unit: telemetry.UnitMs, Labels: map[string]string{"iface": "eth0", "region": "us"}, MonitorID: "probe_mon1", ConfigSerial: 41},
 			{TS: ts, Kind: telemetry.MetricKind("some.future.kind"), Value: 0, Unit: telemetry.UnitBool},
 		},
 		Events: []telemetry.Event{
@@ -90,7 +90,7 @@ func sampleDesiredState() config.DesiredState {
 	return config.DesiredState{
 		ConfigVersion: 8,
 		ProbeTargets: []config.ProbeTarget{
-			{MonitorID: "probe_mon1", Kind: "icmp", Name: "Cloudflare DNS", Target: "1.1.1.1", Params: config.ProbeParams{IntervalSeconds: 10, TimeoutMs: 1000, PacketSize: 56, Retries: 2, PacketCount: 3, GlobalTimeoutMs: 10000}},
+			{MonitorID: "probe_mon1", Kind: "icmp", Name: "Cloudflare DNS", Target: "1.1.1.1", Params: config.ProbeParams{IntervalSeconds: 10, TimeoutMs: 1000, PacketSize: 56, Retries: 2, PacketCount: 3, GlobalTimeoutMs: 10000}, ConfigSerial: 41},
 			{Kind: "http", Name: "Example keyword", Target: "https://example.com", Params: config.ProbeParams{
 				Method: "POST", ExpectedStatus: 200, AcceptedStatuses: "200-299,301",
 				Keyword: "Example Domain", KeywordInvert: true, Headers: map[string]string{"X-Test": "1"},
@@ -184,7 +184,7 @@ func TestFrameRoundTrip(t *testing.T) {
 	ms := MonitorStatus{
 		ConfigVersion: 8, PolicyHash: "abc123",
 		Statuses: []MonitorStatusEntry{
-			{MonitorID: "probe_mon1", Status: MonitorStatusActive},
+			{MonitorID: "probe_mon1", Status: MonitorStatusActive, EffectiveIntervalSeconds: 15, CycleDeadlineMs: 5800, TargetConfigSerial: 41},
 			{MonitorID: "probe_mon2", Status: MonitorStatusPermissionBlocked, MissingPermissions: []string{"probe.http.extended"}, Reason: "method_requires_extended"},
 			{MonitorID: "probe_mon3", Status: MonitorStatusTargetBlocked, MatchedSelector: "scope:loopback", Reason: "literal_denied"},
 		},

@@ -272,6 +272,15 @@ type MonitorStatusEntry struct {
 	MissingPermissions []string               `protobuf:"bytes,3,rep,name=missing_permissions,json=missingPermissions,proto3" json:"missing_permissions,omitempty"`
 	MatchedSelector    string                 `protobuf:"bytes,4,opt,name=matched_selector,json=matchedSelector,proto3" json:"matched_selector,omitempty"`
 	Reason             string                 `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
+	// Agent's actual effective per-target schedule for this monitor, so the server
+	// derives freshness from what the agent really runs (which the agent-local
+	// MinProbeInterval floor can raise well above the configured/default interval).
+	EffectiveIntervalSeconds int32 `protobuf:"varint,6,opt,name=effective_interval_seconds,json=effectiveIntervalSeconds,proto3" json:"effective_interval_seconds,omitempty"`
+	CycleDeadlineMs          int32 `protobuf:"varint,7,opt,name=cycle_deadline_ms,json=cycleDeadlineMs,proto3" json:"cycle_deadline_ms,omitempty"`
+	// The ProbeTarget.config_serial the agent actually applied for this monitor —
+	// the per-target material generation echoed back so the server can distinguish
+	// a report for the current generation from a stale/obsolete one.
+	TargetConfigSerial int32 `protobuf:"varint,8,opt,name=target_config_serial,json=targetConfigSerial,proto3" json:"target_config_serial,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -339,6 +348,27 @@ func (x *MonitorStatusEntry) GetReason() string {
 		return x.Reason
 	}
 	return ""
+}
+
+func (x *MonitorStatusEntry) GetEffectiveIntervalSeconds() int32 {
+	if x != nil {
+		return x.EffectiveIntervalSeconds
+	}
+	return 0
+}
+
+func (x *MonitorStatusEntry) GetCycleDeadlineMs() int32 {
+	if x != nil {
+		return x.CycleDeadlineMs
+	}
+	return 0
+}
+
+func (x *MonitorStatusEntry) GetTargetConfigSerial() int32 {
+	if x != nil {
+		return x.TargetConfigSerial
+	}
+	return 0
 }
 
 // Frame is the envelope for every message on the agent <-> server WebSocket.
@@ -701,8 +731,11 @@ type Metric struct {
 	Unit   string                 `protobuf:"bytes,6,opt,name=unit,proto3" json:"unit,omitempty"`
 	Labels map[string]string      `protobuf:"bytes,7,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// The user-created monitor (probe task) that produced this sample. Empty for
-	// system metrics (host.*, iface.up, agent.*, the built-in gateway probe).
-	MonitorId     string `protobuf:"bytes,8,opt,name=monitor_id,json=monitorId,proto3" json:"monitor_id,omitempty"`
+	// system metrics (host.*, iface.up, agent.*).
+	MonitorId string `protobuf:"bytes,8,opt,name=monitor_id,json=monitorId,proto3" json:"monitor_id,omitempty"`
+	// The probe target's material config generation (probe_tasks.config_serial)
+	// this sample was produced under. 0 for system metrics (monitor_id == "").
+	ConfigSerial  int32 `protobuf:"varint,9,opt,name=config_serial,json=configSerial,proto3" json:"config_serial,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -791,6 +824,13 @@ func (x *Metric) GetMonitorId() string {
 		return x.MonitorId
 	}
 	return ""
+}
+
+func (x *Metric) GetConfigSerial() int32 {
+	if x != nil {
+		return x.ConfigSerial
+	}
+	return 0
 }
 
 // Event mirrors telemetry.Event.
@@ -1770,7 +1810,11 @@ type ProbeTarget struct {
 	Name   string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
 	// Stable server-side id of this monitor (probe_tasks.id). The agent stamps it
 	// onto every Metric the probe emits so the server can key series per monitor.
-	MonitorId     string `protobuf:"bytes,6,opt,name=monitor_id,json=monitorId,proto3" json:"monitor_id,omitempty"`
+	MonitorId string `protobuf:"bytes,6,opt,name=monitor_id,json=monitorId,proto3" json:"monitor_id,omitempty"`
+	// The target's material config generation (probe_tasks.config_serial) at push.
+	// The agent echoes it on Metric.config_serial and MonitorStatusEntry
+	// .target_config_serial so the server can reject obsolete-generation samples.
+	ConfigSerial  int32 `protobuf:"varint,7,opt,name=config_serial,json=configSerial,proto3" json:"config_serial,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1838,6 +1882,13 @@ func (x *ProbeTarget) GetMonitorId() string {
 		return x.MonitorId
 	}
 	return ""
+}
+
+func (x *ProbeTarget) GetConfigSerial() int32 {
+	if x != nil {
+		return x.ConfigSerial
+	}
+	return 0
 }
 
 // ProbeParams mirrors config.ProbeParams (zero == collector default).
@@ -3217,14 +3268,17 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x0econfig_version\x18\x01 \x01(\x05R\rconfigVersion\x12\x1f\n" +
 	"\vpolicy_hash\x18\x02 \x01(\tR\n" +
 	"policyHash\x12?\n" +
-	"\bstatuses\x18\x03 \x03(\v2#.nettact.wire.v1.MonitorStatusEntryR\bstatuses\"\xbf\x01\n" +
+	"\bstatuses\x18\x03 \x03(\v2#.nettact.wire.v1.MonitorStatusEntryR\bstatuses\"\xdb\x02\n" +
 	"\x12MonitorStatusEntry\x12\x1d\n" +
 	"\n" +
 	"monitor_id\x18\x01 \x01(\tR\tmonitorId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12/\n" +
 	"\x13missing_permissions\x18\x03 \x03(\tR\x12missingPermissions\x12)\n" +
 	"\x10matched_selector\x18\x04 \x01(\tR\x0fmatchedSelector\x12\x16\n" +
-	"\x06reason\x18\x05 \x01(\tR\x06reason\"\x8b\x06\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\x12<\n" +
+	"\x1aeffective_interval_seconds\x18\x06 \x01(\x05R\x18effectiveIntervalSeconds\x12*\n" +
+	"\x11cycle_deadline_ms\x18\a \x01(\x05R\x0fcycleDeadlineMs\x120\n" +
+	"\x14target_config_serial\x18\b \x01(\x05R\x12targetConfigSerial\"\x8b\x06\n" +
 	"\x05Frame\x12.\n" +
 	"\x05hello\x18\x01 \x01(\v2\x16.nettact.wire.v1.HelloH\x00R\x05hello\x121\n" +
 	"\x06packet\x18\x02 \x01(\v2\x17.nettact.wire.v1.PacketH\x00R\x06packet\x12D\n" +
@@ -3250,7 +3304,7 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x0finventory_delta\x18\b \x03(\v2\x1e.nettact.wire.v1.InventoryItemR\x0einventoryDelta\x126\n" +
 	"\x17reported_config_version\x18\t \x01(\x05R\x15reportedConfigVersion\x12S\n" +
 	"\x13interface_snapshots\x18\v \x03(\v2\".nettact.wire.v1.InterfaceSnapshotR\x12interfaceSnapshotsJ\x04\b\n" +
-	"\x10\vR\rhost_snapshot\"\xb7\x02\n" +
+	"\x10\vR\rhost_snapshot\"\xdc\x02\n" +
 	"\x06Metric\x12*\n" +
 	"\x02ts\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x16\n" +
@@ -3260,7 +3314,8 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x04unit\x18\x06 \x01(\tR\x04unit\x12;\n" +
 	"\x06labels\x18\a \x03(\v2#.nettact.wire.v1.Metric.LabelsEntryR\x06labels\x12\x1d\n" +
 	"\n" +
-	"monitor_id\x18\b \x01(\tR\tmonitorId\x1a9\n" +
+	"monitor_id\x18\b \x01(\tR\tmonitorId\x12#\n" +
+	"\rconfig_serial\x18\t \x01(\x05R\fconfigSerial\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x96\x02\n" +
@@ -3369,14 +3424,15 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x0fSnapshotRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x16\n" +
-	"\x06scopes\x18\x04 \x03(\tR\x06scopesJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04R\x0ewant_processesR\x10want_connections\"\xae\x01\n" +
+	"\x06scopes\x18\x04 \x03(\tR\x06scopesJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04R\x0ewant_processesR\x10want_connections\"\xd3\x01\n" +
 	"\vProbeTarget\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x124\n" +
 	"\x06params\x18\x04 \x01(\v2\x1c.nettact.wire.v1.ProbeParamsR\x06params\x12\x12\n" +
 	"\x04name\x18\x05 \x01(\tR\x04name\x12\x1d\n" +
 	"\n" +
-	"monitor_id\x18\x06 \x01(\tR\tmonitorIdJ\x04\b\x03\x10\x04R\x04tier\"\xbf\a\n" +
+	"monitor_id\x18\x06 \x01(\tR\tmonitorId\x12#\n" +
+	"\rconfig_serial\x18\a \x01(\x05R\fconfigSerialJ\x04\b\x03\x10\x04R\x04tier\"\xbf\a\n" +
 	"\vProbeParams\x12)\n" +
 	"\x10interval_seconds\x18\x01 \x01(\x05R\x0fintervalSeconds\x12\x1d\n" +
 	"\n" +

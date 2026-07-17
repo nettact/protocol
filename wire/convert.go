@@ -113,27 +113,29 @@ func packetFromProto(p *pb.Packet) telemetry.Packet {
 
 func metricToProto(m telemetry.Metric) *pb.Metric {
 	return &pb.Metric{
-		Ts:        tsToProto(m.TS),
-		Kind:      string(m.Kind),
-		Target:    m.Target,
-		Layer:     string(m.Layer),
-		Value:     m.Value,
-		Unit:      m.Unit,
-		Labels:    m.Labels,
-		MonitorId: m.MonitorID,
+		Ts:           tsToProto(m.TS),
+		Kind:         string(m.Kind),
+		Target:       m.Target,
+		Layer:        string(m.Layer),
+		Value:        m.Value,
+		Unit:         m.Unit,
+		Labels:       m.Labels,
+		MonitorId:    m.MonitorID,
+		ConfigSerial: int32(m.ConfigSerial),
 	}
 }
 
 func metricFromProto(m *pb.Metric) telemetry.Metric {
 	return telemetry.Metric{
-		TS:        tsFromProto(m.Ts),
-		Kind:      telemetry.MetricKind(m.Kind),
-		Target:    m.Target,
-		Layer:     telemetry.HealthLayer(m.Layer),
-		Value:     m.Value,
-		Unit:      m.Unit,
-		Labels:    m.Labels,
-		MonitorID: m.MonitorId,
+		TS:           tsFromProto(m.Ts),
+		Kind:         telemetry.MetricKind(m.Kind),
+		Target:       m.Target,
+		Layer:        telemetry.HealthLayer(m.Layer),
+		Value:        m.Value,
+		Unit:         m.Unit,
+		Labels:       m.Labels,
+		MonitorID:    m.MonitorId,
+		ConfigSerial: int(m.ConfigSerial),
 	}
 }
 
@@ -404,11 +406,14 @@ func monitorStatusToProto(m MonitorStatus) *pb.MonitorStatus {
 		out.Statuses = make([]*pb.MonitorStatusEntry, len(m.Statuses))
 		for i, e := range m.Statuses {
 			out.Statuses[i] = &pb.MonitorStatusEntry{
-				MonitorId:          e.MonitorID,
-				Status:             e.Status,
-				MissingPermissions: e.MissingPermissions,
-				MatchedSelector:    e.MatchedSelector,
-				Reason:             e.Reason,
+				MonitorId:                e.MonitorID,
+				Status:                   e.Status,
+				MissingPermissions:       e.MissingPermissions,
+				MatchedSelector:          e.MatchedSelector,
+				Reason:                   e.Reason,
+				EffectiveIntervalSeconds: int32(e.EffectiveIntervalSeconds),
+				CycleDeadlineMs:          int32(e.CycleDeadlineMs),
+				TargetConfigSerial:       int32(e.TargetConfigSerial),
 			}
 		}
 	}
@@ -427,11 +432,14 @@ func monitorStatusFromProto(m *pb.MonitorStatus) MonitorStatus {
 		out.Statuses = make([]MonitorStatusEntry, len(m.Statuses))
 		for i, e := range m.Statuses {
 			out.Statuses[i] = MonitorStatusEntry{
-				MonitorID:          e.MonitorId,
-				Status:             e.Status,
-				MissingPermissions: e.MissingPermissions,
-				MatchedSelector:    e.MatchedSelector,
-				Reason:             e.Reason,
+				MonitorID:                e.MonitorId,
+				Status:                   e.Status,
+				MissingPermissions:       e.MissingPermissions,
+				MatchedSelector:          e.MatchedSelector,
+				Reason:                   e.Reason,
+				EffectiveIntervalSeconds: int(e.EffectiveIntervalSeconds),
+				CycleDeadlineMs:          int(e.CycleDeadlineMs),
+				TargetConfigSerial:       int(e.TargetConfigSerial),
 			}
 		}
 	}
@@ -494,10 +502,11 @@ func desiredStateToProto(d config.DesiredState) *pb.DesiredState {
 		out.ProbeTargets = make([]*pb.ProbeTarget, len(d.ProbeTargets))
 		for i, t := range d.ProbeTargets {
 			out.ProbeTargets[i] = &pb.ProbeTarget{
-				MonitorId: t.MonitorID,
-				Kind:      t.Kind,
-				Name:      t.Name,
-				Target:    t.Target,
+				MonitorId:    t.MonitorID,
+				Kind:         t.Kind,
+				Name:         t.Name,
+				Target:       t.Target,
+				ConfigSerial: int32(t.ConfigSerial),
 				Params: &pb.ProbeParams{
 					IntervalSeconds:  int32(t.Params.IntervalSeconds),
 					TimeoutMs:        int32(t.Params.TimeoutMs),
@@ -545,10 +554,11 @@ func desiredStateFromProto(d *pb.DesiredState) config.DesiredState {
 		out.ProbeTargets = make([]config.ProbeTarget, len(d.ProbeTargets))
 		for i, t := range d.ProbeTargets {
 			pt := config.ProbeTarget{
-				MonitorID: t.MonitorId,
-				Kind:      t.Kind,
-				Name:      t.Name,
-				Target:    t.Target,
+				MonitorID:    t.MonitorId,
+				Kind:         t.Kind,
+				Name:         t.Name,
+				Target:       t.Target,
+				ConfigSerial: int(t.ConfigSerial),
 			}
 			if t.Params != nil {
 				pt.Params = config.ProbeParams{

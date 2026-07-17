@@ -14,10 +14,15 @@ type Metric struct {
 	Unit   string            `json:"unit,omitempty"` // "ms", "pct", "bool"
 	Labels map[string]string `json:"labels,omitempty"`
 	// MonitorID is the user-created monitor (probe task) that produced this
-	// sample; empty for system metrics (host.*, iface.up, agent.*, the built-in
-	// gateway probe). It keys the server's series so same-target monitors stay
-	// distinct.
+	// sample; empty for system metrics (host.*, iface.up, agent.*). It keys the
+	// server's series so same-target monitors stay distinct.
 	MonitorID string `json:"monitor_id,omitempty"`
+	// ConfigSerial is the probe target's material config generation
+	// (probe_tasks.config_serial) this sample was produced under, stamped by the
+	// probing collector from the applied ProbeTarget. Zero for system metrics
+	// (MonitorID == ""). The server rejects samples whose serial does not match
+	// the target's current generation (obsolete backlog / replay / forged future).
+	ConfigSerial int `json:"config_serial,omitempty"`
 }
 
 // MetricKind is a string enum so unknown kinds are ignored rather than failing

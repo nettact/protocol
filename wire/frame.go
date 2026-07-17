@@ -44,6 +44,16 @@ type MonitorStatusEntry struct {
 	MissingPermissions []string `json:"missing_permissions,omitempty"`
 	MatchedSelector    string   `json:"matched_selector,omitempty"`
 	Reason             string   `json:"reason,omitempty"` // literal_denied | resolved_denied | redirect_denied | method_requires_extended | …
+	// EffectiveIntervalSeconds / CycleDeadlineMs are the agent's actual effective
+	// per-target schedule for this monitor (interval floored by the agent-local
+	// MinProbeInterval; whole-cycle deadline), reported so the server derives
+	// freshness from what the agent really runs rather than the configured value.
+	EffectiveIntervalSeconds int `json:"effective_interval_seconds,omitempty"`
+	CycleDeadlineMs          int `json:"cycle_deadline_ms,omitempty"`
+	// TargetConfigSerial is the ProbeTarget.ConfigSerial the agent applied for
+	// this monitor — the per-target material generation echoed back so the server
+	// distinguishes a current-generation report from a stale/obsolete one.
+	TargetConfigSerial int `json:"target_config_serial,omitempty"`
 }
 
 // Monitor execution status values (MonitorStatusEntry.Status).
