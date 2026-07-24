@@ -209,8 +209,13 @@ type MonitorStatus struct {
 	ConfigVersion int32                  `protobuf:"varint,1,opt,name=config_version,json=configVersion,proto3" json:"config_version,omitempty"`
 	PolicyHash    string                 `protobuf:"bytes,2,opt,name=policy_hash,json=policyHash,proto3" json:"policy_hash,omitempty"`
 	Statuses      []*MonitorStatusEntry  `protobuf:"bytes,3,rep,name=statuses,proto3" json:"statuses,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// Agent's WAL batch-upload interval (its global telemetry flush cadence, not a
+	// per-monitor value). The server folds it into the freshness window (rounded up
+	// to whole seconds) so the probe->arrival batching/drain/ingest latency is not
+	// mistaken for a stale sample.
+	UploadIntervalSeconds int32 `protobuf:"varint,4,opt,name=upload_interval_seconds,json=uploadIntervalSeconds,proto3" json:"upload_interval_seconds,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *MonitorStatus) Reset() {
@@ -262,6 +267,13 @@ func (x *MonitorStatus) GetStatuses() []*MonitorStatusEntry {
 		return x.Statuses
 	}
 	return nil
+}
+
+func (x *MonitorStatus) GetUploadIntervalSeconds() int32 {
+	if x != nil {
+		return x.UploadIntervalSeconds
+	}
+	return 0
 }
 
 // MonitorStatusEntry mirrors wire.MonitorStatusEntry.
@@ -3263,12 +3275,13 @@ const file_telemetry_proto_rawDesc = "" +
 	"\teffective\x18\x03 \x03(\tR\teffective\x12\x16\n" +
 	"\x06source\x18\x04 \x01(\tR\x06source\x12\x1f\n" +
 	"\vpolicy_hash\x18\x05 \x01(\tR\n" +
-	"policyHash\"\x98\x01\n" +
+	"policyHash\"\xd0\x01\n" +
 	"\rMonitorStatus\x12%\n" +
 	"\x0econfig_version\x18\x01 \x01(\x05R\rconfigVersion\x12\x1f\n" +
 	"\vpolicy_hash\x18\x02 \x01(\tR\n" +
 	"policyHash\x12?\n" +
-	"\bstatuses\x18\x03 \x03(\v2#.nettact.wire.v1.MonitorStatusEntryR\bstatuses\"\xdb\x02\n" +
+	"\bstatuses\x18\x03 \x03(\v2#.nettact.wire.v1.MonitorStatusEntryR\bstatuses\x126\n" +
+	"\x17upload_interval_seconds\x18\x04 \x01(\x05R\x15uploadIntervalSeconds\"\xdb\x02\n" +
 	"\x12MonitorStatusEntry\x12\x1d\n" +
 	"\n" +
 	"monitor_id\x18\x01 \x01(\tR\tmonitorId\x12\x16\n" +

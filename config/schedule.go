@@ -128,15 +128,35 @@ func CycleDeadline(kind string, p ProbeParams) time.Duration {
 	}
 }
 
+// DefaultUploadInterval is the agent's default WAL batch-upload cadence (mirrors
+// the agent envcfg default). The server uses it as the StaleAfter fallback when
+// an agent has not (yet) reported its own upload interval, so a freshly-connected
+// or pre-generation agent still gets link-latency slack in its freshness window.
+const DefaultUploadInterval = 5 * time.Second
+
 // StaleAfter is the freshness window after which a sample is considered stale:
-// max(3×interval, interval + 2×cycle). The first term tolerates a couple of
-// missed cycles; the second keeps a legitimately long cycle (multi-echo ICMP,
-// the 25s NAT discovery) from being marked stale while it is still running.
-func StaleAfter(interval, cycle time.Duration) time.Duration {
-	a := 3 * interval
-	b := interval + 2*cycle
-	if a > b {
-		return a
+// max(3×interval, interval + 2×cycle) + 2×upload.
+//
+// The sample timestamp is the probe instant, but a sample does not reach the
+// server store at that instant: the agent buffers results in its WAL and flushes
+// them on a batch-upload cadence (upload), then the server drains and ingests
+// them. The freshness window must tolerate this whole probe→arrival link, or a
+// short-interval target (10s → a ~30s window) is marked stale on nothing more
+// than ordinary batching jitter. The base term is the probe cadence itself:
+// max(3×interval, interval + 2×cycle) tolerates a couple of missed cycles while
+// keeping a legitimately long cycle (multi-echo ICMP, the 25s NAT discovery)
+// from tripping stale mid-run. The +2×upload term adds the link slack: 2× (not
+// 1×) covers a sample that just missed one batch boundary plus one upload retry.
+//
+// upload ≤ 0 falls back to DefaultUploadInterval (the server's value when the
+// agent has not reported its own).
+func StaleAfter(interval, cycle, upload time.Duration) time.Duration {
+	if upload <= 0 {
+		upload = DefaultUploadInterval
 	}
-	return b
+	base := 3 * interval
+	if b := interval + 2*cycle; b > base {
+		base = b
+	}
+	return base + 2*upload
 }

@@ -182,7 +182,7 @@ func TestFrameRoundTrip(t *testing.T) {
 		ReportedConfigVersion: 7,
 	}
 	ms := MonitorStatus{
-		ConfigVersion: 8, PolicyHash: "abc123",
+		ConfigVersion: 8, PolicyHash: "abc123", UploadIntervalSeconds: 5,
 		Statuses: []MonitorStatusEntry{
 			{MonitorID: "probe_mon1", Status: MonitorStatusActive, EffectiveIntervalSeconds: 15, CycleDeadlineMs: 5800, TargetConfigSerial: 41},
 			{MonitorID: "probe_mon2", Status: MonitorStatusPermissionBlocked, MissingPermissions: []string{"probe.http.extended"}, Reason: "method_requires_extended"},

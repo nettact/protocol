@@ -50,6 +50,11 @@ message MonitorStatus {
   int32 config_version = 1;
   string policy_hash = 2;
   repeated MonitorStatusEntry statuses = 3;
+  // Agent's WAL batch-upload interval (its global telemetry flush cadence, not a
+  // per-monitor value). The server folds it into the freshness window (rounded up
+  // to whole seconds) so the probe->arrival batching/drain/ingest latency is not
+  // mistaken for a stale sample.
+  int32 upload_interval_seconds = 4;
 }
 
 // MonitorStatusEntry mirrors wire.MonitorStatusEntry.

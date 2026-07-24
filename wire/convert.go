@@ -399,8 +399,9 @@ func hostSnapshotFromProto(h *pb.HostSnapshot) telemetry.HostSnapshot {
 
 func monitorStatusToProto(m MonitorStatus) *pb.MonitorStatus {
 	out := &pb.MonitorStatus{
-		ConfigVersion: int32(m.ConfigVersion),
-		PolicyHash:    m.PolicyHash,
+		ConfigVersion:         int32(m.ConfigVersion),
+		PolicyHash:            m.PolicyHash,
+		UploadIntervalSeconds: int32(m.UploadIntervalSeconds),
 	}
 	if len(m.Statuses) > 0 {
 		out.Statuses = make([]*pb.MonitorStatusEntry, len(m.Statuses))
@@ -425,8 +426,9 @@ func monitorStatusFromProto(m *pb.MonitorStatus) MonitorStatus {
 		return MonitorStatus{}
 	}
 	out := MonitorStatus{
-		ConfigVersion: int(m.ConfigVersion),
-		PolicyHash:    m.PolicyHash,
+		ConfigVersion:         int(m.ConfigVersion),
+		PolicyHash:            m.PolicyHash,
+		UploadIntervalSeconds: int(m.UploadIntervalSeconds),
 	}
 	if len(m.Statuses) > 0 {
 		out.Statuses = make([]MonitorStatusEntry, len(m.Statuses))

@@ -32,9 +32,15 @@ type Hello struct {
 // agent sends it after every DesiredState apply and on any runtime transition
 // (DNS flip, redirect block, recovery), coalesced latest-wins.
 type MonitorStatus struct {
-	ConfigVersion int                  `json:"config_version"`
-	PolicyHash    string               `json:"policy_hash"`
-	Statuses      []MonitorStatusEntry `json:"statuses"`
+	ConfigVersion int    `json:"config_version"`
+	PolicyHash    string `json:"policy_hash"`
+	// UploadIntervalSeconds is the agent's WAL batch-upload interval (its global
+	// telemetry flush cadence, not a per-monitor value). The server folds it into
+	// the freshness window (rounded up to whole seconds) so a probe whose sample
+	// timestamp is the probe instant is not marked stale merely for the agent's
+	// batching + drain + ingest latency between probe and arrival.
+	UploadIntervalSeconds int                  `json:"upload_interval_seconds,omitempty"`
+	Statuses              []MonitorStatusEntry `json:"statuses"`
 }
 
 // MonitorStatusEntry is one monitor's execution status.
