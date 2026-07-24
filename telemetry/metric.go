@@ -54,9 +54,10 @@ const (
 	HTTPStatus    MetricKind = "probe.http.status"
 	HTTPLat       MetricKind = "probe.http.latency_ms"
 	HTTPOK        MetricKind = "probe.http.ok"
-	// HTTPErrorClass classifies a TRANSPORT failure (DNS/refused/timeout/TLS/…) into a
-	// ProbeReason* code (UnitCode); ProbeReasonNone on a completed request (even a bad
-	// status — the status carries that detail). Emitted every cycle.
+	// HTTPErrorClass classifies the probe failure into a ProbeReason* code (UnitCode):
+	// a transport failure (DNS/refused/timeout/TLS/…) by error type, a completed
+	// request that fails the acceptance check as HTTPStatus/HTTPKeyword. ProbeReasonNone
+	// only when the probe fully passed. Emitted every cycle.
 	HTTPErrorClass MetricKind = "probe.http.error_class"
 
 	// TCP probe results (single connect per cycle). The dial is split into distinct
@@ -138,12 +139,44 @@ const (
 // (icmp/dns/http/tcp) and the consuming server/UI so the meaning never drifts.
 // Emitted every cycle (ProbeReasonNone on success). Not every code applies to
 // every probe (e.g. a raw ICMP echo is never "refused"/"tls").
+//
+// The single-digit codes are failure FAMILIES; the two-digit codes refine a
+// family (4x=DNS, 5x=TLS, 7x=HTTP acceptance), grouped by tens so family
+// membership is code/10 or the base digit. A collector that cannot
+// discriminate finer emits the family code, so every consumer must render an
+// unknown code as at least "other". Whenever the code is non-None the
+// collector also attaches the raw underlying cause (e.g. the OS error text,
+// "HTTP 503", "NXDOMAIN") as Labels["detail"] on the error_class metric —
+// capped at 256 chars, never localized: the code carries the translated
+// meaning, the detail carries the machine truth. The server freezes it onto
+// alert evidence as reason_detail.
 const (
 	ProbeReasonNone        = 0 // the probe succeeded
 	ProbeReasonTimeout     = 1 // no answer within the deadline
 	ProbeReasonRefused     = 2 // connection actively refused (host up, port closed)
 	ProbeReasonUnreachable = 3 // host/network unreachable (no route)
-	ProbeReasonDNS         = 4 // name resolution failed
-	ProbeReasonTLS         = 5 // connected but the TLS handshake failed
+	ProbeReasonDNS         = 4 // name resolution failed (family; unclassified resolver error)
+	ProbeReasonTLS         = 5 // connected but the TLS handshake failed (family; unclassified TLS error)
+	ProbeReasonReset       = 6 // connection reset/aborted by peer mid-exchange
 	ProbeReasonOther       = 9 // any other failure
+
+	// The DNS refinements may be asserted only from a conclusive answer: a
+	// readable rcode, or a completed lookup that returned nothing. A stub
+	// resolver's "no such host" is NOT conclusive (it collapses NXDOMAIN and
+	// NODATA) and a truncated answer is not either — both stay ProbeReasonDNS,
+	// so a missing record is never reported as a missing domain.
+	ProbeReasonDNSNXDomain = 41 // the queried name does not exist (NXDOMAIN rcode)
+	ProbeReasonDNSServFail = 42 // the DNS server answered SERVFAIL
+	ProbeReasonDNSNoRecord = 43 // name exists but has no record of the queried type
+
+	ProbeReasonTLSExpired   = 51 // certificate expired (or not yet valid)
+	ProbeReasonTLSUntrusted = 52 // certificate chain not trusted (unknown authority)
+	ProbeReasonTLSHostname  = 53 // certificate valid but not for the requested hostname
+
+	ProbeReasonHTTPStatus  = 71 // request completed but the status code failed the acceptance check
+	ProbeReasonHTTPKeyword = 72 // request completed but the body keyword check failed
 )
+
+// ProbeReasonDetailLabel is the Metric.Labels key on which a probe.*.error_class
+// sample carries the raw underlying error (see the ProbeReason* contract above).
+const ProbeReasonDetailLabel = "detail"
