@@ -1,6 +1,9 @@
 package telemetry
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // Metric is a single-value time-series sample. One probe run may emit several
 // metrics sharing a timestamp and target (e.g. rtt + loss for one ping),
@@ -180,3 +183,31 @@ const (
 // ProbeReasonDetailLabel is the Metric.Labels key on which a probe.*.error_class
 // sample carries the raw underlying error (see the ProbeReason* contract above).
 const ProbeReasonDetailLabel = "detail"
+
+// MetricAllowedForProbeKind reports whether a metric kind can be produced by a
+// monitoring target of the given probe kind. Gateway pings emit through the
+// shared probe.icmp.* set; a host anchor carries the host.* / iface.up / wifi.* /
+// agent.* series instead of a probe family.
+//
+// This is the single source of truth for the (probe kind → metric family)
+// relation: the server validates alert conditions against it, drops the
+// conditions a target's kind can no longer satisfy when that kind changes, and
+// filters a monitor's listed series by it. An unknown kind allows nothing.
+func MetricAllowedForProbeKind(probeKind, metricKind string) bool {
+	switch probeKind {
+	case "icmp", "gateway":
+		return strings.HasPrefix(metricKind, "probe.icmp.")
+	case "dns":
+		return strings.HasPrefix(metricKind, "probe.dns.")
+	case "http":
+		return strings.HasPrefix(metricKind, "probe.http.")
+	case "tcp":
+		return strings.HasPrefix(metricKind, "probe.tcp.")
+	case "nat":
+		return strings.HasPrefix(metricKind, "probe.nat.")
+	case "host":
+		return strings.HasPrefix(metricKind, "host.") || metricKind == string(IfaceUp) ||
+			strings.HasPrefix(metricKind, "wifi.") || strings.HasPrefix(metricKind, "agent.")
+	}
+	return false
+}
