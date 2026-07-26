@@ -1,6 +1,6 @@
 # protocol
 
-NetTact 的共享线缆协议（telemetry / permission / …）。**Apache-2.0**，由 agent、server-core、server-lite 与未来 Cloud 共用——同一套协议，不 fork（架构 §15.2-3）。
+NetTact 的共享线缆协议（telemetry / permission / …）。**Apache-2.0** 。
 
 类型包（`telemetry` / `config` / `enroll` / `permission`）**仅依赖 Go 标准库**；唯一例外是可选的 `wire` 编解码包，它额外引入 `google.golang.org/protobuf`——只有导入 `wire` 的消费者才会拉入该依赖。
 
