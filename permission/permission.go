@@ -270,6 +270,50 @@ func DefaultStandalone() Set {
 	)
 }
 
+// Bundle is a named permission set the console offers when an operator enrolls
+// an Agent, so the common choices do not have to be assembled permission by
+// permission.
+type Bundle struct {
+	ID  string
+	Set Set
+}
+
+// Bundles are the enrollment presets, in the order a chooser should show them:
+// from the safety baseline to everything. They live here beside
+// DefaultStandalone because which permissions belong together is a product
+// decision about the permission model, not a UI detail — the console must not be
+// the place that decides what "recommended" means.
+//
+// Every bundle is dependency-closed, so any of them is directly usable as a
+// NETTACT_AGENT_PERMISSIONS value.
+func Bundles() []Bundle {
+	return []Bundle{
+		// The frozen safety baseline: standard probes plus basic network state.
+		{ID: "recommended", Set: Closure(DefaultStandalone())},
+		// The baseline plus host resource metrics — the usual next step, and the
+		// reason most operators end up editing a policy at all. Process and
+		// connection snapshots are deliberately NOT here: they read command lines,
+		// owning users and remote addresses, which is a different privacy decision
+		// from "how busy is this machine".
+		{ID: "host_metrics", Set: Closure(union(DefaultStandalone(), NewSet(
+			HostCPURead, HostMemoryRead, HostDiskRead,
+			HostLoadRead, HostUptimeRead, HostNetworkIORead,
+		)))},
+		// Every compiled permission. Capability gating still applies, so this
+		// grants only what the Agent's platform can actually do.
+		{ID: "full", Set: All()},
+	}
+}
+
+// union returns a new set containing every ID in a and b.
+func union(a, b Set) Set {
+	out := a.Clone()
+	for id := range b {
+		out.Add(id)
+	}
+	return out
+}
+
 // EffectiveFrom is the intersection of granted and supported, then a fixpoint
 // prune of any child whose required parent dropped out of the intersection.
 func EffectiveFrom(granted, supported Set) Set {
