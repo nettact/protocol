@@ -327,8 +327,16 @@ message Intervals {
 message IncidentSnapshotRequest {
   string request_id = 1;
   string incident_id = 2;
-  google.protobuf.Timestamp deadline = 3;
+  // The absolute deadline this carried was minted on the server clock and read on
+  // the agent's, so clock skew came straight out of the collection window; it was
+  // replaced by budget_ms and is reserved so the number/name can never be
+  // silently reused.
+  reserved 3;
+  reserved "deadline";
   repeated SnapshotTargetRef targets = 4;
+  // Collection budget measured from arrival on the agent's own clock, never an
+  // absolute timestamp — agent/server clock skew must not shrink the window.
+  int32 budget_ms = 5;
 }
 
 // SnapshotTargetRef mirrors config.SnapshotTargetRef.
@@ -350,7 +358,13 @@ message TraceRequest {
   int32 attempts_per_hop = 6;
   int32 total_timeout_ms = 7;
   bool resolve_hop_hostnames = 8;
-  google.protobuf.Timestamp deadline = 9;
+  // Replaced by budget_ms for the same clock-skew reason as
+  // IncidentSnapshotRequest, and reserved so the number/name can never be
+  // silently reused.
+  reserved 9;
+  reserved "deadline";
+  // Request validity window measured from arrival on the agent's own clock.
+  int32 budget_ms = 10;
 }
 
 // IncidentSnapshot mirrors telemetry.IncidentSnapshot — the agent's allowlisted

@@ -30,12 +30,12 @@ type SnapshotRequest struct {
 // incident scene snapshot (INCIDENT-002), pushed as a standalone frame. It is
 // transient — not versioned into ConfigVersion — and answered once with a
 // telemetry.IncidentSnapshot carrying the same RequestID and IncidentID. The
-// agent collects only the allowlisted evidence groups and stops at Deadline,
-// reporting per-group collected/denied/unsupported/failed either way.
+// agent collects only the allowlisted evidence groups and stops when BudgetMs
+// runs out, reporting per-group collected/denied/unsupported/failed either way.
 type IncidentSnapshotRequest struct {
 	RequestID  string              `json:"request_id"`        // stable snapshot request id (idempotency key with IncidentID + agent)
 	IncidentID string              `json:"incident_id"`       // the incident this snapshot belongs to
-	Deadline   time.Time           `json:"deadline"`          // absolute collection deadline; past it the agent stops and reports terminal group states
+	BudgetMs   int                 `json:"budget_ms"`         // collection budget measured from arrival on the agent's own clock (see BudgetWindow)
 	Targets    []SnapshotTargetRef `json:"targets,omitempty"` // monitor targets to resolve endpoints/error class for
 }
 
@@ -59,19 +59,47 @@ const (
 // TraceRequest is a one-shot server->agent ask to run a single incident
 // traceroute (DIAG-001), pushed as a standalone frame. The detecting agent runs
 // exactly one trace per request and answers once with a telemetry.TraceResult
-// carrying the same ReportID. Deadline is the only validity window: past it the
-// agent must not start, and a running trace is bounded by TotalTimeoutMs. The
-// mode is fixed by the request — the agent never falls back to the other mode.
+// carrying the same ReportID. BudgetMs is the only validity window: exhausted,
+// the agent must not start, and a running trace is bounded by TotalTimeoutMs.
+// The mode is fixed by the request — the agent never falls back to the other mode.
 type TraceRequest struct {
-	ReportID            string    `json:"report_id"`             // stable shared report/request id all referencing incidents read through
-	Mode                string    `json:"mode"`                  // TraceModeICMP | TraceModeTCP
-	DestinationHost     string    `json:"destination_host"`      // host or IP to trace toward
-	TCPPort             int       `json:"tcp_port,omitempty"`    // required for Mode == TraceModeTCP
-	MaxHops             int       `json:"max_hops"`              // TTL ceiling
-	AttemptsPerHop      int       `json:"attempts_per_hop"`      // probes sent per TTL
-	TotalTimeoutMs      int       `json:"total_timeout_ms"`      // overall wall-clock budget for the whole trace
-	ResolveHopHostnames bool      `json:"resolve_hop_hostnames"` // reverse-DNS each responder (default off)
-	Deadline            time.Time `json:"deadline"`              // absolute request validity window
+	ReportID            string `json:"report_id"`             // stable shared report/request id all referencing incidents read through
+	Mode                string `json:"mode"`                  // TraceModeICMP | TraceModeTCP
+	DestinationHost     string `json:"destination_host"`      // host or IP to trace toward
+	TCPPort             int    `json:"tcp_port,omitempty"`    // required for Mode == TraceModeTCP
+	MaxHops             int    `json:"max_hops"`              // TTL ceiling
+	AttemptsPerHop      int    `json:"attempts_per_hop"`      // probes sent per TTL
+	TotalTimeoutMs      int    `json:"total_timeout_ms"`      // overall wall-clock budget for the whole trace
+	ResolveHopHostnames bool   `json:"resolve_hop_hostnames"` // reverse-DNS each responder (default off)
+	BudgetMs            int    `json:"budget_ms"`             // request validity window measured from arrival on the agent's own clock (see BudgetWindow)
+}
+
+// BudgetWindow converts a request's receipt-relative budget in milliseconds into
+// an absolute deadline on the receiving agent's own clock, anchored at the
+// request's arrival instant receivedAt and evaluated as of now.
+//
+// One-shot server->agent requests carry a duration, never an absolute timestamp:
+// the two clocks are independent and can be minutes apart, and a timestamp minted
+// on the server clock and consumed on the agent clock has the whole skew
+// subtracted from (or added to) the window. A skew larger than the budget makes
+// the request expire the instant it arrives, so every collection reports a
+// timeout that never happened. A duration is skew-immune — it costs only the push
+// latency, which the server absorbs by keeping its own reaping deadline.
+//
+// Anchoring at arrival rather than at now is what keeps handler scheduling delay
+// from being handed back as extra window, so the two instants are separate
+// arguments and both are needed: ok is false for a non-positive budget AND for a
+// window that already elapsed between arrival and now. Either way the window is
+// spent, so the receiver must not start and reports its terminal timed-out state.
+func BudgetWindow(budgetMs int, receivedAt, now time.Time) (time.Time, bool) {
+	if budgetMs <= 0 {
+		return time.Time{}, false
+	}
+	deadline := receivedAt.Add(time.Duration(budgetMs) * time.Millisecond)
+	if !now.Before(deadline) {
+		return time.Time{}, false
+	}
+	return deadline, true
 }
 
 // ProbeTarget is one monitoring target pushed to the agent.

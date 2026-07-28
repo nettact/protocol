@@ -189,14 +189,27 @@ func TestFrameRoundTrip(t *testing.T) {
 			{MonitorID: "probe_mon3", Status: MonitorStatusTargetBlocked, MatchedSelector: "scope:loopback", Reason: "literal_denied"},
 		},
 	}
+	isr := config.IncidentSnapshotRequest{
+		RequestID: "isnapreq-1", IncidentID: "inc-1", BudgetMs: 10_000,
+		Targets: []config.SnapshotTargetRef{
+			{MonitorID: "probe_mon1", Kind: "http", Target: "http://example.com/generate_204", Port: 80},
+			{MonitorID: "probe_mon2", Kind: "icmp", Target: "1.1.1.1"},
+		},
+	}
+	tr := config.TraceRequest{
+		ReportID: "trace-1", Mode: config.TraceModeTCP, DestinationHost: "example.com", TCPPort: 443,
+		MaxHops: 30, AttemptsPerHop: 3, TotalTimeoutMs: 30_000, ResolveHopHostnames: true, BudgetMs: 60_000,
+	}
 	frames := map[string]Frame{
-		"hello":            {Hello: &hello},
-		"packet":           {Packet: &pkt},
-		"host_snapshot":    {HostSnapshot: &snap},
-		"monitor_status":   {MonitorStatus: &ms},
-		"ack":              {Ack: &ack},
-		"desired_state":    {DesiredState: &ds},
-		"snapshot_request": {SnapshotRequest: &sr},
+		"hello":                     {Hello: &hello},
+		"packet":                    {Packet: &pkt},
+		"host_snapshot":             {HostSnapshot: &snap},
+		"monitor_status":            {MonitorStatus: &ms},
+		"ack":                       {Ack: &ack},
+		"desired_state":             {DesiredState: &ds},
+		"snapshot_request":          {SnapshotRequest: &sr},
+		"incident_snapshot_request": {IncidentSnapshotRequest: &isr},
+		"trace_request":             {TraceRequest: &tr},
 	}
 	for name, in := range frames {
 		for _, ct := range []string{ContentTypeJSON, ContentTypeProtobuf} {

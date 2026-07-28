@@ -2197,11 +2197,13 @@ func (x *Intervals) GetRegularSeconds() int32 {
 // IncidentSnapshotRequest mirrors config.IncidentSnapshotRequest — the one-shot
 // server->agent ask for an immutable incident scene snapshot (INCIDENT-002).
 type IncidentSnapshotRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	IncidentId    string                 `protobuf:"bytes,2,opt,name=incident_id,json=incidentId,proto3" json:"incident_id,omitempty"`
-	Deadline      *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=deadline,proto3" json:"deadline,omitempty"`
-	Targets       []*SnapshotTargetRef   `protobuf:"bytes,4,rep,name=targets,proto3" json:"targets,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	RequestId  string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	IncidentId string                 `protobuf:"bytes,2,opt,name=incident_id,json=incidentId,proto3" json:"incident_id,omitempty"`
+	Targets    []*SnapshotTargetRef   `protobuf:"bytes,4,rep,name=targets,proto3" json:"targets,omitempty"`
+	// Collection budget measured from arrival on the agent's own clock, never an
+	// absolute timestamp — agent/server clock skew must not shrink the window.
+	BudgetMs      int32 `protobuf:"varint,5,opt,name=budget_ms,json=budgetMs,proto3" json:"budget_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2250,18 +2252,18 @@ func (x *IncidentSnapshotRequest) GetIncidentId() string {
 	return ""
 }
 
-func (x *IncidentSnapshotRequest) GetDeadline() *timestamppb.Timestamp {
-	if x != nil {
-		return x.Deadline
-	}
-	return nil
-}
-
 func (x *IncidentSnapshotRequest) GetTargets() []*SnapshotTargetRef {
 	if x != nil {
 		return x.Targets
 	}
 	return nil
+}
+
+func (x *IncidentSnapshotRequest) GetBudgetMs() int32 {
+	if x != nil {
+		return x.BudgetMs
+	}
+	return 0
 }
 
 // SnapshotTargetRef mirrors config.SnapshotTargetRef.
@@ -2345,9 +2347,10 @@ type TraceRequest struct {
 	AttemptsPerHop      int32                  `protobuf:"varint,6,opt,name=attempts_per_hop,json=attemptsPerHop,proto3" json:"attempts_per_hop,omitempty"`
 	TotalTimeoutMs      int32                  `protobuf:"varint,7,opt,name=total_timeout_ms,json=totalTimeoutMs,proto3" json:"total_timeout_ms,omitempty"`
 	ResolveHopHostnames bool                   `protobuf:"varint,8,opt,name=resolve_hop_hostnames,json=resolveHopHostnames,proto3" json:"resolve_hop_hostnames,omitempty"`
-	Deadline            *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=deadline,proto3" json:"deadline,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Request validity window measured from arrival on the agent's own clock.
+	BudgetMs      int32 `protobuf:"varint,10,opt,name=budget_ms,json=budgetMs,proto3" json:"budget_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TraceRequest) Reset() {
@@ -2436,11 +2439,11 @@ func (x *TraceRequest) GetResolveHopHostnames() bool {
 	return false
 }
 
-func (x *TraceRequest) GetDeadline() *timestamppb.Timestamp {
+func (x *TraceRequest) GetBudgetMs() int32 {
 	if x != nil {
-		return x.Deadline
+		return x.BudgetMs
 	}
-	return nil
+	return 0
 }
 
 // IncidentSnapshot mirrors telemetry.IncidentSnapshot — the agent's allowlisted
@@ -3482,20 +3485,20 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"W\n" +
 	"\tIntervals\x12!\n" +
 	"\fbase_seconds\x18\x01 \x01(\x05R\vbaseSeconds\x12'\n" +
-	"\x0fregular_seconds\x18\x02 \x01(\x05R\x0eregularSeconds\"\xcf\x01\n" +
+	"\x0fregular_seconds\x18\x02 \x01(\x05R\x0eregularSeconds\"\xc4\x01\n" +
 	"\x17IncidentSnapshotRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1f\n" +
 	"\vincident_id\x18\x02 \x01(\tR\n" +
-	"incidentId\x126\n" +
-	"\bdeadline\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\bdeadline\x12<\n" +
-	"\atargets\x18\x04 \x03(\v2\".nettact.wire.v1.SnapshotTargetRefR\atargets\"r\n" +
+	"incidentId\x12<\n" +
+	"\atargets\x18\x04 \x03(\v2\".nettact.wire.v1.SnapshotTargetRefR\atargets\x12\x1b\n" +
+	"\tbudget_ms\x18\x05 \x01(\x05R\bbudgetMsJ\x04\b\x03\x10\x04R\bdeadline\"r\n" +
 	"\x11SnapshotTargetRef\x12\x1d\n" +
 	"\n" +
 	"monitor_id\x18\x01 \x01(\tR\tmonitorId\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x16\n" +
 	"\x06target\x18\x03 \x01(\tR\x06target\x12\x12\n" +
-	"\x04port\x18\x04 \x01(\x05R\x04port\"\xe0\x02\n" +
+	"\x04port\x18\x04 \x01(\x05R\x04port\"\xd5\x02\n" +
 	"\fTraceRequest\x12\x1b\n" +
 	"\treport_id\x18\x01 \x01(\tR\breportId\x12\x12\n" +
 	"\x04mode\x18\x02 \x01(\tR\x04mode\x12)\n" +
@@ -3504,8 +3507,10 @@ const file_telemetry_proto_rawDesc = "" +
 	"\bmax_hops\x18\x05 \x01(\x05R\amaxHops\x12(\n" +
 	"\x10attempts_per_hop\x18\x06 \x01(\x05R\x0eattemptsPerHop\x12(\n" +
 	"\x10total_timeout_ms\x18\a \x01(\x05R\x0etotalTimeoutMs\x122\n" +
-	"\x15resolve_hop_hostnames\x18\b \x01(\bR\x13resolveHopHostnames\x126\n" +
-	"\bdeadline\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\bdeadline\"\xc8\x03\n" +
+	"\x15resolve_hop_hostnames\x18\b \x01(\bR\x13resolveHopHostnames\x12\x1b\n" +
+	"\tbudget_ms\x18\n" +
+	" \x01(\x05R\bbudgetMsJ\x04\b\t\x10\n" +
+	"R\bdeadline\"\xc8\x03\n" +
 	"\x10IncidentSnapshot\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1f\n" +
@@ -3674,27 +3679,25 @@ var file_telemetry_proto_depIdxs = []int32{
 	21, // 32: nettact.wire.v1.DesiredState.intervals:type_name -> nettact.wire.v1.Intervals
 	20, // 33: nettact.wire.v1.ProbeTarget.params:type_name -> nettact.wire.v1.ProbeParams
 	38, // 34: nettact.wire.v1.ProbeParams.headers:type_name -> nettact.wire.v1.ProbeParams.HeadersEntry
-	39, // 35: nettact.wire.v1.IncidentSnapshotRequest.deadline:type_name -> google.protobuf.Timestamp
-	23, // 36: nettact.wire.v1.IncidentSnapshotRequest.targets:type_name -> nettact.wire.v1.SnapshotTargetRef
-	39, // 37: nettact.wire.v1.TraceRequest.deadline:type_name -> google.protobuf.Timestamp
-	39, // 38: nettact.wire.v1.IncidentSnapshot.collected_at:type_name -> google.protobuf.Timestamp
-	26, // 39: nettact.wire.v1.IncidentSnapshot.groups:type_name -> nettact.wire.v1.SnapshotGroupResult
-	27, // 40: nettact.wire.v1.IncidentSnapshot.network:type_name -> nettact.wire.v1.SnapshotNetwork
-	30, // 41: nettact.wire.v1.IncidentSnapshot.agent:type_name -> nettact.wire.v1.SnapshotAgentInfo
-	31, // 42: nettact.wire.v1.IncidentSnapshot.resources:type_name -> nettact.wire.v1.SnapshotResources
-	32, // 43: nettact.wire.v1.IncidentSnapshot.targets:type_name -> nettact.wire.v1.SnapshotTargetResult
-	39, // 44: nettact.wire.v1.SnapshotGroupResult.collected_at:type_name -> google.protobuf.Timestamp
-	28, // 45: nettact.wire.v1.SnapshotNetwork.interfaces:type_name -> nettact.wire.v1.SnapshotInterface
-	29, // 46: nettact.wire.v1.SnapshotNetwork.default_route:type_name -> nettact.wire.v1.SnapshotRoute
-	39, // 47: nettact.wire.v1.TraceResult.started_at:type_name -> google.protobuf.Timestamp
-	39, // 48: nettact.wire.v1.TraceResult.completed_at:type_name -> google.protobuf.Timestamp
-	34, // 49: nettact.wire.v1.TraceResult.hops:type_name -> nettact.wire.v1.TraceHop
-	35, // 50: nettact.wire.v1.TraceHop.attempts:type_name -> nettact.wire.v1.TraceAttempt
-	51, // [51:51] is the sub-list for method output_type
-	51, // [51:51] is the sub-list for method input_type
-	51, // [51:51] is the sub-list for extension type_name
-	51, // [51:51] is the sub-list for extension extendee
-	0,  // [0:51] is the sub-list for field type_name
+	23, // 35: nettact.wire.v1.IncidentSnapshotRequest.targets:type_name -> nettact.wire.v1.SnapshotTargetRef
+	39, // 36: nettact.wire.v1.IncidentSnapshot.collected_at:type_name -> google.protobuf.Timestamp
+	26, // 37: nettact.wire.v1.IncidentSnapshot.groups:type_name -> nettact.wire.v1.SnapshotGroupResult
+	27, // 38: nettact.wire.v1.IncidentSnapshot.network:type_name -> nettact.wire.v1.SnapshotNetwork
+	30, // 39: nettact.wire.v1.IncidentSnapshot.agent:type_name -> nettact.wire.v1.SnapshotAgentInfo
+	31, // 40: nettact.wire.v1.IncidentSnapshot.resources:type_name -> nettact.wire.v1.SnapshotResources
+	32, // 41: nettact.wire.v1.IncidentSnapshot.targets:type_name -> nettact.wire.v1.SnapshotTargetResult
+	39, // 42: nettact.wire.v1.SnapshotGroupResult.collected_at:type_name -> google.protobuf.Timestamp
+	28, // 43: nettact.wire.v1.SnapshotNetwork.interfaces:type_name -> nettact.wire.v1.SnapshotInterface
+	29, // 44: nettact.wire.v1.SnapshotNetwork.default_route:type_name -> nettact.wire.v1.SnapshotRoute
+	39, // 45: nettact.wire.v1.TraceResult.started_at:type_name -> google.protobuf.Timestamp
+	39, // 46: nettact.wire.v1.TraceResult.completed_at:type_name -> google.protobuf.Timestamp
+	34, // 47: nettact.wire.v1.TraceResult.hops:type_name -> nettact.wire.v1.TraceHop
+	35, // 48: nettact.wire.v1.TraceHop.attempts:type_name -> nettact.wire.v1.TraceAttempt
+	49, // [49:49] is the sub-list for method output_type
+	49, // [49:49] is the sub-list for method input_type
+	49, // [49:49] is the sub-list for extension type_name
+	49, // [49:49] is the sub-list for extension extendee
+	0,  // [0:49] is the sub-list for field type_name
 }
 
 func init() { file_telemetry_proto_init() }

@@ -622,7 +622,7 @@ func incidentSnapshotRequestToProto(r config.IncidentSnapshotRequest) *pb.Incide
 	out := &pb.IncidentSnapshotRequest{
 		RequestId:  r.RequestID,
 		IncidentId: r.IncidentID,
-		Deadline:   tsToProto(r.Deadline),
+		BudgetMs:   int32(r.BudgetMs),
 	}
 	if len(r.Targets) > 0 {
 		out.Targets = make([]*pb.SnapshotTargetRef, len(r.Targets))
@@ -645,7 +645,7 @@ func incidentSnapshotRequestFromProto(r *pb.IncidentSnapshotRequest) config.Inci
 	out := config.IncidentSnapshotRequest{
 		RequestID:  r.RequestId,
 		IncidentID: r.IncidentId,
-		Deadline:   tsFromProto(r.Deadline),
+		BudgetMs:   int(r.BudgetMs),
 	}
 	if len(r.Targets) > 0 {
 		out.Targets = make([]config.SnapshotTargetRef, len(r.Targets))
@@ -671,7 +671,7 @@ func traceRequestToProto(r config.TraceRequest) *pb.TraceRequest {
 		AttemptsPerHop:      int32(r.AttemptsPerHop),
 		TotalTimeoutMs:      int32(r.TotalTimeoutMs),
 		ResolveHopHostnames: r.ResolveHopHostnames,
-		Deadline:            tsToProto(r.Deadline),
+		BudgetMs:            int32(r.BudgetMs),
 	}
 }
 
@@ -688,7 +688,7 @@ func traceRequestFromProto(r *pb.TraceRequest) config.TraceRequest {
 		AttemptsPerHop:      int(r.AttemptsPerHop),
 		TotalTimeoutMs:      int(r.TotalTimeoutMs),
 		ResolveHopHostnames: r.ResolveHopHostnames,
-		Deadline:            tsFromProto(r.Deadline),
+		BudgetMs:            int(r.BudgetMs),
 	}
 }
 

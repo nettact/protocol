@@ -97,7 +97,7 @@ type SnapshotTargetResult struct {
 	Target      string   `json:"target,omitempty"`
 	ResolvedIPs []string `json:"resolved_ips,omitempty"`
 	Endpoints   []string `json:"endpoints,omitempty"`   // host:port endpoints derived for probing
-	ErrorClass  string   `json:"error_class,omitempty"` // e.g. dns_error | connect_refused | timeout | tls_error
+	ErrorClass  string   `json:"error_class,omitempty"` // invalid_target | policy_denied | dns_error | timeout | canceled ("" when resolved)
 }
 
 // TraceResult is the agent's terminal result for one config.TraceRequest
