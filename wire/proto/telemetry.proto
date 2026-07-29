@@ -328,15 +328,18 @@ message ProxySpec {
   int32 wg_keepalive_seconds = 19;
 }
 
-// ProbeParams mirrors config.ProbeParams (zero == collector default).
+// ProbeParams mirrors config.ProbeParams (zero == collector default). Field 4
+// (retries) was superseded by packet_count and field 7 (expected_status) by
+// accepted_statuses; both are reserved so the numbers/names can never be
+// silently reused by a future field.
 message ProbeParams {
+  reserved 4, 7;
+  reserved "retries", "expected_status";
   int32 interval_seconds = 1;
   int32 timeout_ms = 2;
   int32 packet_size = 3;
-  int32 retries = 4;
   string record_type = 5;
   string method = 6;
-  int32 expected_status = 7;
   // Appended fields (never renumber the above).
   string keyword = 8;
   bool keyword_invert = 9;

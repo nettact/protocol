@@ -2123,16 +2123,17 @@ func (x *ProxySpec) GetWgKeepaliveSeconds() int32 {
 	return 0
 }
 
-// ProbeParams mirrors config.ProbeParams (zero == collector default).
+// ProbeParams mirrors config.ProbeParams (zero == collector default). Field 4
+// (retries) was superseded by packet_count and field 7 (expected_status) by
+// accepted_statuses; both are reserved so the numbers/names can never be
+// silently reused by a future field.
 type ProbeParams struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	IntervalSeconds int32                  `protobuf:"varint,1,opt,name=interval_seconds,json=intervalSeconds,proto3" json:"interval_seconds,omitempty"`
 	TimeoutMs       int32                  `protobuf:"varint,2,opt,name=timeout_ms,json=timeoutMs,proto3" json:"timeout_ms,omitempty"`
 	PacketSize      int32                  `protobuf:"varint,3,opt,name=packet_size,json=packetSize,proto3" json:"packet_size,omitempty"`
-	Retries         int32                  `protobuf:"varint,4,opt,name=retries,proto3" json:"retries,omitempty"`
 	RecordType      string                 `protobuf:"bytes,5,opt,name=record_type,json=recordType,proto3" json:"record_type,omitempty"`
 	Method          string                 `protobuf:"bytes,6,opt,name=method,proto3" json:"method,omitempty"`
-	ExpectedStatus  int32                  `protobuf:"varint,7,opt,name=expected_status,json=expectedStatus,proto3" json:"expected_status,omitempty"`
 	// Appended fields (never renumber the above).
 	Keyword          string            `protobuf:"bytes,8,opt,name=keyword,proto3" json:"keyword,omitempty"`
 	KeywordInvert    bool              `protobuf:"varint,9,opt,name=keyword_invert,json=keywordInvert,proto3" json:"keyword_invert,omitempty"`
@@ -2207,13 +2208,6 @@ func (x *ProbeParams) GetPacketSize() int32 {
 	return 0
 }
 
-func (x *ProbeParams) GetRetries() int32 {
-	if x != nil {
-		return x.Retries
-	}
-	return 0
-}
-
 func (x *ProbeParams) GetRecordType() string {
 	if x != nil {
 		return x.RecordType
@@ -2226,13 +2220,6 @@ func (x *ProbeParams) GetMethod() string {
 		return x.Method
 	}
 	return ""
-}
-
-func (x *ProbeParams) GetExpectedStatus() int32 {
-	if x != nil {
-		return x.ExpectedStatus
-	}
-	return 0
 }
 
 func (x *ProbeParams) GetKeyword() string {
@@ -3692,18 +3679,16 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x0ewg_local_addrs\x18\x10 \x01(\tR\fwgLocalAddrs\x12\x15\n" +
 	"\x06wg_dns\x18\x11 \x01(\tR\x05wgDns\x12\x15\n" +
 	"\x06wg_mtu\x18\x12 \x01(\x05R\x05wgMtu\x120\n" +
-	"\x14wg_keepalive_seconds\x18\x13 \x01(\x05R\x12wgKeepaliveSeconds\"\xbf\a\n" +
+	"\x14wg_keepalive_seconds\x18\x13 \x01(\x05R\x12wgKeepaliveSeconds\"\xa2\a\n" +
 	"\vProbeParams\x12)\n" +
 	"\x10interval_seconds\x18\x01 \x01(\x05R\x0fintervalSeconds\x12\x1d\n" +
 	"\n" +
 	"timeout_ms\x18\x02 \x01(\x05R\ttimeoutMs\x12\x1f\n" +
 	"\vpacket_size\x18\x03 \x01(\x05R\n" +
-	"packetSize\x12\x18\n" +
-	"\aretries\x18\x04 \x01(\x05R\aretries\x12\x1f\n" +
+	"packetSize\x12\x1f\n" +
 	"\vrecord_type\x18\x05 \x01(\tR\n" +
 	"recordType\x12\x16\n" +
-	"\x06method\x18\x06 \x01(\tR\x06method\x12'\n" +
-	"\x0fexpected_status\x18\a \x01(\x05R\x0eexpectedStatus\x12\x18\n" +
+	"\x06method\x18\x06 \x01(\tR\x06method\x12\x18\n" +
 	"\akeyword\x18\b \x01(\tR\akeyword\x12%\n" +
 	"\x0ekeyword_invert\x18\t \x01(\bR\rkeywordInvert\x12+\n" +
 	"\x11accepted_statuses\x18\n" +
@@ -3726,7 +3711,7 @@ const file_telemetry_proto_rawDesc = "" +
 	"\tinterface\x18\x19 \x01(\tR\tinterface\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"W\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x04\x10\x05J\x04\b\a\x10\bR\aretriesR\x0fexpected_status\"W\n" +
 	"\tIntervals\x12!\n" +
 	"\fbase_seconds\x18\x01 \x01(\x05R\vbaseSeconds\x12'\n" +
 	"\x0fregular_seconds\x18\x02 \x01(\x05R\x0eregularSeconds\"\xc4\x01\n" +

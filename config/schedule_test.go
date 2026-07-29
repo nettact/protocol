@@ -20,7 +20,7 @@ func TestProbeScheduleContract(t *testing.T) {
 		{"tcp defaults", "tcp", ProbeParams{}, 30 * time.Second, 5 * time.Second},
 		{"nat defaults", "nat", ProbeParams{}, 30 * time.Minute, 25 * time.Second},
 		{"explicit", "http", ProbeParams{IntervalSeconds: 7, TimeoutMs: 1_250}, 7 * time.Second, 1250 * time.Millisecond},
-		{"global cycle", "icmp", ProbeParams{Retries: 2, TimeoutMs: 500, GlobalTimeoutMs: 9_000}, 10 * time.Second, 9 * time.Second},
+		{"global cycle", "icmp", ProbeParams{PacketCount: 3, TimeoutMs: 500, GlobalTimeoutMs: 9_000}, 10 * time.Second, 9 * time.Second},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

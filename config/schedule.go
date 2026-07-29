@@ -68,15 +68,12 @@ func EffectiveInterval(kind string, p ProbeParams) time.Duration {
 }
 
 // PingCount is the number of echoes one ICMP cycle sends for these params:
-// PacketCount when set (>0), else Retries+1 when Retries is set (>0), else the
-// default burst. It is shared by the ICMP collectors and CycleDeadline so the
-// per-cycle timing and the reported deadline can never disagree.
+// PacketCount when set (>0), else the default burst. It is shared by the ICMP
+// collectors and CycleDeadline so the per-cycle timing and the reported deadline
+// can never disagree.
 func PingCount(p ProbeParams) int {
 	if p.PacketCount > 0 {
 		return p.PacketCount
-	}
-	if p.Retries > 0 {
-		return p.Retries + 1
 	}
 	return DefaultPingCount
 }

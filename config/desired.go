@@ -140,8 +140,7 @@ type ProbeParams struct {
 
 	// ICMP / Ping.
 	PacketSize      int `json:"packet_size,omitempty"`       // ICMP echo payload bytes
-	Retries         int `json:"retries,omitempty"`           // extra echoes per cycle beyond the first (count = retries+1); superseded by PacketCount
-	PacketCount     int `json:"packet_count,omitempty"`      // total echoes per cycle; 0 = fall back to Retries+1
+	PacketCount     int `json:"packet_count,omitempty"`      // total echoes per cycle; 0 = collector default
 	GlobalTimeoutMs int `json:"global_timeout_ms,omitempty"` // overall deadline across all echoes in one cycle
 
 	// DNS.
@@ -152,8 +151,7 @@ type ProbeParams struct {
 
 	// HTTP.
 	Method           string            `json:"method,omitempty"`             // GET | HEAD | POST | … (default GET)
-	ExpectedStatus   int               `json:"expected_status,omitempty"`    // legacy single status; 0 = any 2xx (kept for back-compat)
-	AcceptedStatuses string            `json:"accepted_statuses,omitempty"`  // ranges/CSV e.g. "200-299,301"; overrides ExpectedStatus when set
+	AcceptedStatuses string            `json:"accepted_statuses,omitempty"`  // ranges/CSV e.g. "200-299,301"; empty = any 2xx/3xx
 	Keyword          string            `json:"keyword,omitempty"`            // body keyword; ok requires presence (or absence when KeywordInvert)
 	KeywordInvert    bool              `json:"keyword_invert,omitempty"`     // invert keyword match (fail when keyword present)
 	Headers          map[string]string `json:"headers,omitempty"`            // request headers

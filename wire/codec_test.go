@@ -90,9 +90,9 @@ func sampleDesiredState() config.DesiredState {
 	return config.DesiredState{
 		ConfigVersion: 8,
 		ProbeTargets: []config.ProbeTarget{
-			{MonitorID: "probe_mon1", Kind: "icmp", Name: "Cloudflare DNS", Target: "1.1.1.1", Params: config.ProbeParams{IntervalSeconds: 10, TimeoutMs: 1000, PacketSize: 56, Retries: 2, PacketCount: 3, GlobalTimeoutMs: 10000}, ConfigSerial: 41},
+			{MonitorID: "probe_mon1", Kind: "icmp", Name: "Cloudflare DNS", Target: "1.1.1.1", Params: config.ProbeParams{IntervalSeconds: 10, TimeoutMs: 1000, PacketSize: 56, PacketCount: 3, GlobalTimeoutMs: 10000}, ConfigSerial: 41},
 			{Kind: "http", Name: "Example keyword", Target: "https://example.com", Params: config.ProbeParams{
-				Method: "POST", ExpectedStatus: 200, AcceptedStatuses: "200-299,301",
+				Method: "POST", AcceptedStatuses: "200-299,301",
 				Keyword: "Example Domain", KeywordInvert: true, Headers: map[string]string{"X-Test": "1"},
 				Body: `{"k":"v"}`, MaxRedirects: 5, IgnoreTLS: true, MaxResponseBytes: 2048,
 			}},
