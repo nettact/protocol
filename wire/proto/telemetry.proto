@@ -256,6 +256,11 @@ message DesiredState {
   int32 config_version = 1;
   repeated ProbeTarget probe_targets = 2;
   Intervals intervals = 3;
+  // The egress proxies referenced by probe_targets — only those referenced, and
+  // only those still enabled. A target whose proxy_id has no entry here stays in
+  // probe_targets on purpose, so the agent reports proxy-missing rather than the
+  // monitor silently disappearing.
+  repeated ProxySpec proxies = 5;
 }
 
 // SnapshotRequest mirrors config.SnapshotRequest. Fields 2-3 (want_processes,
@@ -284,6 +289,43 @@ message ProbeTarget {
   // The agent echoes it on Metric.config_serial and MonitorStatusEntry
   // .target_config_serial so the server can reject obsolete-generation samples.
   int32 config_serial = 7;
+  // Pins this target's egress to one DesiredState.proxies entry. Empty = direct.
+  // An id the agent cannot honor makes the monitor un-runnable, never direct.
+  string proxy_id = 8;
+}
+
+// ProxySpec mirrors config.ProxySpec — one egress proxy for monitoring targets.
+// socks5/http are relays (CONNECT); wireguard is a userspace tunnel the agent
+// dials from inside, which is why it is the only type that can carry ICMP/UDP
+// probes. Credential fields are secrets: they ride the authenticated agent
+// channel and are never echoed by the server's read APIs.
+message ProxySpec {
+  string id = 1;
+  string name = 2;
+  string type = 3; // open enum (config.ProxyType*)
+  // This proxy's material config generation. The agent keys its built dialer on
+  // (id, config_serial) so an edit tears the old one down instead of living on
+  // with stale credentials or a stale connection.
+  int32 config_serial = 4;
+
+  // socks5 / http
+  string host = 5;
+  int32 port = 6;
+  string username = 7;
+  string password = 8;
+  string dns_mode = 9; // open enum (config.ProxyDNS*); "" = local
+  int32 connect_timeout_ms = 10;
+
+  // wireguard
+  string wg_private_key = 11;
+  string wg_peer_public_key = 12;
+  string wg_preshared_key = 13;
+  string wg_endpoint = 14;
+  string wg_allowed_ips = 15;
+  string wg_local_addrs = 16;
+  string wg_dns = 17;
+  int32 wg_mtu = 18;
+  int32 wg_keepalive_seconds = 19;
 }
 
 // ProbeParams mirrors config.ProbeParams (zero == collector default).

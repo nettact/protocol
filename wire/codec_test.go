@@ -96,12 +96,31 @@ func sampleDesiredState() config.DesiredState {
 				Keyword: "Example Domain", KeywordInvert: true, Headers: map[string]string{"X-Test": "1"},
 				Body: `{"k":"v"}`, MaxRedirects: 5, IgnoreTLS: true, MaxResponseBytes: 2048,
 			}},
-			{Kind: "tcp", Name: "TLS port", Target: "1.1.1.1", Params: config.ProbeParams{Port: 443, TLS: true, TimeoutMs: 2000}},
+			{Kind: "tcp", Name: "TLS port", Target: "1.1.1.1", Params: config.ProbeParams{Port: 443, TLS: true, TimeoutMs: 2000}, ProxyID: "prx_socks"},
 			{Kind: "dns", Name: "MX lookup", Target: "example.com", Params: config.ProbeParams{RecordType: "MX", ResolverServer: "https://cloudflare-dns.com/dns-query", ResolverProtocol: "doh"}},
 			{Kind: "nat", Name: "NAT type", Target: "stun.example.com", Params: config.ProbeParams{Port: 3478, NATTransport: "udp", STUNServer2: "stun2.example.com:3478", TimeoutMs: 3000}},
 			{MonitorID: "probe_gw1", Kind: "gateway", Name: "LAN gateway", Target: "gateway", Params: config.ProbeParams{Interface: "以太网", PacketCount: 3, TimeoutMs: 2000}},
+			{MonitorID: "probe_tun1", Kind: "icmp", Name: "Tunnelled ping", Target: "10.7.0.1", Params: config.ProbeParams{PacketCount: 3}, ProxyID: "prx_wg"},
 		},
 		Intervals: config.Intervals{BaseSeconds: 10, RegularSeconds: 60},
+		// One spec per shape: a credentialed relay and a tunnel, so every ProxySpec
+		// field is exercised by the round-trip (a dropped field would otherwise only
+		// surface as a proxy that silently stops authenticating).
+		Proxies: []config.ProxySpec{
+			{
+				ID: "prx_socks", Name: "Office SOCKS5", Type: config.ProxyTypeSOCKS5, ConfigSerial: 12,
+				Host: "proxy.example.com", Port: 1080, Username: "probe", Password: "s3cret",
+				DNSMode: config.ProxyDNSRemote, ConnectTimeoutMs: 3000,
+			},
+			{
+				ID: "prx_wg", Name: "Site tunnel", Type: config.ProxyTypeWireGuard, ConfigSerial: 12,
+				WGPrivateKey:    "aFBrZXlwa2V5cGtleXBrZXlwa2V5cGtleXBrZXk=",
+				WGPeerPublicKey: "cHVia2V5cHVia2V5cHVia2V5cHVia2V5cHViaw==",
+				WGPresharedKey:  "cHNrcHNrcHNrcHNrcHNrcHNrcHNrcHNrcHNrcHM=",
+				WGEndpoint:      "wg.example.com:51820", WGAllowedIPs: "10.7.0.0/24,192.168.9.0/24",
+				WGLocalAddrs: "10.7.0.2/32", WGDNS: "10.7.0.53", WGMTU: 1380, WGKeepaliveSeconds: 25,
+			},
+		},
 	}
 }
 

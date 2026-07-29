@@ -509,6 +509,7 @@ func desiredStateToProto(d config.DesiredState) *pb.DesiredState {
 				Name:         t.Name,
 				Target:       t.Target,
 				ConfigSerial: int32(t.ConfigSerial),
+				ProxyId:      t.ProxyID,
 				Params: &pb.ProbeParams{
 					IntervalSeconds:  int32(t.Params.IntervalSeconds),
 					TimeoutMs:        int32(t.Params.TimeoutMs),
@@ -539,7 +540,64 @@ func desiredStateToProto(d config.DesiredState) *pb.DesiredState {
 			}
 		}
 	}
+	if len(d.Proxies) > 0 {
+		out.Proxies = make([]*pb.ProxySpec, len(d.Proxies))
+		for i, p := range d.Proxies {
+			out.Proxies[i] = proxySpecToProto(p)
+		}
+	}
 	return out
+}
+
+func proxySpecToProto(p config.ProxySpec) *pb.ProxySpec {
+	return &pb.ProxySpec{
+		Id:                 p.ID,
+		Name:               p.Name,
+		Type:               p.Type,
+		ConfigSerial:       int32(p.ConfigSerial),
+		Host:               p.Host,
+		Port:               int32(p.Port),
+		Username:           p.Username,
+		Password:           p.Password,
+		DnsMode:            p.DNSMode,
+		ConnectTimeoutMs:   int32(p.ConnectTimeoutMs),
+		WgPrivateKey:       p.WGPrivateKey,
+		WgPeerPublicKey:    p.WGPeerPublicKey,
+		WgPresharedKey:     p.WGPresharedKey,
+		WgEndpoint:         p.WGEndpoint,
+		WgAllowedIps:       p.WGAllowedIPs,
+		WgLocalAddrs:       p.WGLocalAddrs,
+		WgDns:              p.WGDNS,
+		WgMtu:              int32(p.WGMTU),
+		WgKeepaliveSeconds: int32(p.WGKeepaliveSeconds),
+	}
+}
+
+func proxySpecFromProto(p *pb.ProxySpec) config.ProxySpec {
+	if p == nil {
+		return config.ProxySpec{}
+	}
+	return config.ProxySpec{
+		ID:                 p.Id,
+		Name:               p.Name,
+		Type:               p.Type,
+		ConfigSerial:       int(p.ConfigSerial),
+		Host:               p.Host,
+		Port:               int(p.Port),
+		Username:           p.Username,
+		Password:           p.Password,
+		DNSMode:            p.DnsMode,
+		ConnectTimeoutMs:   int(p.ConnectTimeoutMs),
+		WGPrivateKey:       p.WgPrivateKey,
+		WGPeerPublicKey:    p.WgPeerPublicKey,
+		WGPresharedKey:     p.WgPresharedKey,
+		WGEndpoint:         p.WgEndpoint,
+		WGAllowedIPs:       p.WgAllowedIps,
+		WGLocalAddrs:       p.WgLocalAddrs,
+		WGDNS:              p.WgDns,
+		WGMTU:              int(p.WgMtu),
+		WGKeepaliveSeconds: int(p.WgKeepaliveSeconds),
+	}
 }
 
 func desiredStateFromProto(d *pb.DesiredState) config.DesiredState {
@@ -561,6 +619,7 @@ func desiredStateFromProto(d *pb.DesiredState) config.DesiredState {
 				Name:         t.Name,
 				Target:       t.Target,
 				ConfigSerial: int(t.ConfigSerial),
+				ProxyID:      t.ProxyId,
 			}
 			if t.Params != nil {
 				pt.Params = config.ProbeParams{
@@ -592,6 +651,12 @@ func desiredStateFromProto(d *pb.DesiredState) config.DesiredState {
 				}
 			}
 			out.ProbeTargets[i] = pt
+		}
+	}
+	if len(d.Proxies) > 0 {
+		out.Proxies = make([]config.ProxySpec, len(d.Proxies))
+		for i, p := range d.Proxies {
+			out.Proxies[i] = proxySpecFromProto(p)
 		}
 	}
 	return out

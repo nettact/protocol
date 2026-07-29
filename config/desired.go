@@ -13,6 +13,12 @@ type DesiredState struct {
 	ConfigVersion int           `json:"config_version"`
 	ProbeTargets  []ProbeTarget `json:"probe_targets"`
 	Intervals     Intervals     `json:"intervals"`
+	// Proxies are the egress proxies referenced by the targets above — only those
+	// actually referenced, and only those still enabled. A target whose ProxyID has
+	// no entry here is deliberately left in ProbeTargets so the agent reports it as
+	// a proxy-missing operational issue: dropping it server-side would make a
+	// disabled proxy look like a deleted monitor.
+	Proxies []ProxySpec `json:"proxies,omitempty"`
 }
 
 // SnapshotRequest is a one-shot ask for a live host snapshot, pushed to the
@@ -112,6 +118,11 @@ type ProbeTarget struct {
 	Name      string      `json:"name,omitempty"` // human-friendly display name; optional
 	Target    string      `json:"target"`         // "1.1.1.1", "example.com", "https://…"
 	Params    ProbeParams `json:"params"`         // per-protocol probe settings (zero = collector defaults)
+	// ProxyID pins this target's egress to one DesiredState.Proxies entry. Empty
+	// means a direct dial. A non-empty id the agent cannot honor (absent spec, or a
+	// type this kind cannot use) makes the monitor un-runnable rather than direct:
+	// there is no fallback, by design.
+	ProxyID string `json:"proxy_id,omitempty"`
 	// ConfigSerial is this target's material config generation
 	// (probe_tasks.config_serial) at push time. The agent echoes it on every
 	// Metric (Metric.ConfigSerial) and MonitorStatusEntry (TargetConfigSerial)

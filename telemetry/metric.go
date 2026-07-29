@@ -178,6 +178,22 @@ const (
 
 	ProbeReasonHTTPStatus  = 71 // request completed but the status code failed the acceptance check
 	ProbeReasonHTTPKeyword = 72 // request completed but the body keyword check failed
+
+	// The 8x family covers a probe pinned to an egress proxy that failed BEFORE the
+	// target was ever reached. Keeping these apart from the 1-6 families is the whole
+	// point of the family: "the proxy is down" and "the monitored service is down"
+	// are opposite operational conclusions, and collapsing an unreachable proxy into
+	// ProbeReasonTimeout would page someone about a service that is perfectly fine.
+	// A code here always means the failure is on the egress path, never at the target.
+	ProbeReasonProxyConnect = 81 // could not reach the proxy, or its handshake/tunnel failed
+	ProbeReasonProxyAuth    = 82 // the proxy rejected the supplied credentials
+	ProbeReasonProxyDNS     = 83 // the proxy could not resolve the target hostname
+	ProbeReasonProxyRefused = 84 // the proxy reached but refused to relay to this target
+	// ProbeReasonProxyConfig marks a probe that never dialed at all: the pinned proxy
+	// is absent from the pushed config, unusable for this probe kind, or failed to
+	// initialize. It is deliberately a probe FAILURE rather than a direct dial —
+	// falling back would leak the real egress IP and make an "up" verdict a lie.
+	ProbeReasonProxyConfig = 85
 )
 
 // ProbeReasonDetailLabel is the Metric.Labels key on which a probe.*.error_class
