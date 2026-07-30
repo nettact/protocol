@@ -99,8 +99,9 @@ type InterfaceState struct {
 // Interfaces is intentionally not omitempty: a zero-interface round must still
 // transmit the (empty) set so the server clears stale rows.
 type InterfaceSnapshot struct {
-	SampledAt  time.Time           `json:"sampled_at"`
-	WiFiState  WiFiCollectionState `json:"wifi_state"`
-	WiFiReason WiFiReason          `json:"wifi_reason,omitempty"`
-	Interfaces []InterfaceState    `json:"interfaces"`
+	SampledAt    time.Time           `json:"sampled_at"`
+	WiFiState    WiFiCollectionState `json:"wifi_state"`
+	WiFiReason   WiFiReason          `json:"wifi_reason,omitempty"`
+	DefaultRoute *SnapshotRoute      `json:"default_route,omitempty"`
+	Interfaces   []InterfaceState    `json:"interfaces"`
 }

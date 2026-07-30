@@ -35,8 +35,9 @@ func samplePacket() telemetry.Packet {
 		},
 		InterfaceSnapshots: []telemetry.InterfaceSnapshot{
 			{
-				SampledAt: ts,
-				WiFiState: telemetry.WiFiCollectionOK,
+				SampledAt:    ts,
+				WiFiState:    telemetry.WiFiCollectionOK,
+				DefaultRoute: &telemetry.SnapshotRoute{Gateway: "10.0.0.1", Interface: "eth0"},
 				Interfaces: []telemetry.InterfaceState{
 					{Name: "eth0", Addrs: []string{"10.0.0.2/24"}, Gateway: "10.0.0.1", DNS: []string{"1.1.1.1"}, Up: true},
 					{Name: "wlan0", Addrs: []string{"192.168.1.2/24"}, Up: true, IsWireless: true, WiFi: &telemetry.WiFiInfo{

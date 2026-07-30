@@ -201,6 +201,12 @@ func interfaceSnapshotToProto(s telemetry.InterfaceSnapshot) *pb.InterfaceSnapsh
 		WifiState:  string(s.WiFiState),
 		WifiReason: string(s.WiFiReason),
 	}
+	if s.DefaultRoute != nil {
+		out.DefaultRoute = &pb.SnapshotRoute{
+			Gateway:   s.DefaultRoute.Gateway,
+			Interface: s.DefaultRoute.Interface,
+		}
+	}
 	if len(s.Interfaces) > 0 {
 		out.Interfaces = make([]*pb.InterfaceState, len(s.Interfaces))
 		for i, ifs := range s.Interfaces {
@@ -225,6 +231,12 @@ func interfaceSnapshotFromProto(s *pb.InterfaceSnapshot) telemetry.InterfaceSnap
 		WiFiState:  telemetry.WiFiCollectionState(s.WifiState),
 		WiFiReason: telemetry.WiFiReason(s.WifiReason),
 		Interfaces: make([]telemetry.InterfaceState, len(s.Interfaces)),
+	}
+	if s.DefaultRoute != nil {
+		out.DefaultRoute = &telemetry.SnapshotRoute{
+			Gateway:   s.DefaultRoute.Gateway,
+			Interface: s.DefaultRoute.Interface,
+		}
 	}
 	for i, ifs := range s.Interfaces {
 		out.Interfaces[i] = interfaceStateFromProto(ifs)

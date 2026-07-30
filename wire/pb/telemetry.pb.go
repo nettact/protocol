@@ -1052,6 +1052,7 @@ type InterfaceSnapshot struct {
 	WifiState     string                 `protobuf:"bytes,2,opt,name=wifi_state,json=wifiState,proto3" json:"wifi_state,omitempty"`    // open enum (telemetry.WiFiCollectionState)
 	WifiReason    string                 `protobuf:"bytes,3,opt,name=wifi_reason,json=wifiReason,proto3" json:"wifi_reason,omitempty"` // open enum (telemetry.WiFiReason)
 	Interfaces    []*InterfaceState      `protobuf:"bytes,4,rep,name=interfaces,proto3" json:"interfaces,omitempty"`
+	DefaultRoute  *SnapshotRoute         `protobuf:"bytes,5,opt,name=default_route,json=defaultRoute,proto3" json:"default_route,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1110,6 +1111,13 @@ func (x *InterfaceSnapshot) GetWifiReason() string {
 func (x *InterfaceSnapshot) GetInterfaces() []*InterfaceState {
 	if x != nil {
 		return x.Interfaces
+	}
+	return nil
+}
+
+func (x *InterfaceSnapshot) GetDefaultRoute() *SnapshotRoute {
+	if x != nil {
+		return x.DefaultRoute
 	}
 	return nil
 }
@@ -3562,7 +3570,7 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x02ip\x18\x05 \x01(\tR\x02ip\x12\x1a\n" +
 	"\bhostname\x18\x06 \x01(\tR\bhostname\x12\x16\n" +
 	"\x06vendor\x18\a \x01(\tR\x06vendor\x127\n" +
-	"\tlast_seen\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\blastSeenJ\x04\b\t\x10\x0eR\x04nameR\x05addrsR\agatewayR\x03dnsR\x02up\"\xcf\x01\n" +
+	"\tlast_seen\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\blastSeenJ\x04\b\t\x10\x0eR\x04nameR\x05addrsR\agatewayR\x03dnsR\x02up\"\x94\x02\n" +
 	"\x11InterfaceSnapshot\x129\n" +
 	"\n" +
 	"sampled_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\tsampledAt\x12\x1d\n" +
@@ -3572,7 +3580,8 @@ const file_telemetry_proto_rawDesc = "" +
 	"wifiReason\x12?\n" +
 	"\n" +
 	"interfaces\x18\x04 \x03(\v2\x1f.nettact.wire.v1.InterfaceStateR\n" +
-	"interfaces\"\xc6\x01\n" +
+	"interfaces\x12C\n" +
+	"\rdefault_route\x18\x05 \x01(\v2\x1e.nettact.wire.v1.SnapshotRouteR\fdefaultRoute\"\xc6\x01\n" +
 	"\x0eInterfaceState\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05addrs\x18\x02 \x03(\tR\x05addrs\x12\x18\n" +
@@ -3899,36 +3908,37 @@ var file_telemetry_proto_depIdxs = []int32{
 	40, // 22: nettact.wire.v1.InventoryItem.last_seen:type_name -> google.protobuf.Timestamp
 	40, // 23: nettact.wire.v1.InterfaceSnapshot.sampled_at:type_name -> google.protobuf.Timestamp
 	10, // 24: nettact.wire.v1.InterfaceSnapshot.interfaces:type_name -> nettact.wire.v1.InterfaceState
-	11, // 25: nettact.wire.v1.InterfaceState.wifi:type_name -> nettact.wire.v1.WiFiInfo
-	40, // 26: nettact.wire.v1.HostSnapshot.ts:type_name -> google.protobuf.Timestamp
-	14, // 27: nettact.wire.v1.HostSnapshot.processes:type_name -> nettact.wire.v1.ProcessInfo
-	15, // 28: nettact.wire.v1.HostSnapshot.connections:type_name -> nettact.wire.v1.ConnectionInfo
-	13, // 29: nettact.wire.v1.HostSnapshot.scopes:type_name -> nettact.wire.v1.SnapshotScopeResult
-	40, // 30: nettact.wire.v1.TelemetryAck.server_time:type_name -> google.protobuf.Timestamp
-	19, // 31: nettact.wire.v1.DesiredState.probe_targets:type_name -> nettact.wire.v1.ProbeTarget
-	22, // 32: nettact.wire.v1.DesiredState.intervals:type_name -> nettact.wire.v1.Intervals
-	20, // 33: nettact.wire.v1.DesiredState.proxies:type_name -> nettact.wire.v1.ProxySpec
-	21, // 34: nettact.wire.v1.ProbeTarget.params:type_name -> nettact.wire.v1.ProbeParams
-	39, // 35: nettact.wire.v1.ProbeParams.headers:type_name -> nettact.wire.v1.ProbeParams.HeadersEntry
-	24, // 36: nettact.wire.v1.IncidentSnapshotRequest.targets:type_name -> nettact.wire.v1.SnapshotTargetRef
-	40, // 37: nettact.wire.v1.IncidentSnapshot.collected_at:type_name -> google.protobuf.Timestamp
-	27, // 38: nettact.wire.v1.IncidentSnapshot.groups:type_name -> nettact.wire.v1.SnapshotGroupResult
-	28, // 39: nettact.wire.v1.IncidentSnapshot.network:type_name -> nettact.wire.v1.SnapshotNetwork
-	31, // 40: nettact.wire.v1.IncidentSnapshot.agent:type_name -> nettact.wire.v1.SnapshotAgentInfo
-	32, // 41: nettact.wire.v1.IncidentSnapshot.resources:type_name -> nettact.wire.v1.SnapshotResources
-	33, // 42: nettact.wire.v1.IncidentSnapshot.targets:type_name -> nettact.wire.v1.SnapshotTargetResult
-	40, // 43: nettact.wire.v1.SnapshotGroupResult.collected_at:type_name -> google.protobuf.Timestamp
-	29, // 44: nettact.wire.v1.SnapshotNetwork.interfaces:type_name -> nettact.wire.v1.SnapshotInterface
-	30, // 45: nettact.wire.v1.SnapshotNetwork.default_route:type_name -> nettact.wire.v1.SnapshotRoute
-	40, // 46: nettact.wire.v1.TraceResult.started_at:type_name -> google.protobuf.Timestamp
-	40, // 47: nettact.wire.v1.TraceResult.completed_at:type_name -> google.protobuf.Timestamp
-	35, // 48: nettact.wire.v1.TraceResult.hops:type_name -> nettact.wire.v1.TraceHop
-	36, // 49: nettact.wire.v1.TraceHop.attempts:type_name -> nettact.wire.v1.TraceAttempt
-	50, // [50:50] is the sub-list for method output_type
-	50, // [50:50] is the sub-list for method input_type
-	50, // [50:50] is the sub-list for extension type_name
-	50, // [50:50] is the sub-list for extension extendee
-	0,  // [0:50] is the sub-list for field type_name
+	30, // 25: nettact.wire.v1.InterfaceSnapshot.default_route:type_name -> nettact.wire.v1.SnapshotRoute
+	11, // 26: nettact.wire.v1.InterfaceState.wifi:type_name -> nettact.wire.v1.WiFiInfo
+	40, // 27: nettact.wire.v1.HostSnapshot.ts:type_name -> google.protobuf.Timestamp
+	14, // 28: nettact.wire.v1.HostSnapshot.processes:type_name -> nettact.wire.v1.ProcessInfo
+	15, // 29: nettact.wire.v1.HostSnapshot.connections:type_name -> nettact.wire.v1.ConnectionInfo
+	13, // 30: nettact.wire.v1.HostSnapshot.scopes:type_name -> nettact.wire.v1.SnapshotScopeResult
+	40, // 31: nettact.wire.v1.TelemetryAck.server_time:type_name -> google.protobuf.Timestamp
+	19, // 32: nettact.wire.v1.DesiredState.probe_targets:type_name -> nettact.wire.v1.ProbeTarget
+	22, // 33: nettact.wire.v1.DesiredState.intervals:type_name -> nettact.wire.v1.Intervals
+	20, // 34: nettact.wire.v1.DesiredState.proxies:type_name -> nettact.wire.v1.ProxySpec
+	21, // 35: nettact.wire.v1.ProbeTarget.params:type_name -> nettact.wire.v1.ProbeParams
+	39, // 36: nettact.wire.v1.ProbeParams.headers:type_name -> nettact.wire.v1.ProbeParams.HeadersEntry
+	24, // 37: nettact.wire.v1.IncidentSnapshotRequest.targets:type_name -> nettact.wire.v1.SnapshotTargetRef
+	40, // 38: nettact.wire.v1.IncidentSnapshot.collected_at:type_name -> google.protobuf.Timestamp
+	27, // 39: nettact.wire.v1.IncidentSnapshot.groups:type_name -> nettact.wire.v1.SnapshotGroupResult
+	28, // 40: nettact.wire.v1.IncidentSnapshot.network:type_name -> nettact.wire.v1.SnapshotNetwork
+	31, // 41: nettact.wire.v1.IncidentSnapshot.agent:type_name -> nettact.wire.v1.SnapshotAgentInfo
+	32, // 42: nettact.wire.v1.IncidentSnapshot.resources:type_name -> nettact.wire.v1.SnapshotResources
+	33, // 43: nettact.wire.v1.IncidentSnapshot.targets:type_name -> nettact.wire.v1.SnapshotTargetResult
+	40, // 44: nettact.wire.v1.SnapshotGroupResult.collected_at:type_name -> google.protobuf.Timestamp
+	29, // 45: nettact.wire.v1.SnapshotNetwork.interfaces:type_name -> nettact.wire.v1.SnapshotInterface
+	30, // 46: nettact.wire.v1.SnapshotNetwork.default_route:type_name -> nettact.wire.v1.SnapshotRoute
+	40, // 47: nettact.wire.v1.TraceResult.started_at:type_name -> google.protobuf.Timestamp
+	40, // 48: nettact.wire.v1.TraceResult.completed_at:type_name -> google.protobuf.Timestamp
+	35, // 49: nettact.wire.v1.TraceResult.hops:type_name -> nettact.wire.v1.TraceHop
+	36, // 50: nettact.wire.v1.TraceHop.attempts:type_name -> nettact.wire.v1.TraceAttempt
+	51, // [51:51] is the sub-list for method output_type
+	51, // [51:51] is the sub-list for method input_type
+	51, // [51:51] is the sub-list for extension type_name
+	51, // [51:51] is the sub-list for extension extendee
+	0,  // [0:51] is the sub-list for field type_name
 }
 
 func init() { file_telemetry_proto_init() }

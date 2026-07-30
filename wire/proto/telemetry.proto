@@ -167,6 +167,7 @@ message InterfaceSnapshot {
   string wifi_state = 2; // open enum (telemetry.WiFiCollectionState)
   string wifi_reason = 3; // open enum (telemetry.WiFiReason)
   repeated InterfaceState interfaces = 4;
+  SnapshotRoute default_route = 5;
 }
 
 // InterfaceState mirrors telemetry.InterfaceState — one interface row. wifi is
