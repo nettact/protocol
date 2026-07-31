@@ -120,21 +120,29 @@ const (
 	HostUptime     MetricKind = "host.uptime_s"
 	HostNetRxBps   MetricKind = "host.net.rx_bps" // receive rate, bytes/s
 	HostNetTxBps   MetricKind = "host.net.tx_bps" // send rate, bytes/s
+
+	// Temperature follows the CPU aggregate/detail split: the "host" series is
+	// the hottest plausible sensor (what the console overview graphs), the
+	// per-sensor series keeps the detail. Sensors are wildly platform-dependent,
+	// so both are emitted only when a real reading succeeds.
+	HostTempC       MetricKind = "host.temp.c"        // hottest sensor, Target="host"
+	HostTempSensorC MetricKind = "host.temp.sensor.c" // per sensor, Target=sanitized sensor key
 )
 
 // Units for Metric.Value.
 const (
-	UnitMs    = "ms"
-	UnitPct   = "pct"
-	UnitBool  = "bool"
-	UnitCode  = "code"
-	UnitCount = "count"
-	UnitSec   = "s"
-	UnitBytes = "bytes"
-	UnitBps   = "bps"  // bytes per second
-	UnitLoad  = "load" // load average (dimensionless)
-	UnitDBm   = "dbm"  // signal strength in decibel-milliwatts
-	UnitMbps  = "mbps" // link rate in megabits per second
+	UnitMs      = "ms"
+	UnitPct     = "pct"
+	UnitBool    = "bool"
+	UnitCode    = "code"
+	UnitCount   = "count"
+	UnitSec     = "s"
+	UnitBytes   = "bytes"
+	UnitBps     = "bps"  // bytes per second
+	UnitLoad    = "load" // load average (dimensionless)
+	UnitDBm     = "dbm"  // signal strength in decibel-milliwatts
+	UnitMbps    = "mbps" // link rate in megabits per second
+	UnitCelsius = "c"    // temperature in degrees Celsius
 )
 
 // Probe failure-reason codes carried in the probe.*.error_class metrics

@@ -153,3 +153,24 @@ func TestHostMetricsBundleExcludesSnapshotScopes(t *testing.T) {
 		}
 	}
 }
+
+// TestRequiredForHostMetricGatesTemperature pins both temperature series to the
+// temperature permission, and re-checks the neighbouring host kinds: the switch
+// is prefix-based, so a careless "host.temp" case could shadow them.
+func TestRequiredForHostMetricGatesTemperature(t *testing.T) {
+	for kind, want := range map[string]ID{
+		"host.temp.c":        HostTemperatureRead,
+		"host.temp.sensor.c": HostTemperatureRead,
+		"host.uptime_s":      HostUptimeRead,
+		"host.net.rx_bps":    HostNetworkIORead,
+		"host.cpu.pct":       HostCPURead,
+	} {
+		got := RequiredForHostMetric(kind)
+		if len(got) != 1 || got[0] != want {
+			t.Fatalf("RequiredForHostMetric(%q) = %v, want [%s]", kind, got, want)
+		}
+	}
+	if got := RequiredForHostMetric("probe.icmp.rtt_ms"); got != nil {
+		t.Fatalf("probe kinds are not host-gated, got %v", got)
+	}
+}

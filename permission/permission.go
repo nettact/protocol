@@ -51,6 +51,10 @@ const (
 	HostLoadRead      ID = "host.load.read"
 	HostUptimeRead    ID = "host.uptime.read"
 	HostNetworkIORead ID = "host.network.io.read"
+	// HostTemperatureRead is capability-probed rather than assumed: many boards
+	// and VMs expose no thermal sensors at all, so the agent advertises it in
+	// its supported set only when a startup sensor read returns a real value.
+	HostTemperatureRead ID = "host.temperature.read"
 )
 
 // Process snapshot scope permissions.
@@ -87,6 +91,7 @@ var canonicalOrder = []ID{
 	NetWiFiStatusRead, NetWiFiSSIDRead,
 	NetNeighborRead, NetNeighborHostRead,
 	HostCPURead, HostMemoryRead, HostDiskRead, HostLoadRead, HostUptimeRead, HostNetworkIORead,
+	HostTemperatureRead,
 	HostProcessBasicRead, HostProcessOwnerRead, HostProcessResourceRead, HostProcessIORead,
 	HostConnectionSummaryRead, HostConnectionLocalRead, HostConnectionRemoteRead, HostConnectionOwnerRead,
 	DiagnosticTracerouteICMP, DiagnosticTracerouteTCP,
@@ -298,6 +303,7 @@ func Bundles() []Bundle {
 		{ID: "host_metrics", Set: Closure(union(DefaultStandalone(), NewSet(
 			HostCPURead, HostMemoryRead, HostDiskRead,
 			HostLoadRead, HostUptimeRead, HostNetworkIORead,
+			HostTemperatureRead,
 		)))},
 		// Every compiled permission. Capability gating still applies, so this
 		// grants only what the Agent's platform can actually do.
@@ -451,6 +457,8 @@ func RequiredForHostMetric(metricKind string) []ID {
 		return []ID{HostUptimeRead}
 	case strings.HasPrefix(metricKind, "host.net."):
 		return []ID{HostNetworkIORead}
+	case strings.HasPrefix(metricKind, "host.temp."):
+		return []ID{HostTemperatureRead}
 	case strings.HasPrefix(metricKind, "wifi."):
 		return []ID{NetWiFiStatusRead}
 	case metricKind == "iface.up":
