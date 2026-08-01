@@ -236,6 +236,18 @@ func gameBucketToProto(b gamesense.Bucket) *pb.GameBucket {
 			Changed: b.Present.Changed,
 		}
 	}
+	// A stutter block with count 0 is a watched second that held no hitch, so the
+	// nil check is on the block and never on its contents.
+	if b.Stutter != nil {
+		out.Stutter = &pb.GameStutter{Count: int32(b.Stutter.Count), ExcessMs: b.Stutter.ExcessMs}
+	}
+	if b.ProcRes != nil {
+		out.ProcRes = &pb.GameProcRes{
+			CpuPct:    b.ProcRes.CPUPct,
+			WsBytes:   b.ProcRes.WSBytes,
+			PrivBytes: b.ProcRes.PrivBytes,
+		}
+	}
 	return out
 }
 
@@ -272,6 +284,16 @@ func gameBucketFromProto(b *pb.GameBucket) gamesense.Bucket {
 			Tearing: pr.Tearing,
 			API:     pr.Api,
 			Changed: pr.Changed,
+		}
+	}
+	if s := b.Stutter; s != nil {
+		out.Stutter = &gamesense.Stutter{Count: int(s.Count), ExcessMs: s.ExcessMs}
+	}
+	if p := b.ProcRes; p != nil {
+		out.ProcRes = &gamesense.ProcRes{
+			CPUPct:    p.CpuPct,
+			WSBytes:   p.WsBytes,
+			PrivBytes: p.PrivBytes,
 		}
 	}
 	out.Quality = b.Quality

@@ -132,6 +132,19 @@ const (
 	// than sampled. Statistics from a sampled source describe the samples, not
 	// the second, and the distinction belongs on the record.
 	CapPerFrameComplete = "per_frame_complete"
+	// CapStutter: long frames are detected against a rolling baseline, so each
+	// second carries how many hitches it held and how much time they cost.
+	// Without it the interval statistics are all a reader has, and a p99 cannot
+	// say whether one second held one bad frame or ten.
+	CapStutter = "stutter"
+	// CapProcCPU: the tracked game process's own CPU usage is sampled once per
+	// second. Scoped to that process rather than the machine — "the box is busy"
+	// and "the game is busy" lead to different fixes.
+	CapProcCPU = "proc_cpu"
+	// CapProcMem: the tracked game process's memory footprint is sampled once
+	// per second. Separate from CapProcCPU because the two readings come from
+	// different queries and one can be available while the other is not.
+	CapProcMem = "proc_mem"
 )
 
 // Sources. The identifier is stored with every run so a later comparison
@@ -368,6 +381,44 @@ type Present struct {
 	Changed bool   `json:"changed,omitempty"`
 }
 
+// Stutter reports the long-frame events of one second, produced by the sensor's
+// adaptive detector: the baseline is a rolling 30 s median of application frame
+// intervals, a candidate long frame is one exceeding max(50 ms, 2.5 × baseline),
+// and consecutive candidates merge into a single event attributed to the second
+// the event started in.
+//
+// The threshold is adaptive because a fixed one measures the wrong thing: 20 ms
+// is a severe hitch at 240 fps and an ordinary frame at 45. Merging matters for
+// the same reason — a 400 ms freeze spanning six frames is one thing that
+// happened to the player, not six.
+//
+// A present block with Count 0 is a real measurement: the second was watched and
+// held no stutter. Absence means nothing watched, which is why neither field
+// carries omitempty — a zero here must reach the wire.
+type Stutter struct {
+	Count    int     `json:"count"`
+	ExcessMs float64 `json:"excess_ms"` // sum of (frame time − baseline) across candidate frames, ms
+}
+
+// ProcRes is the game process's own resource usage, sampled once at the second
+// boundary rather than derived from the frame stream. It answers the question
+// the frame data cannot: whether a bad second was the game running out of room
+// or something else on the machine taking it.
+//
+// The inner fields are pointers because the two sources fail independently. CPU
+// is a delta and needs two samples, so the first observed second of a run has
+// none; memory is a level and can be read at once.
+//
+// The key is "proc_res" rather than the shorter "proc" because Sample is
+// embedded into Sec and Bucket: "proc" is already the tracked process's name
+// there, and a duplicate would be resolved away by the JSON encoder rather than
+// reported, leaving a block that silently never travelled.
+type ProcRes struct {
+	CPUPct    *float64 `json:"cpu_pct,omitempty"`    // % of total CPU capacity (all cores), 0-100
+	WSBytes   *uint64  `json:"ws_bytes,omitempty"`   // working set
+	PrivBytes *uint64  `json:"priv_bytes,omitempty"` // private (committed) bytes
+}
+
 // Sample is one second of presentation data, and the payload both the sensor's
 // sec line and the agent's uploaded bucket carry. It is emitted only for seconds
 // that contained frames: an idle second produces no sample at all, because
@@ -379,6 +430,8 @@ type Sample struct {
 	Hist    Histogram  `json:"ft_hist"`
 	DispFT  *DispFT    `json:"disp_ft,omitempty"`
 	Present *Present   `json:"present,omitempty"`
+	Stutter *Stutter   `json:"stutter,omitempty"`
+	ProcRes *ProcRes   `json:"proc_res,omitempty"`
 	Quality []string   `json:"quality,omitempty"`
 }
 

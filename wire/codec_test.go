@@ -81,18 +81,29 @@ func sampleGameRuns(ts time.Time) []gamesense.Run {
 	}
 }
 
-// sampleGameBuckets covers a fully-observed second and a minimally-observed one.
-// The second bucket is the important case: every optional field is nil, and the
-// round-trip must bring back nil rather than a zero that would read as "this
-// game dropped no frames" when nothing ever looked.
+// sampleGameBuckets covers the three shapes a second comes in. The first is
+// fully observed. The second is the important case: every optional field is nil,
+// and the round-trip must bring back nil rather than a zero that would read as
+// "this game dropped no frames" when nothing ever looked.
+//
+// The third is the half-observed middle, which is where a converter that reads
+// emptiness as absence goes wrong. Its stutter block is present with count 0 — a
+// second that was watched and held no hitch, which must not be dropped as if
+// nothing watched — and its resource block carries memory without CPU, the shape
+// of the first second of a run, where there is no delta to compute a percentage
+// from yet.
 func sampleGameBuckets(ts time.Time) []gamesense.Bucket {
 	displayed, dropped, app, generated := 140, 2, 71, 71
 	sync := 0
 	tearing := true
+	cpu := 42.5
+	var ws, priv uint64 = 1 << 30, 1<<30 + 1<<28
 	full := make([]uint32, gamesense.HistBins)
 	full[12], full[16] = 140, 2
 	sparse := make([]uint32, gamesense.HistBins)
 	sparse[9] = 143
+	steady := make([]uint32, gamesense.HistBins)
+	steady[11] = 144
 	return []gamesense.Bucket{
 		{
 			RunID: "run-live", TS: ts,
@@ -102,6 +113,8 @@ func sampleGameBuckets(ts time.Time) []gamesense.Bucket {
 				Hist:    gamesense.Histogram{Layout: gamesense.HistLayoutLog24V1, Counts: full},
 				DispFT:  &gamesense.DispFT{Avg: 7.1, P95: 8.4},
 				Present: &gamesense.Present{Mode: gamesense.PresentModeHardwareIndependentFlip, Sync: &sync, Tearing: &tearing, API: gamesense.APIDXGI, Changed: true},
+				Stutter: &gamesense.Stutter{Count: 2, ExcessMs: 118.4},
+				ProcRes: &gamesense.ProcRes{CPUPct: &cpu, WSBytes: &ws, PrivBytes: &priv},
 				Quality: []string{gamesense.QualityHistClipped},
 			},
 		},
@@ -111,6 +124,16 @@ func sampleGameBuckets(ts time.Time) []gamesense.Bucket {
 				Frames: gamesense.Frames{Presented: 143},
 				FT:     gamesense.FrameTimes{Avg: 6.99, P50: 6.9, P95: 7.4, P99: 7.9, Max: 8.2, SD: 0.31},
 				Hist:   gamesense.Histogram{Layout: gamesense.HistLayoutLog24V1, Counts: sparse},
+			},
+		},
+		{
+			RunID: "run-live", TS: ts.Add(2 * time.Second),
+			Sample: gamesense.Sample{
+				Frames:  gamesense.Frames{Presented: 144},
+				FT:      gamesense.FrameTimes{Avg: 6.94, P50: 6.94, P95: 7.0, P99: 7.1, Max: 7.2, SD: 0.08},
+				Hist:    gamesense.Histogram{Layout: gamesense.HistLayoutLog24V1, Counts: steady},
+				Stutter: &gamesense.Stutter{},
+				ProcRes: &gamesense.ProcRes{WSBytes: &ws, PrivBytes: &priv},
 			},
 		},
 	}
@@ -259,6 +282,50 @@ func TestEmptyRoundTrip(t *testing.T) {
 		}
 		if !reflect.DeepEqual(telemetry.Packet{}, out) {
 			t.Errorf("%s empty packet mismatch: %+v", ct, out)
+		}
+	}
+}
+
+// A second's stutter and resource blocks say what they say by being there, and
+// the emptiest of them are the ones a converter is most likely to lose: reading
+// an empty message as an absent one turns "watched, and nothing stuttered" into
+// "nothing was watching", which is the difference between a smooth run and an
+// unmeasured one. Checked in both formats, because only one of them has a
+// wire-level notion of message presence to get right.
+func TestGameBucketPresenceSurvivesEmptyBlocks(t *testing.T) {
+	in := samplePacket()
+	for _, ct := range []string{ContentTypeJSON, ContentTypeProtobuf} {
+		data, err := MarshalPacket(in, ct)
+		if err != nil {
+			t.Fatalf("MarshalPacket(%s): %v", ct, err)
+		}
+		out, err := UnmarshalPacket(data, ct)
+		if err != nil {
+			t.Fatalf("UnmarshalPacket(%s): %v", ct, err)
+		}
+		if len(out.GameBuckets) != len(in.GameBuckets) {
+			t.Fatalf("%s: %d buckets, want %d", ct, len(out.GameBuckets), len(in.GameBuckets))
+		}
+		// The unobserved second must not acquire blocks it never had.
+		if b := out.GameBuckets[1]; b.Stutter != nil || b.ProcRes != nil {
+			t.Errorf("%s: unwatched second gained stutter=%+v proc_res=%+v", ct, b.Stutter, b.ProcRes)
+		}
+		b := out.GameBuckets[2]
+		if b.Stutter == nil {
+			t.Fatalf("%s: quiet second lost its stutter block", ct)
+		}
+		if *b.Stutter != (gamesense.Stutter{}) {
+			t.Errorf("%s: quiet stutter = %+v, want a zeroed block", ct, *b.Stutter)
+		}
+		if b.ProcRes == nil {
+			t.Fatalf("%s: half-observed second lost its resource block", ct)
+		}
+		// The half that was never read stays unread; the half that was survives.
+		if b.ProcRes.CPUPct != nil {
+			t.Errorf("%s: cpu appeared with no delta to compute it from: %v", ct, *b.ProcRes.CPUPct)
+		}
+		if b.ProcRes.WSBytes == nil || *b.ProcRes.WSBytes != 1<<30 {
+			t.Errorf("%s: working set = %v", ct, b.ProcRes.WSBytes)
 		}
 	}
 }

@@ -167,6 +167,8 @@ message GameBucket {
   GameDispFT disp_ft = 6;
   GamePresent present = 7;
   repeated string quality = 8;
+  GameStutter stutter = 9;
+  GameProcRes proc_res = 10;
 }
 
 // GameFrames mirrors gamesense.Frames. Only presented is universal; the others
@@ -213,6 +215,26 @@ message GamePresent {
   optional bool tearing = 3;
   string api = 4;
   bool changed = 5;
+}
+
+// GameStutter mirrors gamesense.Stutter — the second's long-frame events, found
+// against a rolling baseline. Message presence carries the whole distinction:
+// the block with count 0 is a second that was watched and held no hitch, while
+// no block at all is a second nothing was watching. The fields themselves take
+// no presence, because inside a block that exists a zero is an observation.
+message GameStutter {
+  int32 count = 1;
+  double excess_ms = 2;
+}
+
+// GameProcRes mirrors gamesense.ProcRes — the game process's own resource usage
+// at the second boundary. Each field carries presence because the readings fail
+// independently: CPU is a delta and the first observed second has none, while
+// memory is a level readable at once.
+message GameProcRes {
+  optional double cpu_pct = 1;
+  optional uint64 ws_bytes = 2;
+  optional uint64 priv_bytes = 3;
 }
 
 // Event mirrors telemetry.Event.

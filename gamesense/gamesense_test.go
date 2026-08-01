@@ -190,7 +190,7 @@ func TestUnknownCountsAreAbsentAndZeroCountsAreNot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"displayed", "dropped", "app", "generated", "disp_ft", "present", "quality"} {
+	for _, key := range []string{"displayed", "dropped", "app", "generated", "disp_ft", "present", "stutter", "proc", "quality"} {
 		if strings.Contains(string(b), `"`+key+`"`) {
 			t.Errorf("sample without %s capability still emitted %q: %s", key, key, b)
 		}
@@ -221,6 +221,89 @@ func TestPresentKeepsMeaningfulZeroes(t *testing.T) {
 	want := `{"mode":"hardware_independent_flip","sync":0,"tearing":false,"api":"dxgi"}`
 	if got := string(b); got != want {
 		t.Errorf("present = %s, want %s", got, want)
+	}
+}
+
+// A watched second that held no hitch is a finding, and the most common one: a
+// run is mostly smooth seconds, and a chart that cannot draw them has no
+// baseline to show the bad ones against. Neither field carries omitempty, so the
+// block's own presence is the entire distinction between "no stutter" and "no
+// stutter detector".
+func TestQuietSecondStaysAMeasurement(t *testing.T) {
+	b, err := json.Marshal(Stutter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"count":0,"excess_ms":0}`
+	if got := string(b); got != want {
+		t.Errorf("quiet second = %s, want %s", got, want)
+	}
+	// And it survives being carried: a sample with the block still has it after
+	// a round trip, where a sample without one still has none.
+	sample := Sample{
+		Frames:  Frames{Presented: 142},
+		FT:      FrameTimes{Avg: 6.94, P50: 6.8, P95: 8.1, P99: 11.2, Max: 23, SD: 1.4},
+		Hist:    Histogram{Layout: HistLayoutLog24V1, Counts: make([]uint32, HistBins)},
+		Stutter: &Stutter{},
+	}
+	b, err = json.Marshal(sample)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out Sample
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Stutter == nil || *out.Stutter != (Stutter{}) {
+		t.Errorf("quiet second lost in transit: %+v (%s)", out.Stutter, b)
+	}
+	sample.Stutter = nil
+	b, err = json.Marshal(sample)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out = Sample{}
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Stutter != nil {
+		t.Errorf("an unwatched second acquired a stutter block: %+v (%s)", out.Stutter, b)
+	}
+}
+
+// The process's readings come from queries that fail independently: CPU is a
+// delta and the first observed second has nothing to subtract from, while memory
+// is a level readable at once. The half that is missing stays absent rather than
+// arriving as a zero that would draw a running game using no CPU at all.
+func TestProcResCarriesOnlyTheHalfItHas(t *testing.T) {
+	var ws, priv uint64 = 1 << 30, 1<<30 + 1<<28
+	b, err := json.Marshal(ProcRes{WSBytes: &ws, PrivBytes: &priv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"ws_bytes":1073741824,"priv_bytes":1342177280}`
+	if got := string(b); got != want {
+		t.Errorf("memory-only proc = %s, want %s", got, want)
+	}
+	var out ProcRes
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.CPUPct != nil {
+		t.Errorf("cpu appeared from nowhere: %v", *out.CPUPct)
+	}
+	if out.WSBytes == nil || *out.WSBytes != ws || out.PrivBytes == nil || *out.PrivBytes != priv {
+		t.Errorf("memory = %+v", out)
+	}
+	// An idle-but-measured process is the mirror case: 0% is an observation and
+	// must not be mistaken for the unmeasured CPU above.
+	idle := 0.0
+	b, err = json.Marshal(ProcRes{CPUPct: &idle})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(b), `{"cpu_pct":0}`; got != want {
+		t.Errorf("idle proc = %s, want %s", got, want)
 	}
 }
 
@@ -257,11 +340,84 @@ func TestSecAndBucketShareOneSampleShape(t *testing.T) {
 	}
 }
 
+// Inlining has a cost the compiler will not charge for: a Sample key that
+// collides with one of its wrappers is not an error, it is a silent drop. The
+// encoder resolves the shallower field and the deeper one simply never travels,
+// so a sensor would fill a block that nothing downstream ever sees.
+//
+// The live collision is the process: Sec names the tracked process "proc", so
+// the resource block cannot. Every wrapper key is checked, not just that one,
+// because the next field added to Sample will not come with this reminder.
+func TestSampleKeysDoNotCollideWithTheirWrappers(t *testing.T) {
+	cpu := 42.5
+	var ws uint64 = 1 << 30
+	sample := Sample{
+		Frames:  Frames{Presented: 142},
+		FT:      FrameTimes{Avg: 6.94},
+		Hist:    Histogram{Layout: HistLayoutLog24V1, Counts: make([]uint32, HistBins)},
+		Stutter: &Stutter{Count: 1, ExcessMs: 61.5},
+		ProcRes: &ProcRes{CPUPct: &cpu, WSBytes: &ws},
+	}
+	sampleKeys := make(map[string]struct{})
+	for _, key := range ownJSONKeys(Sample{}) {
+		sampleKeys[key] = struct{}{}
+	}
+	for _, wrapper := range []any{Sec{}, Bucket{}} {
+		for _, key := range ownJSONKeys(wrapper) {
+			if _, ok := sampleKeys[key]; ok {
+				t.Errorf("%T's %q key is also a Sample key: one of them will never reach the wire", wrapper, key)
+			}
+		}
+	}
+
+	// And the whole sample does survive the inlining it shares a namespace with.
+	var out Sec
+	b, err := json.Marshal(Sec{Type: TypeSec, TS: time.Now(), PID: 4242, Proc: "cs2.exe", Sample: sample})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Proc != "cs2.exe" {
+		t.Errorf("process name = %q, want cs2.exe", out.Proc)
+	}
+	if out.ProcRes == nil || out.ProcRes.CPUPct == nil || *out.ProcRes.CPUPct != cpu {
+		t.Errorf("resource block did not survive the sec line: %+v (%s)", out.ProcRes, b)
+	}
+	if out.Stutter == nil || out.Stutter.Count != 1 {
+		t.Errorf("stutter did not survive the sec line: %+v (%s)", out.Stutter, b)
+	}
+}
+
+// ownJSONKeys returns the JSON names v's own fields claim, skipping embedded
+// ones — those are the other side of the comparison, not part of it. Marshalling
+// would not do: a wrapper's output already contains the inlined sample's keys,
+// which is the very flattening under test.
+func ownJSONKeys(v any) []string {
+	rt := reflect.TypeOf(v)
+	var keys []string
+	for i := 0; i < rt.NumField(); i++ {
+		f := rt.Field(i)
+		if f.Anonymous {
+			continue
+		}
+		name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+		if name == "" {
+			name = f.Name
+		}
+		keys = append(keys, name)
+	}
+	return keys
+}
+
 func TestSecRoundTrips(t *testing.T) {
 	ts := time.Date(2026, 8, 1, 12, 0, 4, 123000000, time.UTC)
 	displayed, dropped, app, generated := 140, 2, 71, 71
 	sync := 1
 	tearing := true
+	cpu := 42.5
+	var ws, priv uint64 = 1 << 30, 1<<30 + 1<<28
 	counts := make([]uint32, HistBins)
 	counts[12] = 140
 	counts[16] = 2
@@ -273,6 +429,8 @@ func TestSecRoundTrips(t *testing.T) {
 			Hist:    Histogram{Layout: HistLayoutLog24V1, Counts: counts},
 			DispFT:  &DispFT{Avg: 7.1, P95: 8.4},
 			Present: &Present{Mode: PresentModeComposedFlip, Sync: &sync, Tearing: &tearing, API: APIDXGI, Changed: true},
+			Stutter: &Stutter{Count: 2, ExcessMs: 118.4},
+			ProcRes: &ProcRes{CPUPct: &cpu, WSBytes: &ws, PrivBytes: &priv},
 			Quality: []string{QualityHistClipped},
 		},
 	}
@@ -301,6 +459,12 @@ func TestSecRoundTrips(t *testing.T) {
 	}
 	if out.Present == nil || *out.Present.Sync != sync || !out.Present.Changed {
 		t.Errorf("present = %+v", out.Present)
+	}
+	if out.Stutter == nil || *out.Stutter != *in.Stutter {
+		t.Errorf("stutter = %+v, want %+v", out.Stutter, in.Stutter)
+	}
+	if out.ProcRes == nil || *out.ProcRes.CPUPct != cpu || *out.ProcRes.WSBytes != ws || *out.ProcRes.PrivBytes != priv {
+		t.Errorf("proc_res = %+v", out.ProcRes)
 	}
 	if len(out.Quality) != 1 || out.Quality[0] != QualityHistClipped {
 		t.Errorf("quality = %v", out.Quality)
