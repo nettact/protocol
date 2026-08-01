@@ -169,6 +169,14 @@ message GameBucket {
   repeated string quality = 8;
   GameStutter stutter = 9;
   GameProcRes proc_res = 10;
+  // The diag-tier blocks, absent on a base-tier run and on the seconds a
+  // degraded run stopped polling for.
+  GameCPUSplit cpu_split = 11;
+  GameGPUSplit gpu_split = 12;
+  GameLatency lat = 13;
+  GameGPUTel gpu_tel = 14;
+  GameProcVRAM proc_vram = 15;
+  optional double busiest_core_pct = 16;
 }
 
 // GameFrames mirrors gamesense.Frames. Only presented is universal; the others
@@ -235,6 +243,64 @@ message GameProcRes {
   optional double cpu_pct = 1;
   optional uint64 ws_bytes = 2;
   optional uint64 priv_bytes = 3;
+}
+
+// The diag blocks mirror gamesense.CPUSplit and its neighbours. Values are
+// milliseconds unless the name says otherwise, and each block aggregates the
+// second's application frames.
+//
+// Their fields take no presence: the sensor registers whole metric groups at
+// session start, so a block is either measured entirely or not at all and
+// message presence already carries that. Where a field IS optional it is because
+// that particular reading fails on its own, and the comment there says why.
+
+// GameCPUSplit mirrors gamesense.CPUSplit — the frame's CPU time divided into
+// work and waiting, which is what names a CPU-bound frame.
+message GameCPUSplit {
+  double busy_avg = 1;
+  double busy_p95 = 2;
+  double wait_avg = 3;
+  double wait_p95 = 4;
+}
+
+// GameGPUSplit mirrors gamesense.GPUSplit — the frame's GPU side from the queue
+// in front of it to the present that ends it. Scoped to the tracked process,
+// unlike GameGPUTel below.
+message GameGPUSplit {
+  double latency_avg = 1; // frame start → GPU work start
+  double time_avg = 2; // GPU total duration per frame
+  double time_p95 = 3;
+  double busy_avg = 4; // GPU active time per frame
+  double busy_p95 = 5;
+  double wait_avg = 6;
+  double in_present_avg = 7; // blocked inside the Present call
+  double render_latency_avg = 8; // Present → GPU completion
+}
+
+// GameLatency mirrors gamesense.Latency. display_avg is an estimate whose trust
+// level follows GamePresent.mode, so the two are read together.
+message GameLatency {
+  double display_avg = 1; // frame start → on screen
+  double anim_err_avg = 2; // absolute animation error
+  double anim_err_p95 = 3;
+}
+
+// GameGPUTel mirrors gamesense.GPUTel — whole-GPU telemetry polled once a
+// second, describing the adapter rather than this process. Every field carries
+// presence: which telemetry a driver publishes varies by vendor and by metric,
+// so a card reporting utilization but not memory is ordinary, not broken.
+message GameGPUTel {
+  optional double util_pct = 1; // whole-GPU utilization 0-100
+  optional uint64 mem_used = 2; // whole-GPU dedicated memory used, bytes
+  optional uint64 mem_size = 3; // dedicated memory capacity, bytes
+}
+
+// GameProcVRAM mirrors gamesense.ProcVRAM — the game process's own dedicated
+// video memory. budget carries presence because the OS does not always expose
+// one, and a level without its budget is still a measurement.
+message GameProcVRAM {
+  uint64 used = 1; // bytes committed by the game process
+  optional uint64 budget = 2; // OS budget for the process, bytes
 }
 
 // Event mirrors telemetry.Event.

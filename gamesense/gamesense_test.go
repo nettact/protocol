@@ -52,6 +52,19 @@ func TestProbeOmitsTheReasonWhenThereIsNone(t *testing.T) {
 	if got != want {
 		t.Errorf("blocked probe = %s, want %s", got, want)
 	}
+	// The GPU answer is separate and narrower: frames can be captured on a machine
+	// whose driver publishes no adapter telemetry, so the first probe above — ok
+	// without gpu_ok — is an ordinary machine and not a degraded one. It says so by
+	// omitting the field rather than by carrying a false that reads like a fault.
+	b, err = json.Marshal(Probe{Type: TypeProbe, Proto: ProtoVersion, SensorVersion: "1.2.3", OK: true, GPUOK: true, PMVersion: "3.3.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = string(b)
+	want = `{"type":"probe","proto":3,"sensor_version":"1.2.3","ok":true,"gpu_ok":true,"pm_version":"3.3.0"}`
+	if got != want {
+		t.Errorf("gpu-capable probe = %s, want %s", got, want)
+	}
 }
 
 func TestStatusCarriesOnlyWhatItKnows(t *testing.T) {
@@ -351,12 +364,22 @@ func TestSecAndBucketShareOneSampleShape(t *testing.T) {
 func TestSampleKeysDoNotCollideWithTheirWrappers(t *testing.T) {
 	cpu := 42.5
 	var ws uint64 = 1 << 30
+	util, core := 96.5, 88.0
+	var vram uint64 = 6 << 30
 	sample := Sample{
 		Frames:  Frames{Presented: 142},
 		FT:      FrameTimes{Avg: 6.94},
 		Hist:    Histogram{Layout: HistLayoutLog24V1, Counts: make([]uint32, HistBins)},
 		Stutter: &Stutter{Count: 1, ExcessMs: 61.5},
 		ProcRes: &ProcRes{CPUPct: &cpu, WSBytes: &ws},
+		// The diag blocks are the newest arrivals and so the likeliest to have
+		// picked a key one of the wrappers already owns.
+		CPUSplit:       &CPUSplit{BusyAvg: 4.1, BusyP95: 5.9, WaitAvg: 2.8, WaitP95: 3.4},
+		GPUSplit:       &GPUSplit{LatencyAvg: 1.2, TimeAvg: 6.1, TimeP95: 7.7, BusyAvg: 5.8, BusyP95: 7.2, WaitAvg: 0.3, InPresentAvg: 0.9, RenderLatencyAvg: 5.2},
+		Latency:        &Latency{DisplayAvg: 21.4, AnimErrAvg: 1.1, AnimErrP95: 3.6},
+		GPUTel:         &GPUTel{UtilPct: &util},
+		ProcVRAM:       &ProcVRAM{Used: vram},
+		BusiestCorePct: &core,
 	}
 	sampleKeys := make(map[string]struct{})
 	for _, key := range ownJSONKeys(Sample{}) {
@@ -387,6 +410,24 @@ func TestSampleKeysDoNotCollideWithTheirWrappers(t *testing.T) {
 	}
 	if out.Stutter == nil || out.Stutter.Count != 1 {
 		t.Errorf("stutter did not survive the sec line: %+v (%s)", out.Stutter, b)
+	}
+	if out.CPUSplit == nil || *out.CPUSplit != *sample.CPUSplit {
+		t.Errorf("cpu split did not survive the sec line: %+v (%s)", out.CPUSplit, b)
+	}
+	if out.GPUSplit == nil || *out.GPUSplit != *sample.GPUSplit {
+		t.Errorf("gpu split did not survive the sec line: %+v (%s)", out.GPUSplit, b)
+	}
+	if out.Latency == nil || *out.Latency != *sample.Latency {
+		t.Errorf("latency did not survive the sec line: %+v (%s)", out.Latency, b)
+	}
+	if out.GPUTel == nil || out.GPUTel.UtilPct == nil || *out.GPUTel.UtilPct != util {
+		t.Errorf("gpu telemetry did not survive the sec line: %+v (%s)", out.GPUTel, b)
+	}
+	if out.ProcVRAM == nil || out.ProcVRAM.Used != vram {
+		t.Errorf("process vram did not survive the sec line: %+v (%s)", out.ProcVRAM, b)
+	}
+	if out.BusiestCorePct == nil || *out.BusiestCorePct != core {
+		t.Errorf("busiest core did not survive the sec line: %+v (%s)", out.BusiestCorePct, b)
 	}
 }
 
@@ -468,6 +509,150 @@ func TestSecRoundTrips(t *testing.T) {
 	}
 	if len(out.Quality) != 1 || out.Quality[0] != QualityHistClipped {
 		t.Errorf("quality = %v", out.Quality)
+	}
+}
+
+// The frame-derived diag blocks are group-atomic: the sensor registers whole
+// metric groups when the session opens, so a block either arrives measured in
+// full or does not arrive at all. That is what lets their fields carry no
+// presence — and it is also what an omitempty added out of habit would break,
+// silently turning a frame that waited no time at all into one nobody measured.
+func TestDiagBlocksCarryEveryFieldIncludingZero(t *testing.T) {
+	for _, block := range []any{CPUSplit{}, GPUSplit{}, Latency{}} {
+		b, err := json.Marshal(block)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got map[string]json.RawMessage
+		if err := json.Unmarshal(b, &got); err != nil {
+			t.Fatal(err)
+		}
+		want := ownJSONKeys(block)
+		if len(got) != len(want) {
+			t.Errorf("%T at zero has %d keys, want %d (%v): %s", block, len(got), len(want), want, b)
+		}
+		for _, key := range want {
+			if _, ok := got[key]; !ok {
+				t.Errorf("%T dropped %q at zero: %s", block, key, b)
+			}
+		}
+	}
+}
+
+// Whole-GPU telemetry is the exception to the group-atomic rule, because which
+// figures a driver publishes differs by vendor and by metric. A card that
+// reports utilization and no memory is an ordinary card, so the memory fields
+// stay absent rather than arriving as a zero that would draw an empty framebuffer.
+func TestGPUTelReportsOnlyWhatTheDriverPublishes(t *testing.T) {
+	util := 96.5
+	b, err := json.Marshal(GPUTel{UtilPct: &util})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(b), `{"util_pct":96.5}`; got != want {
+		t.Errorf("utilization-only card = %s, want %s", got, want)
+	}
+	var out GPUTel
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.MemUsed != nil || out.MemSize != nil {
+		t.Errorf("memory appeared from a card that never reported it: %+v", out)
+	}
+	// And the mirror: a card sitting idle under a paused game reports 0%, which is
+	// a measurement and must not be mistaken for the unpublished figures above.
+	idle := 0.0
+	b, err = json.Marshal(GPUTel{UtilPct: &idle})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(b), `{"util_pct":0}`; got != want {
+		t.Errorf("idle card = %s, want %s", got, want)
+	}
+}
+
+// A process's VRAM level is worth recording with or without the OS budget that
+// would contextualize it: the level is the measurement, the budget is the
+// yardstick, and a source that cannot supply the second must not cost us the
+// first. Used carries no presence for the same reason — inside a block that
+// exists, zero bytes committed is an observation.
+func TestProcVRAMKeepsTheLevelWithoutTheBudget(t *testing.T) {
+	var used uint64 = 6 << 30
+	b, err := json.Marshal(ProcVRAM{Used: used})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(b), `{"used":6442450944}`; got != want {
+		t.Errorf("budget-less vram = %s, want %s", got, want)
+	}
+	var out ProcVRAM
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Budget != nil {
+		t.Errorf("budget appeared from nowhere: %v", *out.Budget)
+	}
+	var budget uint64 = 8 << 30
+	b, err = json.Marshal(ProcVRAM{Used: used, Budget: &budget})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(b), `{"used":6442450944,"budget":8589934592}`; got != want {
+		t.Errorf("budgeted vram = %s, want %s", got, want)
+	}
+}
+
+// Degradation is a property of a second, not of a run. When the sensor's
+// boundary work overruns its budget it stops polling for the rest of the run,
+// but the frame-derived breakdowns cost nothing extra at the boundary and keep
+// arriving. So a degraded second is partial, and it says which half it lost by
+// dropping exactly the polled blocks and flagging itself — not by revising the
+// run's capabilities, which would make every earlier second unexplainable.
+func TestDegradedSecondKeepsWhatTheFramesStillProvide(t *testing.T) {
+	sample := Sample{
+		Frames:   Frames{Presented: 142},
+		FT:       FrameTimes{Avg: 6.94, P50: 6.8, P95: 8.1, P99: 11.2, Max: 23, SD: 1.4},
+		Hist:     Histogram{Layout: HistLayoutLog24V1, Counts: make([]uint32, HistBins)},
+		CPUSplit: &CPUSplit{BusyAvg: 4.1, BusyP95: 5.9, WaitAvg: 2.8, WaitP95: 3.4},
+		GPUSplit: &GPUSplit{LatencyAvg: 1.2, TimeAvg: 6.1, TimeP95: 7.7, BusyAvg: 5.8, BusyP95: 7.2, WaitAvg: 0.3, InPresentAvg: 0.9, RenderLatencyAvg: 5.2},
+		Latency:  &Latency{DisplayAvg: 21.4, AnimErrAvg: 1.1, AnimErrP95: 3.6},
+		Quality:  []string{QualityDiagDegraded},
+	}
+	b, err := json.Marshal(sample)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out Sample
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"gpu_tel", "proc_vram", "busiest_core_pct"} {
+		if strings.Contains(string(b), key) {
+			t.Errorf("a degraded second still carries the polled %q: %s", key, b)
+		}
+	}
+	if out.CPUSplit == nil || out.GPUSplit == nil || out.Latency == nil {
+		t.Errorf("degradation cost the frame-derived blocks: %s", b)
+	}
+	if len(out.Quality) != 1 || out.Quality[0] != QualityDiagDegraded {
+		t.Errorf("quality = %v, want the degradation flag", out.Quality)
+	}
+}
+
+// Capabilities are matched as strings by every consumer, so two of them sharing
+// a value would not fail to compile — it would make the pair indistinguishable,
+// and a console would light up a block the sensor never fills.
+func TestCapabilitiesAreDistinct(t *testing.T) {
+	seen := make(map[string]struct{})
+	for _, cap := range []string{
+		CapDisplayed, CapFrameType, CapPresentMeta, CapPerFrameComplete, CapStutter,
+		CapProcCPU, CapProcMem,
+		CapCPUSplit, CapGPUSplit, CapLatency, CapGPUTel, CapProcVRAM, CapBusiestCore,
+	} {
+		if _, dup := seen[cap]; dup {
+			t.Errorf("capability %q is declared twice", cap)
+		}
+		seen[cap] = struct{}{}
 	}
 }
 

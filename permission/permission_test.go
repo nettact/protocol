@@ -179,7 +179,7 @@ func TestRequiredForHostMetricGatesTemperature(t *testing.T) {
 // running, so it must never arrive by way of a bundle chosen for something else.
 // Only "full" — an explicit everything — may carry it.
 func TestGamePermissionsAreOptIn(t *testing.T) {
-	for _, id := range []ID{GameProcessDetect, GamePerformanceRead} {
+	for _, id := range []ID{GameProcessDetect, GamePerformanceRead, GameGPURead} {
 		if DefaultStandalone().Has(id) {
 			t.Errorf("default policy must not grant %q", id)
 		}
@@ -215,6 +215,55 @@ func TestGamePerformanceRequiresProcessDetect(t *testing.T) {
 	}
 	if got := EffectiveFrom(granted, granted); len(got) != 2 {
 		t.Fatalf("EffectiveFrom() = %v, want both when supported", got.Strings())
+	}
+}
+
+// TestGameGPUReadSitsBelowThePerformanceRead: adapter telemetry is collected on
+// the frame-capture tick and lands in the same per-second bucket, so there is no
+// path that produces it without the frame capture underneath. The chain is three
+// deep, which makes it the first place a single-step dependency walk would break
+// — granting the GPU read on a build that detects processes but cannot read
+// frames must leave nothing effective, not the two ends of a chain missing its
+// middle.
+func TestGameGPUReadSitsBelowThePerformanceRead(t *testing.T) {
+	if deps := Dependencies(GameGPURead); len(deps) != 1 || deps[0] != GamePerformanceRead {
+		t.Fatalf("Dependencies(%q) = %v, want [%s]", GameGPURead, deps, GamePerformanceRead)
+	}
+	// Closure must walk the whole chain, since the value it produces is handed to
+	// an operator as a NETTACT_AGENT_PERMISSIONS line that has to validate.
+	closed := Closure(NewSet(GameGPURead))
+	for _, id := range []ID{GameGPURead, GamePerformanceRead, GameProcessDetect} {
+		if !closed.Has(id) {
+			t.Errorf("Closure(game.gpu.read) is missing %q: %v", id, closed.Strings())
+		}
+	}
+	if err := Validate(closed); err != nil {
+		t.Fatalf("closure of the GPU read is not a usable policy: %v", err)
+	}
+	// The middle of the chain missing prunes both ends, not just the child.
+	granted := NewSet(GameProcessDetect, GamePerformanceRead, GameGPURead)
+	if got := EffectiveFrom(granted, NewSet(GameProcessDetect, GameGPURead)); len(got) != 1 || !got.Has(GameProcessDetect) {
+		t.Fatalf("EffectiveFrom() = %v, want only game.process.detect once the chain breaks", got.Strings())
+	}
+	if got := EffectiveFrom(granted, granted); len(got) != 3 {
+		t.Fatalf("EffectiveFrom() = %v, want all three when supported", got.Strings())
+	}
+	// A machine that captures frames but whose driver publishes no adapter
+	// telemetry is ordinary, and it keeps everything below the GPU read.
+	noGPU := NewSet(GameProcessDetect, GamePerformanceRead)
+	if got := EffectiveFrom(granted, noGPU); len(got) != 2 || got.Has(GameGPURead) {
+		t.Fatalf("EffectiveFrom() = %v, want frame capture without the GPU read", got.Strings())
+	}
+}
+
+// TestGamePermissionsFollowTheirCanonicalOrder: Sorted() drives the console's
+// permission list and the policy hash, so the family must read parent-first
+// rather than in whatever order a map yielded.
+func TestGamePermissionsFollowTheirCanonicalOrder(t *testing.T) {
+	want := []string{"game.process.detect", "game.performance.read", "game.gpu.read"}
+	got := NewSet(GameGPURead, GamePerformanceRead, GameProcessDetect).Strings()
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Sorted() = %v, want %v", got, want)
 	}
 }
 

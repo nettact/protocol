@@ -81,41 +81,62 @@ func sampleGameRuns(ts time.Time) []gamesense.Run {
 	}
 }
 
-// sampleGameBuckets covers the three shapes a second comes in. The first is
-// fully observed. The second is the important case: every optional field is nil,
-// and the round-trip must bring back nil rather than a zero that would read as
-// "this game dropped no frames" when nothing ever looked.
+// sampleGameBuckets covers the four shapes a second comes in. The first is fully
+// observed, down to the diag blocks a TierDiag profile buys. The second is the
+// important case: every optional field is nil, and the round-trip must bring
+// back nil rather than a zero that would read as "this game dropped no frames"
+// when nothing ever looked.
 //
 // The third is the half-observed middle, which is where a converter that reads
 // emptiness as absence goes wrong. Its stutter block is present with count 0 — a
 // second that was watched and held no hitch, which must not be dropped as if
 // nothing watched — and its resource block carries memory without CPU, the shape
 // of the first second of a run, where there is no delta to compute a percentage
-// from yet.
+// from yet. Its two diag blocks are the same hazard one layer down: adapter
+// telemetry with utilization but no memory (an ordinary vendor gap), and a
+// process VRAM block that is empty on the wire because the process holds no
+// dedicated bytes and the OS published no budget — an all-defaults message that
+// still has to arrive as a block.
+//
+// The fourth is a degraded second: the sensor overran its per-second budget and
+// stopped polling, so the frame-derived breakdowns continue while the polled
+// blocks stop. Losing that distinction would make a partial second look like a
+// base-tier one, which is the difference between "we stopped looking" and "we
+// were never looking".
 func sampleGameBuckets(ts time.Time) []gamesense.Bucket {
 	displayed, dropped, app, generated := 140, 2, 71, 71
 	sync := 0
 	tearing := true
 	cpu := 42.5
 	var ws, priv uint64 = 1 << 30, 1<<30 + 1<<28
+	util, core := 96.5, 88.25
+	var memUsed, memSize, vram, budget uint64 = 7 << 30, 8 << 30, 6 << 30, 7<<30 + 1<<29
 	full := make([]uint32, gamesense.HistBins)
 	full[12], full[16] = 140, 2
 	sparse := make([]uint32, gamesense.HistBins)
 	sparse[9] = 143
 	steady := make([]uint32, gamesense.HistBins)
 	steady[11] = 144
+	degraded := make([]uint32, gamesense.HistBins)
+	degraded[13] = 139
 	return []gamesense.Bucket{
 		{
 			RunID: "run-live", TS: ts,
 			Sample: gamesense.Sample{
-				Frames:  gamesense.Frames{Presented: 142, Displayed: &displayed, Dropped: &dropped, App: &app, Generated: &generated},
-				FT:      gamesense.FrameTimes{Avg: 6.944, P50: 6.8, P95: 8.1, P99: 11.2, Max: 23.5, SD: 1.42},
-				Hist:    gamesense.Histogram{Layout: gamesense.HistLayoutLog24V1, Counts: full},
-				DispFT:  &gamesense.DispFT{Avg: 7.1, P95: 8.4},
-				Present: &gamesense.Present{Mode: gamesense.PresentModeHardwareIndependentFlip, Sync: &sync, Tearing: &tearing, API: gamesense.APIDXGI, Changed: true},
-				Stutter: &gamesense.Stutter{Count: 2, ExcessMs: 118.4},
-				ProcRes: &gamesense.ProcRes{CPUPct: &cpu, WSBytes: &ws, PrivBytes: &priv},
-				Quality: []string{gamesense.QualityHistClipped},
+				Frames:         gamesense.Frames{Presented: 142, Displayed: &displayed, Dropped: &dropped, App: &app, Generated: &generated},
+				FT:             gamesense.FrameTimes{Avg: 6.944, P50: 6.8, P95: 8.1, P99: 11.2, Max: 23.5, SD: 1.42},
+				Hist:           gamesense.Histogram{Layout: gamesense.HistLayoutLog24V1, Counts: full},
+				DispFT:         &gamesense.DispFT{Avg: 7.1, P95: 8.4},
+				Present:        &gamesense.Present{Mode: gamesense.PresentModeHardwareIndependentFlip, Sync: &sync, Tearing: &tearing, API: gamesense.APIDXGI, Changed: true},
+				Stutter:        &gamesense.Stutter{Count: 2, ExcessMs: 118.4},
+				ProcRes:        &gamesense.ProcRes{CPUPct: &cpu, WSBytes: &ws, PrivBytes: &priv},
+				CPUSplit:       &gamesense.CPUSplit{BusyAvg: 4.12, BusyP95: 5.9, WaitAvg: 2.81, WaitP95: 3.44},
+				GPUSplit:       &gamesense.GPUSplit{LatencyAvg: 1.21, TimeAvg: 6.13, TimeP95: 7.72, BusyAvg: 5.86, BusyP95: 7.21, WaitAvg: 0.27, InPresentAvg: 0.94, RenderLatencyAvg: 5.18},
+				Latency:        &gamesense.Latency{DisplayAvg: 21.43, AnimErrAvg: 1.12, AnimErrP95: 3.61},
+				GPUTel:         &gamesense.GPUTel{UtilPct: &util, MemUsed: &memUsed, MemSize: &memSize},
+				ProcVRAM:       &gamesense.ProcVRAM{Used: vram, Budget: &budget},
+				BusiestCorePct: &core,
+				Quality:        []string{gamesense.QualityHistClipped},
 			},
 		},
 		{
@@ -129,11 +150,25 @@ func sampleGameBuckets(ts time.Time) []gamesense.Bucket {
 		{
 			RunID: "run-live", TS: ts.Add(2 * time.Second),
 			Sample: gamesense.Sample{
-				Frames:  gamesense.Frames{Presented: 144},
-				FT:      gamesense.FrameTimes{Avg: 6.94, P50: 6.94, P95: 7.0, P99: 7.1, Max: 7.2, SD: 0.08},
-				Hist:    gamesense.Histogram{Layout: gamesense.HistLayoutLog24V1, Counts: steady},
-				Stutter: &gamesense.Stutter{},
-				ProcRes: &gamesense.ProcRes{WSBytes: &ws, PrivBytes: &priv},
+				Frames:   gamesense.Frames{Presented: 144},
+				FT:       gamesense.FrameTimes{Avg: 6.94, P50: 6.94, P95: 7.0, P99: 7.1, Max: 7.2, SD: 0.08},
+				Hist:     gamesense.Histogram{Layout: gamesense.HistLayoutLog24V1, Counts: steady},
+				Stutter:  &gamesense.Stutter{},
+				ProcRes:  &gamesense.ProcRes{WSBytes: &ws, PrivBytes: &priv},
+				GPUTel:   &gamesense.GPUTel{UtilPct: &util},
+				ProcVRAM: &gamesense.ProcVRAM{},
+			},
+		},
+		{
+			RunID: "run-live", TS: ts.Add(3 * time.Second),
+			Sample: gamesense.Sample{
+				Frames:   gamesense.Frames{Presented: 139},
+				FT:       gamesense.FrameTimes{Avg: 7.19, P50: 7.1, P95: 7.8, P99: 8.4, Max: 9.1, SD: 0.44},
+				Hist:     gamesense.Histogram{Layout: gamesense.HistLayoutLog24V1, Counts: degraded},
+				CPUSplit: &gamesense.CPUSplit{BusyAvg: 4.4, BusyP95: 6.2, WaitAvg: 2.79, WaitP95: 3.5},
+				GPUSplit: &gamesense.GPUSplit{LatencyAvg: 1.3, TimeAvg: 6.4, TimeP95: 8.0, BusyAvg: 6.05, BusyP95: 7.5, WaitAvg: 0.35, InPresentAvg: 1.02, RenderLatencyAvg: 5.4},
+				Latency:  &gamesense.Latency{DisplayAvg: 22.1, AnimErrAvg: 1.3, AnimErrP95: 4.02},
+				Quality:  []string{gamesense.QualityDiagDegraded},
 			},
 		},
 	}
@@ -326,6 +361,84 @@ func TestGameBucketPresenceSurvivesEmptyBlocks(t *testing.T) {
 		}
 		if b.ProcRes.WSBytes == nil || *b.ProcRes.WSBytes != 1<<30 {
 			t.Errorf("%s: working set = %v", ct, b.ProcRes.WSBytes)
+		}
+	}
+}
+
+// The diag blocks add three presence rules a converter can get wrong without
+// failing any round-trip that only checks full values: a block whose fields are
+// all defaults must still arrive as a block, a vendor gap inside GPUTel must
+// stay a gap, and a degraded second must keep the frame-derived halves it never
+// lost. Checked in both formats because only one of them has a wire-level notion
+// of message presence to get right.
+func TestGameDiagBlocksSurviveTheirPartialShapes(t *testing.T) {
+	in := samplePacket()
+	for _, ct := range []string{ContentTypeJSON, ContentTypeProtobuf} {
+		data, err := MarshalPacket(in, ct)
+		if err != nil {
+			t.Fatalf("MarshalPacket(%s): %v", ct, err)
+		}
+		out, err := UnmarshalPacket(data, ct)
+		if err != nil {
+			t.Fatalf("UnmarshalPacket(%s): %v", ct, err)
+		}
+		if len(out.GameBuckets) != 4 {
+			t.Fatalf("%s: %d buckets, want 4", ct, len(out.GameBuckets))
+		}
+		// The base-tier second buys none of this and must not acquire any of it.
+		if b := out.GameBuckets[1]; b.CPUSplit != nil || b.GPUSplit != nil || b.Latency != nil ||
+			b.GPUTel != nil || b.ProcVRAM != nil || b.BusiestCorePct != nil {
+			t.Errorf("%s: an unobserved second gained diag blocks: %+v", ct, b.Sample)
+		}
+		half := out.GameBuckets[2]
+		if half.GPUTel == nil {
+			t.Fatalf("%s: partially-published adapter telemetry was dropped entirely", ct)
+		}
+		if half.GPUTel.UtilPct == nil || *half.GPUTel.UtilPct != 96.5 {
+			t.Errorf("%s: gpu utilization = %v", ct, half.GPUTel.UtilPct)
+		}
+		if half.GPUTel.MemUsed != nil || half.GPUTel.MemSize != nil {
+			t.Errorf("%s: memory appeared from a card that never published it: %+v", ct, *half.GPUTel)
+		}
+		// An all-defaults block is the emptiest thing on the wire and the easiest
+		// to mistake for nothing: zero committed bytes with no budget is a reading.
+		if half.ProcVRAM == nil {
+			t.Fatalf("%s: an empty process-vram block was read as an absent one", ct)
+		}
+		if half.ProcVRAM.Used != 0 || half.ProcVRAM.Budget != nil {
+			t.Errorf("%s: process vram = %+v, want a zeroed, budget-less block", ct, *half.ProcVRAM)
+		}
+		if half.BusiestCorePct != nil {
+			t.Errorf("%s: busiest core appeared unmeasured: %v", ct, *half.BusiestCorePct)
+		}
+		// Degradation stops the polling, not the frame stream.
+		deg := out.GameBuckets[3]
+		if deg.CPUSplit == nil || deg.GPUSplit == nil || deg.Latency == nil {
+			t.Errorf("%s: a degraded second lost its frame-derived blocks: %+v", ct, deg.Sample)
+		}
+		if deg.GPUTel != nil || deg.ProcVRAM != nil || deg.BusiestCorePct != nil {
+			t.Errorf("%s: a degraded second still carries polled blocks: %+v", ct, deg.Sample)
+		}
+		if len(deg.Quality) != 1 || deg.Quality[0] != gamesense.QualityDiagDegraded {
+			t.Errorf("%s: degraded quality = %v", ct, deg.Quality)
+		}
+		// And the fully-observed second keeps every value, so a converter cannot
+		// pass the presence rules above by dropping the contents.
+		full := out.GameBuckets[0]
+		if full.GPUSplit == nil || *full.GPUSplit != *in.GameBuckets[0].GPUSplit {
+			t.Errorf("%s: gpu split = %+v, want %+v", ct, full.GPUSplit, in.GameBuckets[0].GPUSplit)
+		}
+		if full.CPUSplit == nil || *full.CPUSplit != *in.GameBuckets[0].CPUSplit {
+			t.Errorf("%s: cpu split = %+v, want %+v", ct, full.CPUSplit, in.GameBuckets[0].CPUSplit)
+		}
+		if full.Latency == nil || *full.Latency != *in.GameBuckets[0].Latency {
+			t.Errorf("%s: latency = %+v, want %+v", ct, full.Latency, in.GameBuckets[0].Latency)
+		}
+		if full.ProcVRAM == nil || full.ProcVRAM.Budget == nil || *full.ProcVRAM.Budget != *in.GameBuckets[0].ProcVRAM.Budget {
+			t.Errorf("%s: process vram = %+v", ct, full.ProcVRAM)
+		}
+		if full.BusiestCorePct == nil || *full.BusiestCorePct != *in.GameBuckets[0].BusiestCorePct {
+			t.Errorf("%s: busiest core = %v", ct, full.BusiestCorePct)
 		}
 	}
 }

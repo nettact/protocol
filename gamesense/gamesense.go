@@ -145,6 +145,33 @@ const (
 	// per second. Separate from CapProcCPU because the two readings come from
 	// different queries and one can be available while the other is not.
 	CapProcMem = "proc_mem"
+	// CapCPUSplit: every frame's CPU time is split into the work the game did
+	// and the time it spent waiting. Frame intervals say a second was slow; the
+	// split says which side was holding it up, which is the difference between a
+	// finding and a number.
+	CapCPUSplit = "cpu_split"
+	// CapGPUSplit: every frame's GPU side is broken out — how long before the GPU
+	// started, how long it ran, how long it idled — along with the present path
+	// around it. Read against CapCPUSplit it names the bottleneck: a busy GPU
+	// with a waiting CPU is one verdict and the mirror image is the other.
+	CapGPUSplit = "gpu_split"
+	// CapLatency: display latency and animation error are observed per frame, so
+	// the second can say how long a frame took to reach the screen and how far
+	// the game's own pacing drifted from what was shown.
+	CapLatency = "latency"
+	// CapGPUTel: whole-GPU telemetry is polled once a second. It is the adapter,
+	// not the process — the two together are what separates "this game is asking
+	// too much of the card" from "something else on the machine is".
+	CapGPUTel = "gpu_tel"
+	// CapProcVRAM: the game process's own dedicated video memory is read once a
+	// second. Distinct from the whole-card figure in CapGPUTel for the same
+	// reason CapProcCPU is distinct from the machine's CPU usage.
+	CapProcVRAM = "proc_vram"
+	// CapBusiestCore: per-core utilization is read once a second and the busiest
+	// logical core reported. A game bound to one thread pins a single core while
+	// the machine-wide average stays comfortable, and the average is what hides
+	// it.
+	CapBusiestCore = "busiest_core"
 )
 
 // Sources. The identifier is stored with every run so a later comparison
@@ -164,6 +191,17 @@ const (
 	// been produced faster than they were consumed and some may belong to a
 	// neighbouring second.
 	QualityConsumeBacklog = "consume_backlog"
+	// QualityDiagDegraded: the sensor's per-second boundary work exceeded its
+	// wall-clock budget, and diagnostic polling was stopped for the rest of the
+	// run. The frame-derived blocks continue — they cost nothing extra at the
+	// boundary — so a degraded second is partial, not empty.
+	//
+	// It is a per-second flag rather than a capability change because
+	// capabilities are stated once and never revised: a run's caps describe what
+	// the run set out to measure, and rewriting them mid-run would make every
+	// earlier second retroactively unexplainable. The flag marks exactly the
+	// seconds that lost the polled blocks, which is the honest granularity.
+	QualityDiagDegraded = "diag_degraded"
 )
 
 // Presentation modes, mapped from the source's own enumeration. The wire carries
@@ -258,6 +296,14 @@ type Probe struct {
 	SensorVersion string `json:"sensor_version"`
 	OK            bool   `json:"ok"`
 	Reason        string `json:"reason,omitempty"`
+	// GPUOK reports the second, narrower question: beyond opening a frame
+	// session, the probe registered a minimal GPU-telemetry query and it was
+	// accepted. That is a separate answer because the two fail apart — a machine
+	// whose driver exposes no adapter telemetry captures frames perfectly well —
+	// and it is what gates game.gpu.read on the agent side. False alongside a
+	// true OK is an ordinary machine, not a fault, so it carries no reason of its
+	// own.
+	GPUOK bool `json:"gpu_ok,omitempty"`
 	// PMVersion is the frame source's own version, when one could be read. It is
 	// diagnostic only: the OK/Reason pair is the whole decision.
 	PMVersion string `json:"pm_version,omitempty"`
@@ -419,6 +465,92 @@ type ProcRes struct {
 	PrivBytes *uint64  `json:"priv_bytes,omitempty"` // private (committed) bytes
 }
 
+// The diag blocks below are the deeper breakdowns a TierDiag profile buys. They
+// come in two kinds and share one rule.
+//
+// CPUSplit, GPUSplit and Latency are frame-derived: each figure aggregates the
+// second's APPLICATION frames, the same population FrameTimes describes, so a
+// breakdown lines up frame for frame with the interval it exists to explain.
+// Their values are milliseconds, and like FrameTimes they are within-second
+// statistics — averaging a run's per-second p95s does not produce the run's p95.
+// GPUTel and ProcVRAM are the other kind: single readings taken once at the
+// second boundary, in the units their comments name.
+//
+// The shared rule is that a block is group-atomic — if it is present, every
+// field in it was measured. That mirrors how the sensor acquires them: whole
+// metric groups are registered when the session opens and are either accepted or
+// not, so a half-filled block is not a state that can occur and the fields
+// inside need no presence of their own. The exceptions are marked with pointers,
+// and each says why it is one.
+
+// CPUSplit divides each frame's CPU time into the work the game did and the
+// time it spent waiting for something else — which is the whole question when a
+// frame runs long. Paired with GPUSplit it decides the verdict: CPU busy high
+// with GPU wait high is a CPU-bound frame, and the mirror is a GPU-bound one.
+type CPUSplit struct {
+	BusyAvg float64 `json:"busy_avg"`
+	BusyP95 float64 `json:"busy_p95"`
+	WaitAvg float64 `json:"wait_avg"`
+	WaitP95 float64 `json:"wait_p95"`
+}
+
+// GPUSplit is the frame's GPU side, from the queue in front of it to the
+// present that ends it. It is scoped to the tracked process — these come from
+// the frame events, not from adapter telemetry — so a busy figure here is this
+// game's work and not the card's total load. GPUTel is the other half of that
+// comparison.
+type GPUSplit struct {
+	LatencyAvg       float64 `json:"latency_avg"` // frame start → GPU work start
+	TimeAvg          float64 `json:"time_avg"`    // GPU total duration per frame
+	TimeP95          float64 `json:"time_p95"`
+	BusyAvg          float64 `json:"busy_avg"` // GPU active time per frame
+	BusyP95          float64 `json:"busy_p95"`
+	WaitAvg          float64 `json:"wait_avg"`
+	InPresentAvg     float64 `json:"in_present_avg"`     // blocked inside the Present call
+	RenderLatencyAvg float64 `json:"render_latency_avg"` // Present → GPU completion
+}
+
+// Latency is how long the second's frames took to become visible, and how far
+// the game's own pacing drifted from what the screen showed.
+//
+// DisplayAvg is an estimate, and how good an estimate depends on how the frames
+// reached the screen — an independent flip is measured much more tightly than a
+// composed copy. Present.Mode is what says which, so the two are read together
+// and a display latency shown without its present mode is a number with an
+// unstated error bar.
+type Latency struct {
+	DisplayAvg float64 `json:"display_avg"`  // frame start → on screen (estimate; trust level per present mode)
+	AnimErrAvg float64 `json:"anim_err_avg"` // |animation error| — source is signed, absolute value recorded
+	AnimErrP95 float64 `json:"anim_err_p95"`
+}
+
+// GPUTel is whole-GPU telemetry polled once a second, not derived from the
+// frame stream. It is deliberately the ADAPTER's figures: a card at 100% while
+// the tracked game's own GPUSplit shows it idling is the signature of something
+// else on the machine taking the card, and that is a conclusion neither number
+// reaches alone.
+//
+// The inner fields are pointers, breaking the group-atomic rule above, because
+// which telemetry a driver publishes varies by vendor and by metric. A card that
+// reports utilization but not memory is an ordinary card, not a broken read.
+type GPUTel struct {
+	UtilPct *float64 `json:"util_pct,omitempty"` // whole-GPU utilization 0-100 (NOT this process)
+	MemUsed *uint64  `json:"mem_used,omitempty"` // whole-GPU dedicated memory used, bytes
+	MemSize *uint64  `json:"mem_size,omitempty"` // dedicated memory capacity, bytes
+}
+
+// ProcVRAM is the game process's own dedicated video memory, read once a second
+// per adapter and process. It answers what GPUTel.MemUsed cannot: a full card
+// says nothing about whether this game is the one filling it.
+//
+// Budget is a pointer because the OS does not always expose a per-process
+// budget, and Used without it is still worth recording — the level is the
+// measurement, the budget is the context.
+type ProcVRAM struct {
+	Used   uint64  `json:"used"`             // bytes committed by the game process
+	Budget *uint64 `json:"budget,omitempty"` // OS budget for the process, bytes; nil when the source can't provide it
+}
+
 // Sample is one second of presentation data, and the payload both the sensor's
 // sec line and the agent's uploaded bucket carry. It is emitted only for seconds
 // that contained frames: an idle second produces no sample at all, because
@@ -432,7 +564,19 @@ type Sample struct {
 	Present *Present   `json:"present,omitempty"`
 	Stutter *Stutter   `json:"stutter,omitempty"`
 	ProcRes *ProcRes   `json:"proc_res,omitempty"`
-	Quality []string   `json:"quality,omitempty"`
+	// The diag blocks. Absent on a base-tier run, and absent on a diag run's
+	// seconds after QualityDiagDegraded appears for the polled ones.
+	CPUSplit *CPUSplit `json:"cpu_split,omitempty"`
+	GPUSplit *GPUSplit `json:"gpu_split,omitempty"`
+	Latency  *Latency  `json:"lat,omitempty"`
+	GPUTel   *GPUTel   `json:"gpu_tel,omitempty"`
+	ProcVRAM *ProcVRAM `json:"proc_vram,omitempty"`
+	// BusiestCorePct is the busiest logical core, % 0-100. It stands alone
+	// rather than joining ProcRes because it describes the machine, not the
+	// process: a single-threaded game pins one core while ProcRes.CPUPct — a
+	// share of all cores — reads low, and that gap is the finding.
+	BusiestCorePct *float64 `json:"busiest_core_pct,omitempty"`
+	Quality        []string `json:"quality,omitempty"`
 }
 
 // Sec is the per-second line on the sensor's stdout: a Sample plus the process

@@ -248,6 +248,41 @@ func gameBucketToProto(b gamesense.Bucket) *pb.GameBucket {
 			PrivBytes: b.ProcRes.PrivBytes,
 		}
 	}
+	// The diag blocks. Each is nil-checked as a whole and copied field for field:
+	// a block that exists was measured in full, so there is nothing to decide
+	// inside one. The two exceptions carry their own pointers straight across.
+	if c := b.CPUSplit; c != nil {
+		out.CpuSplit = &pb.GameCPUSplit{
+			BusyAvg: c.BusyAvg, BusyP95: c.BusyP95,
+			WaitAvg: c.WaitAvg, WaitP95: c.WaitP95,
+		}
+	}
+	if g := b.GPUSplit; g != nil {
+		out.GpuSplit = &pb.GameGPUSplit{
+			LatencyAvg:       g.LatencyAvg,
+			TimeAvg:          g.TimeAvg,
+			TimeP95:          g.TimeP95,
+			BusyAvg:          g.BusyAvg,
+			BusyP95:          g.BusyP95,
+			WaitAvg:          g.WaitAvg,
+			InPresentAvg:     g.InPresentAvg,
+			RenderLatencyAvg: g.RenderLatencyAvg,
+		}
+	}
+	if l := b.Latency; l != nil {
+		out.Lat = &pb.GameLatency{
+			DisplayAvg: l.DisplayAvg,
+			AnimErrAvg: l.AnimErrAvg,
+			AnimErrP95: l.AnimErrP95,
+		}
+	}
+	if g := b.GPUTel; g != nil {
+		out.GpuTel = &pb.GameGPUTel{UtilPct: g.UtilPct, MemUsed: g.MemUsed, MemSize: g.MemSize}
+	}
+	if v := b.ProcVRAM; v != nil {
+		out.ProcVram = &pb.GameProcVRAM{Used: v.Used, Budget: v.Budget}
+	}
+	out.BusiestCorePct = b.BusiestCorePct
 	return out
 }
 
@@ -296,6 +331,38 @@ func gameBucketFromProto(b *pb.GameBucket) gamesense.Bucket {
 			PrivBytes: p.PrivBytes,
 		}
 	}
+	if c := b.CpuSplit; c != nil {
+		out.CPUSplit = &gamesense.CPUSplit{
+			BusyAvg: c.BusyAvg, BusyP95: c.BusyP95,
+			WaitAvg: c.WaitAvg, WaitP95: c.WaitP95,
+		}
+	}
+	if g := b.GpuSplit; g != nil {
+		out.GPUSplit = &gamesense.GPUSplit{
+			LatencyAvg:       g.LatencyAvg,
+			TimeAvg:          g.TimeAvg,
+			TimeP95:          g.TimeP95,
+			BusyAvg:          g.BusyAvg,
+			BusyP95:          g.BusyP95,
+			WaitAvg:          g.WaitAvg,
+			InPresentAvg:     g.InPresentAvg,
+			RenderLatencyAvg: g.RenderLatencyAvg,
+		}
+	}
+	if l := b.Lat; l != nil {
+		out.Latency = &gamesense.Latency{
+			DisplayAvg: l.DisplayAvg,
+			AnimErrAvg: l.AnimErrAvg,
+			AnimErrP95: l.AnimErrP95,
+		}
+	}
+	if g := b.GpuTel; g != nil {
+		out.GPUTel = &gamesense.GPUTel{UtilPct: g.UtilPct, MemUsed: g.MemUsed, MemSize: g.MemSize}
+	}
+	if v := b.ProcVram; v != nil {
+		out.ProcVRAM = &gamesense.ProcVRAM{Used: v.Used, Budget: v.Budget}
+	}
+	out.BusiestCorePct = b.BusiestCorePct
 	out.Quality = b.Quality
 	return out
 }

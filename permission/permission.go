@@ -89,9 +89,16 @@ const (
 // agent executable AND can actually open a trace session. "Component missing",
 // "component present but blocked", and "working" are therefore three
 // distinguishable states, not one silent unsupported.
+//
+// GameGPURead is gated apart from the frame data because it is a different
+// read: frame timings come from the game's own presentation, while GPU and VRAM
+// telemetry describes the adapter and every process sharing it. A machine can
+// support one and not the other — plenty of drivers publish no adapter
+// telemetry at all — so the sensor probes them separately.
 const (
 	GameProcessDetect   ID = "game.process.detect"
 	GamePerformanceRead ID = "game.performance.read"
+	GameGPURead         ID = "game.gpu.read"
 )
 
 // canonicalOrder is the compiled registry in canonical (stable) order. Set.Sorted
@@ -108,7 +115,7 @@ var canonicalOrder = []ID{
 	HostProcessBasicRead, HostProcessOwnerRead, HostProcessResourceRead, HostProcessIORead,
 	HostConnectionSummaryRead, HostConnectionLocalRead, HostConnectionRemoteRead, HostConnectionOwnerRead,
 	DiagnosticTracerouteICMP, DiagnosticTracerouteTCP,
-	GameProcessDetect, GamePerformanceRead,
+	GameProcessDetect, GamePerformanceRead, GameGPURead,
 }
 
 // orderIndex maps a known ID to its canonical rank for sorting.
@@ -139,6 +146,11 @@ var deps = map[ID][]ID{
 	// Reading a game's frame timings means knowing which process is presenting,
 	// so performance reads cannot be granted without process detection.
 	GamePerformanceRead: {GameProcessDetect},
+	// GPU and VRAM telemetry is collected on the frame-capture tick, for the
+	// process being tracked, and lands in the same per-second bucket. There is no
+	// path that produces it without the frame capture underneath, so granting it
+	// alone would name a collection that cannot happen.
+	GameGPURead: {GamePerformanceRead},
 }
 
 // known reports whether id is a compiled permission.
