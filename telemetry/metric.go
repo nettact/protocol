@@ -208,6 +208,27 @@ const (
 // sample carries the raw underlying error (see the ProbeReason* contract above).
 const ProbeReasonDetailLabel = "detail"
 
+// Labels naming the endpoint a probe actually TALKED TO, as opposed to the
+// endpoint it was asked about. A DNS monitor's Target is the queried name, so
+// without these the resolver that failed is unnameable; a NAT monitor's Target
+// is the STUN server itself, but the resolved host:port (defaults applied) is
+// only known to the collector. The server freezes them onto fault evidence and
+// aims the path diagnostic at them, so the values are wire contracts: a probe
+// that cannot name its endpoint omits the label rather than guessing.
+const (
+	// DNSResolverLabel carries the resolver endpoint a probe.dns.error_class
+	// sample's query actually used — "host:port", or the DoH URL. Absent when
+	// the agent could not name the system resolver on this platform.
+	DNSResolverLabel = "resolver"
+	// DNSResolverProtocolLabel is that resolver's protocol: udp | tcp | dot | doh.
+	DNSResolverProtocolLabel = "resolver_protocol"
+
+	// NATServerLabel is the resolved STUN server "host:port" on probe.nat.*.
+	NATServerLabel = "server"
+	// NATTransportLabel is the STUN transport on probe.nat.*: udp | tcp | tls | dtls.
+	NATTransportLabel = "transport"
+)
+
 // MetricAllowedForProbeKind reports whether a metric kind can be produced by a
 // monitoring target of the given probe kind. Gateway pings emit through the
 // shared probe.icmp.* set; a host anchor carries the host.* / iface.up / wifi.* /
