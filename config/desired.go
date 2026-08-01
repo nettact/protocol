@@ -19,6 +19,45 @@ type DesiredState struct {
 	// a proxy-missing operational issue: dropping it server-side would make a
 	// disabled proxy look like a deleted monitor.
 	Proxies []ProxySpec `json:"proxies,omitempty"`
+	// Game is the game-profile configuration for the site. Nil means the server
+	// has nothing to say about game capture; an empty-but-present block is a
+	// deliberate "record everything, no profiles defined".
+	Game *GameConfig `json:"game,omitempty"`
+}
+
+// GameConfig is the site's game-capture configuration: which processes count as
+// which game, and whether everything else is worth recording at all.
+//
+// Version is its own axis, deliberately not ConfigVersion. The two describe
+// unrelated things that change at unrelated times: renaming a game profile has
+// nothing to say to a ping monitor, and bumping ConfigVersion for it would make
+// every agent re-evaluate every probe target and restart the ones whose serial
+// it cannot prove unchanged. Keeping the serials apart means a profile edit
+// re-pushes DesiredState with an unchanged ConfigVersion — the probe side
+// no-ops — and a probe edit re-pushes it with an unchanged game Version, so the
+// sensor is not restarted for a change it cannot see (product doc §13).
+type GameConfig struct {
+	Version int `json:"version"` // sites.game_config_serial — independent of ConfigVersion
+	// RecordUnmatched decides what happens to a presenting process that matches
+	// no profile: recorded as an "other process" run, or ignored. It is a site
+	// setting rather than a per-profile one because it is a privacy choice about
+	// the machine, not a measurement choice about a game.
+	RecordUnmatched bool          `json:"record_unmatched"`
+	Profiles        []GameProfile `json:"profiles,omitempty"`
+}
+
+// GameProfile is one named game as the agent needs it.
+//
+// The profile's monitor_ids are deliberately absent: linking a game to network
+// monitors only affects how a run is charted in the console, and the agent would
+// carry the list across every push without ever reading it. Anything the agent
+// cannot act on stays server-side.
+type GameProfile struct {
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Exe       []string `json:"exe"`                  // case-insensitive process names
+	TargetFPS int      `json:"target_fps,omitempty"` // 0 = unset
+	Tier      string   `json:"tier"`                 // "base" | "diag"
 }
 
 // SnapshotRequest is a one-shot ask for a live host snapshot, pushed to the

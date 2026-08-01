@@ -181,6 +181,7 @@ func gameRunToProto(r gamesense.Run) *pb.GameRun {
 		EndedAt:    tsPtrToProto(r.EndedAt),
 		Source:     r.Source,
 		Caps:       r.Caps,
+		ProfileId:  r.ProfileID,
 	}
 }
 
@@ -197,6 +198,7 @@ func gameRunFromProto(r *pb.GameRun) gamesense.Run {
 		EndedAt:    tsPtrFromProto(r.EndedAt),
 		Source:     r.Source,
 		Caps:       r.Caps,
+		ProfileID:  r.ProfileId,
 	}
 }
 
@@ -723,6 +725,52 @@ func desiredStateToProto(d config.DesiredState) *pb.DesiredState {
 			out.Proxies[i] = proxySpecToProto(p)
 		}
 	}
+	if d.Game != nil {
+		out.Game = gameConfigToProto(*d.Game)
+	}
+	return out
+}
+
+// gameConfigToProto mirrors the game block. Presence carries the meaning at this
+// level too: a nil Game leaves the field absent, which is a different fact from
+// a present block that happens to hold no profiles.
+func gameConfigToProto(g config.GameConfig) *pb.GameConfig {
+	out := &pb.GameConfig{
+		Version:         int32(g.Version),
+		RecordUnmatched: g.RecordUnmatched,
+	}
+	if len(g.Profiles) > 0 {
+		out.Profiles = make([]*pb.GameProfile, len(g.Profiles))
+		for i, p := range g.Profiles {
+			out.Profiles[i] = &pb.GameProfile{
+				Id:        p.ID,
+				Name:      p.Name,
+				Exe:       p.Exe,
+				TargetFps: int32(p.TargetFPS),
+				Tier:      p.Tier,
+			}
+		}
+	}
+	return out
+}
+
+func gameConfigFromProto(g *pb.GameConfig) config.GameConfig {
+	out := config.GameConfig{
+		Version:         int(g.Version),
+		RecordUnmatched: g.RecordUnmatched,
+	}
+	if len(g.Profiles) > 0 {
+		out.Profiles = make([]config.GameProfile, len(g.Profiles))
+		for i, p := range g.Profiles {
+			out.Profiles[i] = config.GameProfile{
+				ID:        p.Id,
+				Name:      p.Name,
+				Exe:       p.Exe,
+				TargetFPS: int(p.TargetFps),
+				Tier:      p.Tier,
+			}
+		}
+	}
 	return out
 }
 
@@ -833,6 +881,10 @@ func desiredStateFromProto(d *pb.DesiredState) config.DesiredState {
 		for i, p := range d.Proxies {
 			out.Proxies[i] = proxySpecFromProto(p)
 		}
+	}
+	if d.Game != nil {
+		g := gameConfigFromProto(d.Game)
+		out.Game = &g
 	}
 	return out
 }

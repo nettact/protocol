@@ -1,6 +1,7 @@
 // Package gamesense defines the contract for game presentation data: the
-// line-delimited JSON a sensor component writes on its stdout, and the run /
-// second-bucket records the agent uploads from it.
+// line-delimited JSON a sensor component writes on its stdout, the single
+// config line the agent writes back on its stdin, and the run / second-bucket
+// records the agent uploads from it.
 //
 // Both halves live here because they carry the same facts. A sensor observes one
 // second of frame presentation and describes it; the agent groups those seconds
@@ -24,22 +25,49 @@
 // anything else in.
 package gamesense
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
-// ProtoVersion is the sensor stdout protocol this build speaks. The agent
-// requires an exact match: a sensor ships with the agent rather than
-// independently, so a mismatch is a broken install, not a version to negotiate.
-const ProtoVersion = 2
+// ProtoVersion is the sensor protocol this build speaks. The agent requires an
+// exact match: a sensor ships with the agent rather than independently, so a
+// mismatch is a broken install, not a version to negotiate.
+const ProtoVersion = 3
 
-// Message types. Every sensor line is exactly one of these, discriminated by
-// Type. A reader decodes Envelope first and then the matching struct: probe and
-// hello both carry information about capability but in different shapes, so no
-// single union struct can decode the stream.
+// Message types. Every line is exactly one of these, discriminated by Type. A
+// reader decodes Envelope first and then the matching struct: probe and hello
+// both carry information about capability but in different shapes, so no single
+// union struct can decode the stream.
+//
+// All but TypeConfig travel from the sensor to the agent; TypeConfig is the one
+// line that travels the other way.
 const (
 	TypeProbe  = "probe"
 	TypeHello  = "hello"
 	TypeSec    = "sec"
 	TypeStatus = "status"
+	TypeConfig = "config"
+)
+
+// Tracking modes carried by a Config, deciding which presenting processes the
+// sensor reports at all.
+//
+// The distinction is a privacy and volume choice, not a capability one: a site
+// that has named the games it cares about does not want every other program
+// that touches the screen recorded, while a site with no profiles yet would
+// learn nothing from a sensor that reports nothing.
+const (
+	ModeAll      = "all"      // track every presenting process
+	ModeProfiles = "profiles" // strict: only track processes matching a profile
+)
+
+// Profile tiers, naming how much a matched game is measured. Base is the frame
+// data every profile gets; diag adds the deeper per-frame breakdowns, which cost
+// more to collect and are only worth it on the games a user is diagnosing.
+const (
+	TierBase = "base"
+	TierDiag = "diag"
 )
 
 // Sensor states carried by a status message.
@@ -154,6 +182,60 @@ type Envelope struct {
 	Proto int    `json:"proto"`
 }
 
+// Config is the one line that travels toward the sensor: the agent writes it to
+// the sensor's stdin immediately after spawn, and writes nothing else for the
+// rest of the run. Closing stdin remains the stop signal, so the sensor keeps
+// reading after this line purely to see the EOF.
+//
+// One line rather than a stream because the sensor's configuration is fixed for
+// the life of a run: when the profiles or the mode change, the agent restarts
+// the sensor with a new Config. That keeps the sensor free of reconfiguration
+// state, and keeps a run describable by a single set of rules — a run whose
+// filtering changed midway would be two runs wearing one id.
+type Config struct {
+	Type  string `json:"type"`  // TypeConfig
+	Proto int    `json:"proto"` // ProtoVersion
+	// GPU is whether game.gpu.read is effective for this agent, i.e. whether the
+	// sensor may collect adapter-level telemetry. Consumed in a later batch.
+	GPU      bool            `json:"gpu"`
+	Mode     string          `json:"mode"` // ModeAll | ModeProfiles
+	Profiles []ConfigProfile `json:"profiles,omitempty"`
+}
+
+// ConfigProfile is one named game as the sensor needs to know it: what to match
+// on, and how closely to watch it once matched. It is the pushed GameProfile
+// stripped to the fields that change sensor behaviour — the display name and the
+// linked monitors stay on the server, where they are read.
+type ConfigProfile struct {
+	ID        string   `json:"id"`
+	Exe       []string `json:"exe"`                  // process names, matched case-insensitively ("cs2.exe")
+	TargetFPS int      `json:"target_fps,omitempty"` // 0 = unset
+	Tier      string   `json:"tier"`                 // TierBase | TierDiag
+}
+
+// Match returns the profile the named process belongs to, comparing process
+// names case-insensitively because the source of a process name (the OS, a
+// launcher, a user typing into the console) does not agree on case and none of
+// them mean anything by it. The first matching profile wins, so a process listed
+// twice resolves to the earlier profile rather than to whichever the map
+// iteration happened to reach.
+//
+// This is the only implementation of the matching rule. The sensor uses it to
+// decide what to track and which profile id to stamp on a status line, and any
+// other consumer that needs to ask the same question must call it rather than
+// re-derive it: two spellings of "does this process match" is exactly how a
+// profile starts recording on one side of the system and not the other.
+func (c Config) Match(proc string) (ConfigProfile, bool) {
+	for _, p := range c.Profiles {
+		for _, exe := range p.Exe {
+			if strings.EqualFold(exe, proc) {
+				return p, true
+			}
+		}
+	}
+	return ConfigProfile{}, false
+}
+
 // Probe is the single line a `--probe` run prints before exiting. It answers one
 // question — can this machine capture frames right now — and, when the answer is
 // no, says why in a code the console can act on.
@@ -193,8 +275,14 @@ type Status struct {
 	// process name identifies the program, the title usually identifies what is
 	// being played inside it. Absent when no window could be read, which is
 	// ordinary for a game mid-launch.
-	Title  string `json:"title,omitempty"`
-	Reason string `json:"reason,omitempty"`
+	Title string `json:"title,omitempty"`
+	// ProfileID names the Config profile the tracked process matched, when one
+	// did. Absent means the process matched nothing — which under ModeAll is an
+	// ordinary recorded process and under ModeProfiles cannot happen. The sensor
+	// decides this once, so the agent never re-runs the match against a profile
+	// list it might hold a different generation of.
+	ProfileID string `json:"profile_id,omitempty"`
+	Reason    string `json:"reason,omitempty"`
 }
 
 // Frames counts one second of frames by outcome.
@@ -316,6 +404,11 @@ type Run struct {
 	ID    string `json:"id"`
 	Proc  string `json:"proc"`
 	Title string `json:"title,omitempty"`
+	// ProfileID is the run's game, copied from the status line that opened it.
+	// Absent means the process matched no profile — an "other process" run, which
+	// only exists under ModeAll. It is stamped rather than resolved at read time
+	// so a later profile edit cannot retroactively rewrite what a past run was.
+	ProfileID string `json:"profile_id,omitempty"`
 	// StartedAt and LastSeenAt bound the captured seconds. EndedAt is set only
 	// once the run is known to be over, so an in-progress run is distinguishable
 	// from one whose ending was never observed because the agent stopped.

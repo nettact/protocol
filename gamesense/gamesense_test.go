@@ -2,6 +2,7 @@ package gamesense
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -12,8 +13,8 @@ func TestEnvelopeDiscriminatesBeforeTheTypedDecode(t *testing.T) {
 	// carry, which is why the reader is two-pass. Decoding either as the other
 	// must not be attempted, and the envelope is what makes that decidable.
 	lines := []string{
-		`{"type":"probe","proto":2,"ok":true}`,
-		`{"type":"hello","proto":2,"caps":["displayed"]}`,
+		`{"type":"probe","proto":3,"ok":true}`,
+		`{"type":"hello","proto":3,"caps":["displayed"]}`,
 	}
 	want := []string{TypeProbe, TypeHello}
 	for i, line := range lines {
@@ -36,7 +37,7 @@ func TestProbeOmitsTheReasonWhenThereIsNone(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(b)
-	want := `{"type":"probe","proto":2,"sensor_version":"1.2.3","ok":true,"pm_version":"3.3.0"}`
+	want := `{"type":"probe","proto":3,"sensor_version":"1.2.3","ok":true,"pm_version":"3.3.0"}`
 	if got != want {
 		t.Errorf("probe = %s, want %s", got, want)
 	}
@@ -47,7 +48,7 @@ func TestProbeOmitsTheReasonWhenThereIsNone(t *testing.T) {
 		t.Fatal(err)
 	}
 	got = string(b)
-	want = `{"type":"probe","proto":2,"sensor_version":"1.2.3","ok":false,"reason":"service_unavailable"}`
+	want = `{"type":"probe","proto":3,"sensor_version":"1.2.3","ok":false,"reason":"service_unavailable"}`
 	if got != want {
 		t.Errorf("blocked probe = %s, want %s", got, want)
 	}
@@ -71,6 +72,107 @@ func TestStatusCarriesOnlyWhatItKnows(t *testing.T) {
 	want = `{"type":"status","state":"idle"}`
 	if got := string(b); got != want {
 		t.Errorf("idle status = %s, want %s", got, want)
+	}
+	// A tracked process that matched a profile carries its id; one that matched
+	// nothing leaves the field out rather than naming an empty profile, because
+	// "this is an unrecognized program" is a fact the reader acts on.
+	b, err = json.Marshal(Status{Type: TypeStatus, State: StateTracking, PID: &pid, Proc: "cs2.exe", ProfileID: "gp_cs2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = `{"type":"status","state":"tracking","pid":4242,"proc":"cs2.exe","profile_id":"gp_cs2"}`
+	if got := string(b); got != want {
+		t.Errorf("matched status = %s, want %s", got, want)
+	}
+}
+
+// The config line is the agent's only word to the sensor, so its shape is the
+// whole handshake: type and proto are always present (the sensor rejects a
+// mismatched proto), gpu is a decision and must survive as false rather than
+// vanish, and profiles are omitted entirely when there are none.
+func TestConfigStatesTheWholeRunUpFront(t *testing.T) {
+	b, err := json.Marshal(Config{Type: TypeConfig, Proto: ProtoVersion, Mode: ModeAll})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"type":"config","proto":3,"gpu":false,"mode":"all"}`
+	if got := string(b); got != want {
+		t.Errorf("open config = %s, want %s", got, want)
+	}
+
+	in := Config{
+		Type: TypeConfig, Proto: ProtoVersion, GPU: true, Mode: ModeProfiles,
+		Profiles: []ConfigProfile{
+			{ID: "gp_cs2", Exe: []string{"cs2.exe"}, TargetFPS: 240, Tier: TierDiag},
+			{ID: "gp_er", Exe: []string{"eldenring.exe", "start_protected_game.exe"}, Tier: TierBase},
+		},
+	}
+	b, err = json.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out Config
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Proto != ProtoVersion || !out.GPU || out.Mode != ModeProfiles {
+		t.Errorf("config header = %+v", out)
+	}
+	if len(out.Profiles) != 2 || out.Profiles[0].TargetFPS != 240 || out.Profiles[1].TargetFPS != 0 {
+		t.Errorf("profiles = %+v", out.Profiles)
+	}
+	if len(out.Profiles[1].Exe) != 2 || out.Profiles[1].Tier != TierBase {
+		t.Errorf("second profile = %+v", out.Profiles[1])
+	}
+	// An unset target is absent, not a zero rate the sensor could act on.
+	if strings.Contains(string(b), `"target_fps":0`) {
+		t.Errorf("unset target_fps reached the wire: %s", b)
+	}
+}
+
+func TestConfigMatch(t *testing.T) {
+	cfg := Config{
+		Type: TypeConfig, Proto: ProtoVersion, Mode: ModeProfiles,
+		Profiles: []ConfigProfile{
+			{ID: "gp_cs2", Exe: []string{"cs2.exe"}, Tier: TierDiag},
+			{ID: "gp_er", Exe: []string{"eldenring.exe", "start_protected_game.exe"}, Tier: TierBase},
+			// Deliberately claims a name an earlier profile already claims: two
+			// profiles can name the same launcher, and the answer must not depend
+			// on which one the code happens to visit first.
+			{ID: "gp_dupe", Exe: []string{"CS2.EXE"}, Tier: TierBase},
+		},
+	}
+	tests := []struct {
+		name   string
+		cfg    Config
+		proc   string
+		wantID string
+		wantOK bool
+	}{
+		{"exact", cfg, "cs2.exe", "gp_cs2", true},
+		{"upper-case process", cfg, "CS2.EXE", "gp_cs2", true},
+		{"mixed-case process", cfg, "Cs2.Exe", "gp_cs2", true},
+		{"mixed-case profile entry", cfg, "start_PROTECTED_game.exe", "gp_er", true},
+		{"second entry of a profile", cfg, "eldenring.exe", "gp_er", true},
+		{"first match wins", cfg, "cs2.EXE", "gp_cs2", true},
+		{"no match", cfg, "notepad.exe", "", false},
+		{"empty process", cfg, "", "", false},
+		{"no profiles", Config{Type: TypeConfig, Proto: ProtoVersion, Mode: ModeAll}, "cs2.exe", "", false},
+		{"profile with no names", Config{Profiles: []ConfigProfile{{ID: "gp_empty"}}}, "cs2.exe", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := tt.cfg.Match(tt.proc)
+			if ok != tt.wantOK {
+				t.Fatalf("Match(%q) ok = %v, want %v", tt.proc, ok, tt.wantOK)
+			}
+			if got.ID != tt.wantID {
+				t.Errorf("Match(%q) id = %q, want %q", tt.proc, got.ID, tt.wantID)
+			}
+			if !ok && !reflect.DeepEqual(got, ConfigProfile{}) {
+				t.Errorf("Match(%q) returned %+v alongside a false", tt.proc, got)
+			}
+		})
 	}
 }
 
@@ -207,12 +309,15 @@ func TestSecRoundTrips(t *testing.T) {
 
 func TestRunLeavesEndedAtUnsetWhileRunning(t *testing.T) {
 	start := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
-	b, err := json.Marshal(Run{ID: "run-1", Proc: "eldenring.exe", Title: "ELDEN RING", StartedAt: start, LastSeenAt: start.Add(time.Minute), Source: SourcePresentMonService, Caps: []string{CapDisplayed}})
+	b, err := json.Marshal(Run{ID: "run-1", Proc: "eldenring.exe", Title: "ELDEN RING", ProfileID: "gp_er", StartedAt: start, LastSeenAt: start.Add(time.Minute), Source: SourcePresentMonService, Caps: []string{CapDisplayed}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(string(b), "ended_at") {
 		t.Errorf("a live run must not carry an end: %s", b)
+	}
+	if !strings.Contains(string(b), `"profile_id":"gp_er"`) {
+		t.Errorf("a profiled run must carry its profile: %s", b)
 	}
 	end := start.Add(2 * time.Minute)
 	b, err = json.Marshal(Run{ID: "run-1", Proc: "eldenring.exe", StartedAt: start, LastSeenAt: end, EndedAt: &end})
@@ -221,5 +326,9 @@ func TestRunLeavesEndedAtUnsetWhileRunning(t *testing.T) {
 	}
 	if !strings.Contains(string(b), `"ended_at":"2026-08-01T12:02:00Z"`) {
 		t.Errorf("a finished run must carry its end: %s", b)
+	}
+	// An unmatched process is recorded without a profile, not with an empty one.
+	if strings.Contains(string(b), "profile_id") {
+		t.Errorf("an unmatched run must not name a profile: %s", b)
 	}
 }

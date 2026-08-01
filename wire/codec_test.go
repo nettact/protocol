@@ -60,11 +60,15 @@ func samplePacket() telemetry.Packet {
 // finished. The distinction is carried by presence alone, so a converter that
 // substituted a zero time would pass every other assertion and silently declare
 // live runs to have ended in year one.
+//
+// The pair also splits on profile: the live run matched a configured game, the
+// finished one is an unmatched "other process". An empty profile id must stay
+// empty rather than acquire whichever profile the previous run belonged to.
 func sampleGameRuns(ts time.Time) []gamesense.Run {
 	ended := ts.Add(90 * time.Second)
 	return []gamesense.Run{
 		{
-			ID: "run-live", Proc: "eldenring.exe", Title: "ELDEN RING",
+			ID: "run-live", Proc: "eldenring.exe", Title: "ELDEN RING", ProfileID: "gp_er",
 			StartedAt: ts, LastSeenAt: ts.Add(30 * time.Second),
 			Source: gamesense.SourcePresentMonService,
 			Caps:   []string{gamesense.CapDisplayed, gamesense.CapFrameType, gamesense.CapPresentMeta, gamesense.CapPerFrameComplete},
@@ -180,6 +184,23 @@ func sampleDesiredState() config.DesiredState {
 				WGEndpoint:      "wg.example.com:51820", WGAllowedIPs: "10.7.0.0/24,192.168.9.0/24",
 				WGLocalAddrs: "10.7.0.2/32", WGDNS: "10.7.0.53", WGMTU: 1380, WGKeepaliveSeconds: 25,
 			},
+		},
+		Game: sampleGameConfig(),
+	}
+}
+
+// sampleGameConfig exercises the game block's own version axis alongside a
+// profile set that differs field by field: one profile names several executables
+// and a target rate, the other names one and leaves the target unset. A target
+// of 0 means "unset", so a converter that turned it into a rate would be
+// inventing a goal the user never set.
+func sampleGameConfig() *config.GameConfig {
+	return &config.GameConfig{
+		Version:         5,
+		RecordUnmatched: true,
+		Profiles: []config.GameProfile{
+			{ID: "gp_er", Name: "ELDEN RING", Exe: []string{"eldenring.exe", "start_protected_game.exe"}, TargetFPS: 60, Tier: "diag"},
+			{ID: "gp_cs2", Name: "Counter-Strike 2", Exe: []string{"cs2.exe"}, Tier: "base"},
 		},
 	}
 }
@@ -320,6 +341,67 @@ func TestFrameRoundTrip(t *testing.T) {
 			if !reflect.DeepEqual(in, out) {
 				t.Errorf("%s(%s) round-trip mismatch:\n in=%+v\nout=%+v", name, ct, in, out)
 			}
+		}
+	}
+}
+
+// The game block is optional, and its absence is a claim: "the server has
+// nothing to say about game capture" is not the same as "record everything with
+// no profiles defined". Both must survive both encodings intact, because a
+// converter that materialized an empty block out of a nil would switch every
+// agent's recording behaviour on without anyone configuring it.
+func TestDesiredStateGamePresence(t *testing.T) {
+	cases := map[string]*config.GameConfig{
+		"absent":        nil,
+		"empty":         {},
+		"no profiles":   {Version: 3, RecordUnmatched: true},
+		"with profiles": sampleGameConfig(),
+	}
+	for name, game := range cases {
+		ds := config.DesiredState{
+			ConfigVersion: 8,
+			Intervals:     config.Intervals{BaseSeconds: 10, RegularSeconds: 60},
+			Game:          game,
+		}
+		for _, ct := range []string{ContentTypeJSON, ContentTypeProtobuf} {
+			data, err := MarshalFrame(Frame{DesiredState: &ds}, ct)
+			if err != nil {
+				t.Fatalf("MarshalFrame %s(%s): %v", name, ct, err)
+			}
+			out, err := UnmarshalFrame(data, ct)
+			if err != nil {
+				t.Fatalf("UnmarshalFrame %s(%s): %v", name, ct, err)
+			}
+			if !reflect.DeepEqual(ds, *out.DesiredState) {
+				t.Errorf("%s(%s) round-trip mismatch:\n in=%+v\nout=%+v", name, ct, ds, *out.DesiredState)
+			}
+		}
+	}
+}
+
+// The two serials are independent axes: a profile edit bumps the game version
+// and leaves config_version alone, and a probe edit does the reverse. Carrying
+// them in separate fields is what lets each side no-op on the other's change, so
+// a converter that derived one from the other would reintroduce exactly the
+// probe churn the split exists to prevent.
+func TestDesiredStateSerialsStaySeparate(t *testing.T) {
+	ds := config.DesiredState{
+		ConfigVersion: 8,
+		Intervals:     config.Intervals{BaseSeconds: 10, RegularSeconds: 60},
+		Game:          &config.GameConfig{Version: 41},
+	}
+	for _, ct := range []string{ContentTypeJSON, ContentTypeProtobuf} {
+		data, err := MarshalFrame(Frame{DesiredState: &ds}, ct)
+		if err != nil {
+			t.Fatalf("MarshalFrame(%s): %v", ct, err)
+		}
+		out, err := UnmarshalFrame(data, ct)
+		if err != nil {
+			t.Fatalf("UnmarshalFrame(%s): %v", ct, err)
+		}
+		got := out.DesiredState
+		if got.ConfigVersion != 8 || got.Game == nil || got.Game.Version != 41 {
+			t.Errorf("%s: config_version = %d, game version = %+v", ct, got.ConfigVersion, got.Game)
 		}
 	}
 }

@@ -145,6 +145,10 @@ message GameRun {
   google.protobuf.Timestamp ended_at = 6;
   string source = 7;
   repeated string caps = 8;
+  // The game profile this run matched, stamped by the agent from the sensor's
+  // status line. Empty means the process matched no profile — an "other process"
+  // run, which only exists when the site records unmatched processes.
+  string profile_id = 9;
 }
 
 // GameBucket mirrors gamesense.Bucket — one second of a run, keyed by
@@ -343,6 +347,32 @@ message DesiredState {
   // probe_targets on purpose, so the agent reports proxy-missing rather than the
   // monitor silently disappearing.
   repeated ProxySpec proxies = 5;
+  // The site's game-capture configuration. Absent means the server has nothing
+  // to say about game capture; present-but-empty is a deliberate "record
+  // everything, no profiles defined".
+  GameConfig game = 6;
+}
+
+// GameConfig mirrors config.GameConfig — the site's game-capture configuration.
+// version is sites.game_config_serial and is an independent axis from
+// config_version: a profile edit bumps only this one, so probe targets do not
+// churn, and a probe edit leaves it alone so the sensor is not restarted for a
+// change it cannot see.
+message GameConfig {
+  int32 version = 1;
+  bool record_unmatched = 2;
+  repeated GameProfile profiles = 3;
+}
+
+// GameProfile mirrors config.GameProfile — one named game. The profile's
+// monitor_ids are deliberately not pushed: they only affect how a run is charted
+// in the console, so the agent would carry them without ever reading them.
+message GameProfile {
+  string id = 1;
+  string name = 2;
+  repeated string exe = 3;
+  int32 target_fps = 4;
+  string tier = 5;
 }
 
 // SnapshotRequest mirrors config.SnapshotRequest. Fields 2-3 (want_processes,
