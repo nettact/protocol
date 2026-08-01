@@ -27,6 +27,15 @@ const (
 	EventProbeFailed        EventType = "probe.failed"
 	EventDataGap            EventType = "data.gap" // WAL overflow dropped samples
 	EventAgentUpdated       EventType = "agent.updated"
+
+	// Game sensor lifecycle. The permission report already says whether game
+	// metrics are possible at all; these events carry the part it cannot; why
+	// they are not. "Blocked" in particular is what separates "the component is
+	// not installed" (nothing to report) from "it is installed but was refused a
+	// trace session" (actionable), so the reason attribute is a stable code.
+	EventGameSensorBlocked   EventType = "game.sensor.blocked"
+	EventGameSensorFailed    EventType = "game.sensor.failed"
+	EventGameSensorRecovered EventType = "game.sensor.recovered"
 )
 
 type Severity string

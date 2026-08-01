@@ -174,3 +174,59 @@ func TestRequiredForHostMetricGatesTemperature(t *testing.T) {
 		t.Fatalf("probe kinds are not host-gated, got %v", got)
 	}
 }
+
+// TestGamePermissionsAreOptIn: frame data identifies which program a person is
+// running, so it must never arrive by way of a bundle chosen for something else.
+// Only "full" — an explicit everything — may carry it.
+func TestGamePermissionsAreOptIn(t *testing.T) {
+	for _, id := range []ID{GameProcessDetect, GamePerformanceRead} {
+		if DefaultStandalone().Has(id) {
+			t.Errorf("default policy must not grant %q", id)
+		}
+		for _, b := range Bundles() {
+			if b.ID == "full" {
+				if !b.Set.Has(id) {
+					t.Errorf("bundle %q must carry %q", b.ID, id)
+				}
+				continue
+			}
+			if b.Set.Has(id) {
+				t.Errorf("bundle %q must not carry %q", b.ID, id)
+			}
+		}
+	}
+}
+
+// TestGamePerformanceRequiresProcessDetect: reading a game's frame timings means
+// first knowing which process is presenting. A build that can do the second but
+// not the first must report neither as effective.
+func TestGamePerformanceRequiresProcessDetect(t *testing.T) {
+	if deps := Dependencies(GamePerformanceRead); len(deps) != 1 || deps[0] != GameProcessDetect {
+		t.Fatalf("Dependencies(%q) = %v, want [%s]", GamePerformanceRead, deps, GameProcessDetect)
+	}
+	granted := NewSet(GameProcessDetect, GamePerformanceRead)
+	// The sensor component is absent, so the platform supports neither.
+	if got := EffectiveFrom(granted, Set{}); len(got) != 0 {
+		t.Fatalf("EffectiveFrom() = %v, want empty when the sensor is absent", got.Strings())
+	}
+	// A build claiming the read without detection is pruned back to nothing.
+	if got := EffectiveFrom(granted, NewSet(GamePerformanceRead)); len(got) != 0 {
+		t.Fatalf("EffectiveFrom() = %v, want empty after dependency pruning", got.Strings())
+	}
+	if got := EffectiveFrom(granted, granted); len(got) != 2 {
+		t.Fatalf("EffectiveFrom() = %v, want both when supported", got.Strings())
+	}
+}
+
+// TestRequiredForHostMetricGatesGameMetrics pins the whole game.* family to the
+// performance permission; the console uses this to explain a missing series.
+func TestRequiredForHostMetricGatesGameMetrics(t *testing.T) {
+	for _, kind := range []string{
+		"game.fps.current", "game.frame_time.avg_ms", "game.frame_time.p95_ms",
+	} {
+		got := RequiredForHostMetric(kind)
+		if len(got) != 1 || got[0] != GamePerformanceRead {
+			t.Fatalf("RequiredForHostMetric(%q) = %v, want [%s]", kind, got, GamePerformanceRead)
+		}
+	}
+}

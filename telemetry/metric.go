@@ -127,6 +127,16 @@ const (
 	// so both are emitted only when a real reading succeeds.
 	HostTempC       MetricKind = "host.temp.c"        // hottest sensor, Target="host"
 	HostTempSensorC MetricKind = "host.temp.sensor.c" // per sensor, Target=sanitized sensor key
+
+	// Game presentation metrics (LayerLocal), produced from frame-present events
+	// by the sensor component the agent supervises. Target is the presenting
+	// process's executable name ("eldenring.exe") — never a path, never a window
+	// title. Emitted at 1 Hz and only while a process is actually presenting: an
+	// idle desktop produces a gap in the series, never a synthetic zero, because
+	// "nothing was rendering" and "rendering at 0 FPS" are different facts.
+	GameFPS          MetricKind = "game.fps.current"       // frames presented in the last second
+	GameFrameTimeAvg MetricKind = "game.frame_time.avg_ms" // mean frame interval over that second
+	GameFrameTimeP95 MetricKind = "game.frame_time.p95_ms" // p95 frame interval over that second
 )
 
 // Units for Metric.Value.
@@ -143,6 +153,7 @@ const (
 	UnitDBm     = "dbm"  // signal strength in decibel-milliwatts
 	UnitMbps    = "mbps" // link rate in megabits per second
 	UnitCelsius = "c"    // temperature in degrees Celsius
+	UnitFPS     = "fps"  // frames presented per second
 )
 
 // Probe failure-reason codes carried in the probe.*.error_class metrics
@@ -251,8 +262,15 @@ func MetricAllowedForProbeKind(probeKind, metricKind string) bool {
 	case "nat":
 		return strings.HasPrefix(metricKind, "probe.nat.")
 	case "host":
+		// game.* belongs here for the same reason host.* does: it describes the
+		// machine itself rather than something probed over the network. Game series
+		// carry no monitor id today, so nothing routes them through a host anchor —
+		// but this function is documented as the single source of truth for the
+		// relation, and a family missing from it is a trap for the next consumer
+		// that consults it.
 		return strings.HasPrefix(metricKind, "host.") || metricKind == string(IfaceUp) ||
-			strings.HasPrefix(metricKind, "wifi.") || strings.HasPrefix(metricKind, "agent.")
+			strings.HasPrefix(metricKind, "wifi.") || strings.HasPrefix(metricKind, "agent.") ||
+			strings.HasPrefix(metricKind, "game.")
 	}
 	return false
 }

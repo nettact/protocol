@@ -81,6 +81,18 @@ const (
 	DiagnosticTracerouteTCP  ID = "diagnostic.traceroute.tcp"
 )
 
+// Game experience permissions. Both are capability-probed like
+// HostTemperatureRead: frame presentation data comes from a separate signed
+// sensor component that the agent only detects — never implements — so the
+// supported view holds them only when that component is installed beside the
+// agent executable AND can actually open a trace session. "Component missing",
+// "component present but blocked", and "working" are therefore three
+// distinguishable states, not one silent unsupported.
+const (
+	GameProcessDetect   ID = "game.process.detect"
+	GamePerformanceRead ID = "game.performance.read"
+)
+
 // canonicalOrder is the compiled registry in canonical (stable) order. Set.Sorted
 // and Strings emit IDs in this order; unknown IDs sort after all known ones. It
 // is the single source of truth for All().
@@ -95,6 +107,7 @@ var canonicalOrder = []ID{
 	HostProcessBasicRead, HostProcessOwnerRead, HostProcessResourceRead, HostProcessIORead,
 	HostConnectionSummaryRead, HostConnectionLocalRead, HostConnectionRemoteRead, HostConnectionOwnerRead,
 	DiagnosticTracerouteICMP, DiagnosticTracerouteTCP,
+	GameProcessDetect, GamePerformanceRead,
 }
 
 // orderIndex maps a known ID to its canonical rank for sorting.
@@ -121,6 +134,10 @@ var deps = map[ID][]ID{
 	HostConnectionLocalRead:  {HostConnectionSummaryRead},
 	HostConnectionRemoteRead: {HostConnectionSummaryRead},
 	HostConnectionOwnerRead:  {HostConnectionSummaryRead},
+
+	// Reading a game's frame timings means knowing which process is presenting,
+	// so performance reads cannot be granted without process detection.
+	GamePerformanceRead: {GameProcessDetect},
 }
 
 // known reports whether id is a compiled permission.
@@ -459,6 +476,8 @@ func RequiredForHostMetric(metricKind string) []ID {
 		return []ID{HostNetworkIORead}
 	case strings.HasPrefix(metricKind, "host.temp."):
 		return []ID{HostTemperatureRead}
+	case strings.HasPrefix(metricKind, "game."):
+		return []ID{GamePerformanceRead}
 	case strings.HasPrefix(metricKind, "wifi."):
 		return []ID{NetWiFiStatusRead}
 	case metricKind == "iface.up":

@@ -30,7 +30,13 @@ func TestMetricAllowedForProbeKind(t *testing.T) {
 		{"host", string(IfaceUp), true},
 		{"host", string(WiFiUp), true},
 		{"host", string(AgentUptime), true},
+		// What the machine renders is a property of the machine, like what it
+		// measures of its own CPU — not something probed over the network.
+		{"host", string(GameFPS), true},
+		{"host", string(GameFrameTimeP95), true},
 		{"host", string(HTTPOK), false},
+		// …but only for the host anchor: a probe monitor never carries them.
+		{"icmp", string(GameFPS), false},
 
 		// An unknown kind allows nothing.
 		{"", string(HTTPOK), false},
