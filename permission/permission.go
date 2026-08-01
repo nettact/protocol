@@ -52,8 +52,9 @@ const (
 	HostUptimeRead    ID = "host.uptime.read"
 	HostNetworkIORead ID = "host.network.io.read"
 	// HostTemperatureRead is capability-probed rather than assumed: many boards
-	// and VMs expose no thermal sensors at all, so the agent advertises it in
-	// its supported set only when a startup sensor read returns a real value.
+	// and VMs expose no thermal sensors at all, so a platform advertises it only
+	// when it has a trustworthy backend and a startup sensor read returns a real
+	// value. Windows deliberately has no backend until ACPI WMI is replaced.
 	HostTemperatureRead ID = "host.temperature.read"
 )
 
