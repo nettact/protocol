@@ -78,6 +78,18 @@ type TraceRequest struct {
 	TotalTimeoutMs      int    `json:"total_timeout_ms"`      // overall wall-clock budget for the whole trace
 	ResolveHopHostnames bool   `json:"resolve_hop_hostnames"` // reverse-DNS each responder (default off)
 	BudgetMs            int    `json:"budget_ms"`             // request validity window measured from arrival on the agent's own clock (see BudgetWindow)
+
+	// EgressProxyID pins this trace INSIDE one WireGuard tunnel: probes are sent
+	// in-tunnel toward DestinationHost (DIAG-004). Empty means a host-stack
+	// trace. EgressConfigSerial pins the exact config generation the diagnosed
+	// fault was observed on; the agent must match BOTH against its live proxy
+	// entries and fail closed on any mismatch (egress_generation_mismatch /
+	// egress_not_available) — never trace over a newer generation or the direct
+	// path, which would describe a route the fault never took. TraceRequest is a
+	// standalone frame, so this reference is danglable by construction; that is
+	// why the failure is a reportable terminal result, not a fallback.
+	EgressProxyID      string `json:"egress_proxy_id,omitempty"`
+	EgressConfigSerial int    `json:"egress_config_serial,omitempty"`
 }
 
 // BudgetWindow converts a request's receipt-relative budget in milliseconds into

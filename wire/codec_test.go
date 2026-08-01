@@ -219,6 +219,22 @@ func TestFrameRoundTrip(t *testing.T) {
 	tr := config.TraceRequest{
 		ReportID: "trace-1", Mode: config.TraceModeTCP, DestinationHost: "example.com", TCPPort: 443,
 		MaxHops: 30, AttemptsPerHop: 3, TotalTimeoutMs: 30_000, ResolveHopHostnames: true, BudgetMs: 60_000,
+		EgressProxyID: "prx_wg", EgressConfigSerial: 4,
+	}
+	// Every TraceResult field populated, including the path attestation — a field
+	// dropped in one converter half only surfaces through this fixture.
+	tres := telemetry.TraceResult{
+		ReportID: "trace-1", Mode: config.TraceModeICMP, Status: telemetry.TraceStatusPartial, Reason: "deadline_exceeded",
+		DestinationIP: "10.7.0.10", Reached: true, ReachedTTL: 3,
+		StartedAt: time.Unix(1700000300, 0).UTC(), CompletedAt: time.Unix(1700000310, 0).UTC(),
+		Hops: []telemetry.TraceHop{
+			{TTL: 1, Attempts: []telemetry.TraceAttempt{
+				{ResponderAddr: "10.7.0.1", Hostname: "gw.internal", RTTMs: 1.25},
+				{Timeout: true},
+			}},
+			{TTL: 2, Attempts: []telemetry.TraceAttempt{{ResponderAddr: "10.7.0.10", RTTMs: 8.5}}},
+		},
+		PathScope: telemetry.TracePathWireGuardInner, EgressProxyID: "prx_wg", EgressConfigSerial: 4,
 	}
 	frames := map[string]Frame{
 		"hello":                     {Hello: &hello},
@@ -230,6 +246,7 @@ func TestFrameRoundTrip(t *testing.T) {
 		"snapshot_request":          {SnapshotRequest: &sr},
 		"incident_snapshot_request": {IncidentSnapshotRequest: &isr},
 		"trace_request":             {TraceRequest: &tr},
+		"trace_result":              {TraceResult: &tres},
 	}
 	for name, in := range frames {
 		for _, ct := range []string{ContentTypeJSON, ContentTypeProtobuf} {

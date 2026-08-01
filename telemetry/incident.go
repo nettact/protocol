@@ -118,6 +118,17 @@ type TraceResult struct {
 	StartedAt   time.Time  `json:"started_at,omitempty"`
 	CompletedAt time.Time  `json:"completed_at,omitempty"`
 	Hops        []TraceHop `json:"hops,omitempty"`
+
+	// PathScope attests the execution path the trace ACTUALLY used —
+	// TracePathDirect (host stack; "" reads the same) or TracePathWireGuardInner
+	// (probes sent inside the tunnel). The egress fields echo the generation
+	// that carried them and are empty for a host-stack trace. The server
+	// validates all three against the plan it issued and rejects a result whose
+	// attestation does not match, so a report can never render a path the
+	// probes did not take.
+	PathScope          string `json:"path_scope,omitempty"`
+	EgressProxyID      string `json:"egress_proxy_id,omitempty"`
+	EgressConfigSerial int    `json:"egress_config_serial,omitempty"`
 }
 
 // Terminal traceroute statuses (TraceResult.Status). Pre-terminal queued/running
@@ -129,6 +140,17 @@ const (
 	TraceStatusUnsupported = "unsupported"
 	TraceStatusFailed      = "failed"
 	TraceStatusCanceled    = "canceled"
+)
+
+// Trace path scopes (TraceResult.PathScope / server-side trace_reports.path_scope).
+// The scope is orthogonal to the trace subject: it answers "which path did the
+// probes travel", not "who is being measured". WireGuardPhysical is planned
+// server-side only — a host-stack trace toward a peer's physical endpoint — so
+// agents attest Direct for it.
+const (
+	TracePathDirect            = "direct"
+	TracePathWireGuardPhysical = "wireguard_physical"
+	TracePathWireGuardInner    = "wireguard_inner"
 )
 
 // TraceHop is one TTL and all its per-attempt probe responses.

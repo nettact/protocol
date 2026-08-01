@@ -2563,9 +2563,14 @@ type TraceRequest struct {
 	TotalTimeoutMs      int32                  `protobuf:"varint,7,opt,name=total_timeout_ms,json=totalTimeoutMs,proto3" json:"total_timeout_ms,omitempty"`
 	ResolveHopHostnames bool                   `protobuf:"varint,8,opt,name=resolve_hop_hostnames,json=resolveHopHostnames,proto3" json:"resolve_hop_hostnames,omitempty"`
 	// Request validity window measured from arrival on the agent's own clock.
-	BudgetMs      int32 `protobuf:"varint,10,opt,name=budget_ms,json=budgetMs,proto3" json:"budget_ms,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	BudgetMs int32 `protobuf:"varint,10,opt,name=budget_ms,json=budgetMs,proto3" json:"budget_ms,omitempty"`
+	// In-tunnel egress pin (DIAG-004): empty id = host-stack trace; a non-empty
+	// id must match a live proxy AND its config generation or the agent fails
+	// closed — never a direct fallback.
+	EgressProxyId      string `protobuf:"bytes,11,opt,name=egress_proxy_id,json=egressProxyId,proto3" json:"egress_proxy_id,omitempty"`
+	EgressConfigSerial int32  `protobuf:"varint,12,opt,name=egress_config_serial,json=egressConfigSerial,proto3" json:"egress_config_serial,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *TraceRequest) Reset() {
@@ -2657,6 +2662,20 @@ func (x *TraceRequest) GetResolveHopHostnames() bool {
 func (x *TraceRequest) GetBudgetMs() int32 {
 	if x != nil {
 		return x.BudgetMs
+	}
+	return 0
+}
+
+func (x *TraceRequest) GetEgressProxyId() string {
+	if x != nil {
+		return x.EgressProxyId
+	}
+	return ""
+}
+
+func (x *TraceRequest) GetEgressConfigSerial() int32 {
+	if x != nil {
+		return x.EgressConfigSerial
 	}
 	return 0
 }
@@ -3248,8 +3267,14 @@ type TraceResult struct {
 	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
 	CompletedAt   *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
 	Hops          []*TraceHop            `protobuf:"bytes,10,rep,name=hops,proto3" json:"hops,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// Attestation of the path actually used: "direct" (or empty) | "wireguard_inner",
+	// plus the egress generation that carried in-tunnel probes. The server
+	// validates these against the plan it issued.
+	PathScope          string `protobuf:"bytes,11,opt,name=path_scope,json=pathScope,proto3" json:"path_scope,omitempty"`
+	EgressProxyId      string `protobuf:"bytes,12,opt,name=egress_proxy_id,json=egressProxyId,proto3" json:"egress_proxy_id,omitempty"`
+	EgressConfigSerial int32  `protobuf:"varint,13,opt,name=egress_config_serial,json=egressConfigSerial,proto3" json:"egress_config_serial,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *TraceResult) Reset() {
@@ -3350,6 +3375,27 @@ func (x *TraceResult) GetHops() []*TraceHop {
 		return x.Hops
 	}
 	return nil
+}
+
+func (x *TraceResult) GetPathScope() string {
+	if x != nil {
+		return x.PathScope
+	}
+	return ""
+}
+
+func (x *TraceResult) GetEgressProxyId() string {
+	if x != nil {
+		return x.EgressProxyId
+	}
+	return ""
+}
+
+func (x *TraceResult) GetEgressConfigSerial() int32 {
+	if x != nil {
+		return x.EgressConfigSerial
+	}
+	return 0
 }
 
 // TraceHop mirrors telemetry.TraceHop.
@@ -3736,7 +3782,7 @@ const file_telemetry_proto_rawDesc = "" +
 	"monitor_id\x18\x01 \x01(\tR\tmonitorId\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x16\n" +
 	"\x06target\x18\x03 \x01(\tR\x06target\x12\x12\n" +
-	"\x04port\x18\x04 \x01(\x05R\x04port\"\xd5\x02\n" +
+	"\x04port\x18\x04 \x01(\x05R\x04port\"\xaf\x03\n" +
 	"\fTraceRequest\x12\x1b\n" +
 	"\treport_id\x18\x01 \x01(\tR\breportId\x12\x12\n" +
 	"\x04mode\x18\x02 \x01(\tR\x04mode\x12)\n" +
@@ -3747,7 +3793,9 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x10total_timeout_ms\x18\a \x01(\x05R\x0etotalTimeoutMs\x122\n" +
 	"\x15resolve_hop_hostnames\x18\b \x01(\bR\x13resolveHopHostnames\x12\x1b\n" +
 	"\tbudget_ms\x18\n" +
-	" \x01(\x05R\bbudgetMsJ\x04\b\t\x10\n" +
+	" \x01(\x05R\bbudgetMs\x12&\n" +
+	"\x0fegress_proxy_id\x18\v \x01(\tR\regressProxyId\x120\n" +
+	"\x14egress_config_serial\x18\f \x01(\x05R\x12egressConfigSerialJ\x04\b\t\x10\n" +
 	"R\bdeadline\"\xc8\x03\n" +
 	"\x10IncidentSnapshot\x12\x1d\n" +
 	"\n" +
@@ -3802,7 +3850,7 @@ const file_telemetry_proto_rawDesc = "" +
 	"\fresolved_ips\x18\x04 \x03(\tR\vresolvedIps\x12\x1c\n" +
 	"\tendpoints\x18\x05 \x03(\tR\tendpoints\x12\x1f\n" +
 	"\verror_class\x18\x06 \x01(\tR\n" +
-	"errorClass\"\xf9\x02\n" +
+	"errorClass\"\xf2\x03\n" +
 	"\vTraceResult\x12\x1b\n" +
 	"\treport_id\x18\x01 \x01(\tR\breportId\x12\x12\n" +
 	"\x04mode\x18\x02 \x01(\tR\x04mode\x12\x16\n" +
@@ -3816,7 +3864,11 @@ const file_telemetry_proto_rawDesc = "" +
 	"started_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12=\n" +
 	"\fcompleted_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt\x12-\n" +
 	"\x04hops\x18\n" +
-	" \x03(\v2\x19.nettact.wire.v1.TraceHopR\x04hops\"W\n" +
+	" \x03(\v2\x19.nettact.wire.v1.TraceHopR\x04hops\x12\x1d\n" +
+	"\n" +
+	"path_scope\x18\v \x01(\tR\tpathScope\x12&\n" +
+	"\x0fegress_proxy_id\x18\f \x01(\tR\regressProxyId\x120\n" +
+	"\x14egress_config_serial\x18\r \x01(\x05R\x12egressConfigSerial\"W\n" +
 	"\bTraceHop\x12\x10\n" +
 	"\x03ttl\x18\x01 \x01(\x05R\x03ttl\x129\n" +
 	"\battempts\x18\x02 \x03(\v2\x1d.nettact.wire.v1.TraceAttemptR\battempts\"\x82\x01\n" +

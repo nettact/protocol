@@ -745,6 +745,8 @@ func traceRequestToProto(r config.TraceRequest) *pb.TraceRequest {
 		TotalTimeoutMs:      int32(r.TotalTimeoutMs),
 		ResolveHopHostnames: r.ResolveHopHostnames,
 		BudgetMs:            int32(r.BudgetMs),
+		EgressProxyId:       r.EgressProxyID,
+		EgressConfigSerial:  int32(r.EgressConfigSerial),
 	}
 }
 
@@ -762,6 +764,8 @@ func traceRequestFromProto(r *pb.TraceRequest) config.TraceRequest {
 		TotalTimeoutMs:      int(r.TotalTimeoutMs),
 		ResolveHopHostnames: r.ResolveHopHostnames,
 		BudgetMs:            int(r.BudgetMs),
+		EgressProxyID:       r.EgressProxyId,
+		EgressConfigSerial:  int(r.EgressConfigSerial),
 	}
 }
 
@@ -953,6 +957,10 @@ func traceResultToProto(r telemetry.TraceResult) *pb.TraceResult {
 		ReachedTtl:    int32(r.ReachedTTL),
 		StartedAt:     tsToProto(r.StartedAt),
 		CompletedAt:   tsToProto(r.CompletedAt),
+
+		PathScope:          r.PathScope,
+		EgressProxyId:      r.EgressProxyID,
+		EgressConfigSerial: int32(r.EgressConfigSerial),
 	}
 	if len(r.Hops) > 0 {
 		out.Hops = make([]*pb.TraceHop, len(r.Hops))
@@ -989,6 +997,10 @@ func traceResultFromProto(r *pb.TraceResult) telemetry.TraceResult {
 		ReachedTTL:    int(r.ReachedTtl),
 		StartedAt:     tsFromProto(r.StartedAt),
 		CompletedAt:   tsFromProto(r.CompletedAt),
+
+		PathScope:          r.PathScope,
+		EgressProxyID:      r.EgressProxyId,
+		EgressConfigSerial: int(r.EgressConfigSerial),
 	}
 	if len(r.Hops) > 0 {
 		out.Hops = make([]telemetry.TraceHop, len(r.Hops))

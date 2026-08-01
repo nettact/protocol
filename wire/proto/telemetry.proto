@@ -411,6 +411,11 @@ message TraceRequest {
   reserved "deadline";
   // Request validity window measured from arrival on the agent's own clock.
   int32 budget_ms = 10;
+  // In-tunnel egress pin (DIAG-004): empty id = host-stack trace; a non-empty
+  // id must match a live proxy AND its config generation or the agent fails
+  // closed — never a direct fallback.
+  string egress_proxy_id = 11;
+  int32 egress_config_serial = 12;
 }
 
 // IncidentSnapshot mirrors telemetry.IncidentSnapshot — the agent's allowlisted
@@ -497,6 +502,12 @@ message TraceResult {
   google.protobuf.Timestamp started_at = 8;
   google.protobuf.Timestamp completed_at = 9;
   repeated TraceHop hops = 10;
+  // Attestation of the path actually used: "direct" (or empty) | "wireguard_inner",
+  // plus the egress generation that carried in-tunnel probes. The server
+  // validates these against the plan it issued.
+  string path_scope = 11;
+  string egress_proxy_id = 12;
+  int32 egress_config_serial = 13;
 }
 
 // TraceHop mirrors telemetry.TraceHop.
