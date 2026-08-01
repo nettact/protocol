@@ -628,6 +628,8 @@ type Packet struct {
 	InventoryDelta        []*InventoryItem       `protobuf:"bytes,8,rep,name=inventory_delta,json=inventoryDelta,proto3" json:"inventory_delta,omitempty"`
 	ReportedConfigVersion int32                  `protobuf:"varint,9,opt,name=reported_config_version,json=reportedConfigVersion,proto3" json:"reported_config_version,omitempty"`
 	InterfaceSnapshots    []*InterfaceSnapshot   `protobuf:"bytes,11,rep,name=interface_snapshots,json=interfaceSnapshots,proto3" json:"interface_snapshots,omitempty"`
+	GameRuns              []*GameRun             `protobuf:"bytes,12,rep,name=game_runs,json=gameRuns,proto3" json:"game_runs,omitempty"`
+	GameBuckets           []*GameBucket          `protobuf:"bytes,13,rep,name=game_buckets,json=gameBuckets,proto3" json:"game_buckets,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -728,6 +730,20 @@ func (x *Packet) GetReportedConfigVersion() int32 {
 func (x *Packet) GetInterfaceSnapshots() []*InterfaceSnapshot {
 	if x != nil {
 		return x.InterfaceSnapshots
+	}
+	return nil
+}
+
+func (x *Packet) GetGameRuns() []*GameRun {
+	if x != nil {
+		return x.GameRuns
+	}
+	return nil
+}
+
+func (x *Packet) GetGameBuckets() []*GameBucket {
+	if x != nil {
+		return x.GameBuckets
 	}
 	return nil
 }
@@ -845,6 +861,568 @@ func (x *Metric) GetConfigSerial() int32 {
 	return 0
 }
 
+// GameRun mirrors gamesense.Run — one continuous stretch of a game presenting
+// frames. Re-sent whenever its mutable fields change, so the server upserts by
+// id. ended_at uses message presence: absent means the run is still going, which
+// is a different fact from a run whose end was never observed.
+type GameRun struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Proc          string                 `protobuf:"bytes,2,opt,name=proc,proto3" json:"proc,omitempty"`
+	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	LastSeenAt    *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=last_seen_at,json=lastSeenAt,proto3" json:"last_seen_at,omitempty"`
+	EndedAt       *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=ended_at,json=endedAt,proto3" json:"ended_at,omitempty"`
+	Source        string                 `protobuf:"bytes,7,opt,name=source,proto3" json:"source,omitempty"`
+	Caps          []string               `protobuf:"bytes,8,rep,name=caps,proto3" json:"caps,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GameRun) Reset() {
+	*x = GameRun{}
+	mi := &file_telemetry_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GameRun) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GameRun) ProtoMessage() {}
+
+func (x *GameRun) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GameRun.ProtoReflect.Descriptor instead.
+func (*GameRun) Descriptor() ([]byte, []int) {
+	return file_telemetry_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *GameRun) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *GameRun) GetProc() string {
+	if x != nil {
+		return x.Proc
+	}
+	return ""
+}
+
+func (x *GameRun) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *GameRun) GetStartedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartedAt
+	}
+	return nil
+}
+
+func (x *GameRun) GetLastSeenAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastSeenAt
+	}
+	return nil
+}
+
+func (x *GameRun) GetEndedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EndedAt
+	}
+	return nil
+}
+
+func (x *GameRun) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *GameRun) GetCaps() []string {
+	if x != nil {
+		return x.Caps
+	}
+	return nil
+}
+
+// GameBucket mirrors gamesense.Bucket — one second of a run, keyed by
+// (run_id, ts) so replays are idempotent.
+//
+// The nested messages mirror the Go structs one-for-one rather than flattening
+// them, because their optionality is the contract: an absent disp_ft means the
+// source could not see frames reach the screen, and flattening would force that
+// distinction onto field-presence bookkeeping the reader has to reassemble.
+type GameBucket struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	Ts            *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=ts,proto3" json:"ts,omitempty"`
+	Frames        *GameFrames            `protobuf:"bytes,3,opt,name=frames,proto3" json:"frames,omitempty"`
+	Ft            *GameFrameTimes        `protobuf:"bytes,4,opt,name=ft,proto3" json:"ft,omitempty"`
+	Hist          *GameHistogram         `protobuf:"bytes,5,opt,name=hist,proto3" json:"hist,omitempty"`
+	DispFt        *GameDispFT            `protobuf:"bytes,6,opt,name=disp_ft,json=dispFt,proto3" json:"disp_ft,omitempty"`
+	Present       *GamePresent           `protobuf:"bytes,7,opt,name=present,proto3" json:"present,omitempty"`
+	Quality       []string               `protobuf:"bytes,8,rep,name=quality,proto3" json:"quality,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GameBucket) Reset() {
+	*x = GameBucket{}
+	mi := &file_telemetry_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GameBucket) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GameBucket) ProtoMessage() {}
+
+func (x *GameBucket) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GameBucket.ProtoReflect.Descriptor instead.
+func (*GameBucket) Descriptor() ([]byte, []int) {
+	return file_telemetry_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *GameBucket) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *GameBucket) GetTs() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Ts
+	}
+	return nil
+}
+
+func (x *GameBucket) GetFrames() *GameFrames {
+	if x != nil {
+		return x.Frames
+	}
+	return nil
+}
+
+func (x *GameBucket) GetFt() *GameFrameTimes {
+	if x != nil {
+		return x.Ft
+	}
+	return nil
+}
+
+func (x *GameBucket) GetHist() *GameHistogram {
+	if x != nil {
+		return x.Hist
+	}
+	return nil
+}
+
+func (x *GameBucket) GetDispFt() *GameDispFT {
+	if x != nil {
+		return x.DispFt
+	}
+	return nil
+}
+
+func (x *GameBucket) GetPresent() *GamePresent {
+	if x != nil {
+		return x.Present
+	}
+	return nil
+}
+
+func (x *GameBucket) GetQuality() []string {
+	if x != nil {
+		return x.Quality
+	}
+	return nil
+}
+
+// GameFrames mirrors gamesense.Frames. Only presented is universal; the others
+// use proto3 presence so "no frames were dropped" and "drops are not observable
+// here" stay distinguishable.
+type GameFrames struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Presented     int32                  `protobuf:"varint,1,opt,name=presented,proto3" json:"presented,omitempty"`
+	Displayed     *int32                 `protobuf:"varint,2,opt,name=displayed,proto3,oneof" json:"displayed,omitempty"`
+	Dropped       *int32                 `protobuf:"varint,3,opt,name=dropped,proto3,oneof" json:"dropped,omitempty"`
+	App           *int32                 `protobuf:"varint,4,opt,name=app,proto3,oneof" json:"app,omitempty"`
+	Generated     *int32                 `protobuf:"varint,5,opt,name=generated,proto3,oneof" json:"generated,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GameFrames) Reset() {
+	*x = GameFrames{}
+	mi := &file_telemetry_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GameFrames) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GameFrames) ProtoMessage() {}
+
+func (x *GameFrames) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GameFrames.ProtoReflect.Descriptor instead.
+func (*GameFrames) Descriptor() ([]byte, []int) {
+	return file_telemetry_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *GameFrames) GetPresented() int32 {
+	if x != nil {
+		return x.Presented
+	}
+	return 0
+}
+
+func (x *GameFrames) GetDisplayed() int32 {
+	if x != nil && x.Displayed != nil {
+		return *x.Displayed
+	}
+	return 0
+}
+
+func (x *GameFrames) GetDropped() int32 {
+	if x != nil && x.Dropped != nil {
+		return *x.Dropped
+	}
+	return 0
+}
+
+func (x *GameFrames) GetApp() int32 {
+	if x != nil && x.App != nil {
+		return *x.App
+	}
+	return 0
+}
+
+func (x *GameFrames) GetGenerated() int32 {
+	if x != nil && x.Generated != nil {
+		return *x.Generated
+	}
+	return 0
+}
+
+// GameFrameTimes mirrors gamesense.FrameTimes — within-second statistics in
+// milliseconds.
+type GameFrameTimes struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Avg           float64                `protobuf:"fixed64,1,opt,name=avg,proto3" json:"avg,omitempty"`
+	P50           float64                `protobuf:"fixed64,2,opt,name=p50,proto3" json:"p50,omitempty"`
+	P95           float64                `protobuf:"fixed64,3,opt,name=p95,proto3" json:"p95,omitempty"`
+	P99           float64                `protobuf:"fixed64,4,opt,name=p99,proto3" json:"p99,omitempty"`
+	Max           float64                `protobuf:"fixed64,5,opt,name=max,proto3" json:"max,omitempty"`
+	Sd            float64                `protobuf:"fixed64,6,opt,name=sd,proto3" json:"sd,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GameFrameTimes) Reset() {
+	*x = GameFrameTimes{}
+	mi := &file_telemetry_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GameFrameTimes) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GameFrameTimes) ProtoMessage() {}
+
+func (x *GameFrameTimes) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GameFrameTimes.ProtoReflect.Descriptor instead.
+func (*GameFrameTimes) Descriptor() ([]byte, []int) {
+	return file_telemetry_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *GameFrameTimes) GetAvg() float64 {
+	if x != nil {
+		return x.Avg
+	}
+	return 0
+}
+
+func (x *GameFrameTimes) GetP50() float64 {
+	if x != nil {
+		return x.P50
+	}
+	return 0
+}
+
+func (x *GameFrameTimes) GetP95() float64 {
+	if x != nil {
+		return x.P95
+	}
+	return 0
+}
+
+func (x *GameFrameTimes) GetP99() float64 {
+	if x != nil {
+		return x.P99
+	}
+	return 0
+}
+
+func (x *GameFrameTimes) GetMax() float64 {
+	if x != nil {
+		return x.Max
+	}
+	return 0
+}
+
+func (x *GameFrameTimes) GetSd() float64 {
+	if x != nil {
+		return x.Sd
+	}
+	return 0
+}
+
+// GameHistogram mirrors gamesense.Histogram. layout names frozen bin edges; a
+// reader that does not know the layout must not interpret the counts.
+type GameHistogram struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Layout        string                 `protobuf:"bytes,1,opt,name=layout,proto3" json:"layout,omitempty"`
+	Counts        []uint32               `protobuf:"varint,2,rep,packed,name=counts,proto3" json:"counts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GameHistogram) Reset() {
+	*x = GameHistogram{}
+	mi := &file_telemetry_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GameHistogram) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GameHistogram) ProtoMessage() {}
+
+func (x *GameHistogram) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GameHistogram.ProtoReflect.Descriptor instead.
+func (*GameHistogram) Descriptor() ([]byte, []int) {
+	return file_telemetry_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *GameHistogram) GetLayout() string {
+	if x != nil {
+		return x.Layout
+	}
+	return ""
+}
+
+func (x *GameHistogram) GetCounts() []uint32 {
+	if x != nil {
+		return x.Counts
+	}
+	return nil
+}
+
+// GameDispFT mirrors gamesense.DispFT — intervals between frames reaching the
+// screen, as opposed to being produced.
+type GameDispFT struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Avg           float64                `protobuf:"fixed64,1,opt,name=avg,proto3" json:"avg,omitempty"`
+	P95           float64                `protobuf:"fixed64,2,opt,name=p95,proto3" json:"p95,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GameDispFT) Reset() {
+	*x = GameDispFT{}
+	mi := &file_telemetry_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GameDispFT) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GameDispFT) ProtoMessage() {}
+
+func (x *GameDispFT) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GameDispFT.ProtoReflect.Descriptor instead.
+func (*GameDispFT) Descriptor() ([]byte, []int) {
+	return file_telemetry_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *GameDispFT) GetAvg() float64 {
+	if x != nil {
+		return x.Avg
+	}
+	return 0
+}
+
+func (x *GameDispFT) GetP95() float64 {
+	if x != nil {
+		return x.P95
+	}
+	return 0
+}
+
+// GamePresent mirrors gamesense.Present. sync and tearing carry presence because
+// their zero values are real observations (vsync off; no tearing).
+type GamePresent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Mode          string                 `protobuf:"bytes,1,opt,name=mode,proto3" json:"mode,omitempty"`
+	Sync          *int32                 `protobuf:"varint,2,opt,name=sync,proto3,oneof" json:"sync,omitempty"`
+	Tearing       *bool                  `protobuf:"varint,3,opt,name=tearing,proto3,oneof" json:"tearing,omitempty"`
+	Api           string                 `protobuf:"bytes,4,opt,name=api,proto3" json:"api,omitempty"`
+	Changed       bool                   `protobuf:"varint,5,opt,name=changed,proto3" json:"changed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GamePresent) Reset() {
+	*x = GamePresent{}
+	mi := &file_telemetry_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GamePresent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GamePresent) ProtoMessage() {}
+
+func (x *GamePresent) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GamePresent.ProtoReflect.Descriptor instead.
+func (*GamePresent) Descriptor() ([]byte, []int) {
+	return file_telemetry_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *GamePresent) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *GamePresent) GetSync() int32 {
+	if x != nil && x.Sync != nil {
+		return *x.Sync
+	}
+	return 0
+}
+
+func (x *GamePresent) GetTearing() bool {
+	if x != nil && x.Tearing != nil {
+		return *x.Tearing
+	}
+	return false
+}
+
+func (x *GamePresent) GetApi() string {
+	if x != nil {
+		return x.Api
+	}
+	return ""
+}
+
+func (x *GamePresent) GetChanged() bool {
+	if x != nil {
+		return x.Changed
+	}
+	return false
+}
+
 // Event mirrors telemetry.Event.
 type Event struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -861,7 +1439,7 @@ type Event struct {
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_telemetry_proto_msgTypes[7]
+	mi := &file_telemetry_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -873,7 +1451,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[7]
+	mi := &file_telemetry_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -886,7 +1464,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{7}
+	return file_telemetry_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *Event) GetId() string {
@@ -959,7 +1537,7 @@ type InventoryItem struct {
 
 func (x *InventoryItem) Reset() {
 	*x = InventoryItem{}
-	mi := &file_telemetry_proto_msgTypes[8]
+	mi := &file_telemetry_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -971,7 +1549,7 @@ func (x *InventoryItem) String() string {
 func (*InventoryItem) ProtoMessage() {}
 
 func (x *InventoryItem) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[8]
+	mi := &file_telemetry_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -984,7 +1562,7 @@ func (x *InventoryItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InventoryItem.ProtoReflect.Descriptor instead.
 func (*InventoryItem) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{8}
+	return file_telemetry_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *InventoryItem) GetKind() string {
@@ -1059,7 +1637,7 @@ type InterfaceSnapshot struct {
 
 func (x *InterfaceSnapshot) Reset() {
 	*x = InterfaceSnapshot{}
-	mi := &file_telemetry_proto_msgTypes[9]
+	mi := &file_telemetry_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1071,7 +1649,7 @@ func (x *InterfaceSnapshot) String() string {
 func (*InterfaceSnapshot) ProtoMessage() {}
 
 func (x *InterfaceSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[9]
+	mi := &file_telemetry_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1084,7 +1662,7 @@ func (x *InterfaceSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InterfaceSnapshot.ProtoReflect.Descriptor instead.
 func (*InterfaceSnapshot) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{9}
+	return file_telemetry_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *InterfaceSnapshot) GetSampledAt() *timestamppb.Timestamp {
@@ -1139,7 +1717,7 @@ type InterfaceState struct {
 
 func (x *InterfaceState) Reset() {
 	*x = InterfaceState{}
-	mi := &file_telemetry_proto_msgTypes[10]
+	mi := &file_telemetry_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1151,7 +1729,7 @@ func (x *InterfaceState) String() string {
 func (*InterfaceState) ProtoMessage() {}
 
 func (x *InterfaceState) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[10]
+	mi := &file_telemetry_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1164,7 +1742,7 @@ func (x *InterfaceState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InterfaceState.ProtoReflect.Descriptor instead.
 func (*InterfaceState) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{10}
+	return file_telemetry_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *InterfaceState) GetName() string {
@@ -1230,7 +1808,7 @@ type WiFiInfo struct {
 
 func (x *WiFiInfo) Reset() {
 	*x = WiFiInfo{}
-	mi := &file_telemetry_proto_msgTypes[11]
+	mi := &file_telemetry_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1242,7 +1820,7 @@ func (x *WiFiInfo) String() string {
 func (*WiFiInfo) ProtoMessage() {}
 
 func (x *WiFiInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[11]
+	mi := &file_telemetry_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1255,7 +1833,7 @@ func (x *WiFiInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WiFiInfo.ProtoReflect.Descriptor instead.
 func (*WiFiInfo) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{11}
+	return file_telemetry_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *WiFiInfo) GetState() string {
@@ -1310,7 +1888,7 @@ type HostSnapshot struct {
 
 func (x *HostSnapshot) Reset() {
 	*x = HostSnapshot{}
-	mi := &file_telemetry_proto_msgTypes[12]
+	mi := &file_telemetry_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1322,7 +1900,7 @@ func (x *HostSnapshot) String() string {
 func (*HostSnapshot) ProtoMessage() {}
 
 func (x *HostSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[12]
+	mi := &file_telemetry_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1335,7 +1913,7 @@ func (x *HostSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostSnapshot.ProtoReflect.Descriptor instead.
 func (*HostSnapshot) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{12}
+	return file_telemetry_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *HostSnapshot) GetTs() *timestamppb.Timestamp {
@@ -1392,7 +1970,7 @@ type SnapshotScopeResult struct {
 
 func (x *SnapshotScopeResult) Reset() {
 	*x = SnapshotScopeResult{}
-	mi := &file_telemetry_proto_msgTypes[13]
+	mi := &file_telemetry_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1404,7 +1982,7 @@ func (x *SnapshotScopeResult) String() string {
 func (*SnapshotScopeResult) ProtoMessage() {}
 
 func (x *SnapshotScopeResult) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[13]
+	mi := &file_telemetry_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1417,7 +1995,7 @@ func (x *SnapshotScopeResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotScopeResult.ProtoReflect.Descriptor instead.
 func (*SnapshotScopeResult) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{13}
+	return file_telemetry_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *SnapshotScopeResult) GetScope() string {
@@ -1461,7 +2039,7 @@ type ProcessInfo struct {
 
 func (x *ProcessInfo) Reset() {
 	*x = ProcessInfo{}
-	mi := &file_telemetry_proto_msgTypes[14]
+	mi := &file_telemetry_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1473,7 +2051,7 @@ func (x *ProcessInfo) String() string {
 func (*ProcessInfo) ProtoMessage() {}
 
 func (x *ProcessInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[14]
+	mi := &file_telemetry_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1486,7 +2064,7 @@ func (x *ProcessInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProcessInfo.ProtoReflect.Descriptor instead.
 func (*ProcessInfo) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{14}
+	return file_telemetry_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ProcessInfo) GetPid() int32 {
@@ -1575,7 +2153,7 @@ type ConnectionInfo struct {
 
 func (x *ConnectionInfo) Reset() {
 	*x = ConnectionInfo{}
-	mi := &file_telemetry_proto_msgTypes[15]
+	mi := &file_telemetry_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1587,7 +2165,7 @@ func (x *ConnectionInfo) String() string {
 func (*ConnectionInfo) ProtoMessage() {}
 
 func (x *ConnectionInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[15]
+	mi := &file_telemetry_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1600,7 +2178,7 @@ func (x *ConnectionInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConnectionInfo.ProtoReflect.Descriptor instead.
 func (*ConnectionInfo) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{15}
+	return file_telemetry_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ConnectionInfo) GetProto() string {
@@ -1659,7 +2237,7 @@ type TelemetryAck struct {
 
 func (x *TelemetryAck) Reset() {
 	*x = TelemetryAck{}
-	mi := &file_telemetry_proto_msgTypes[16]
+	mi := &file_telemetry_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1671,7 +2249,7 @@ func (x *TelemetryAck) String() string {
 func (*TelemetryAck) ProtoMessage() {}
 
 func (x *TelemetryAck) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[16]
+	mi := &file_telemetry_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1684,7 +2262,7 @@ func (x *TelemetryAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TelemetryAck.ProtoReflect.Descriptor instead.
 func (*TelemetryAck) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{16}
+	return file_telemetry_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *TelemetryAck) GetHighestSequence() uint64 {
@@ -1721,7 +2299,7 @@ type DesiredState struct {
 
 func (x *DesiredState) Reset() {
 	*x = DesiredState{}
-	mi := &file_telemetry_proto_msgTypes[17]
+	mi := &file_telemetry_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1733,7 +2311,7 @@ func (x *DesiredState) String() string {
 func (*DesiredState) ProtoMessage() {}
 
 func (x *DesiredState) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[17]
+	mi := &file_telemetry_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1746,7 +2324,7 @@ func (x *DesiredState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DesiredState.ProtoReflect.Descriptor instead.
 func (*DesiredState) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{17}
+	return file_telemetry_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *DesiredState) GetConfigVersion() int32 {
@@ -1790,7 +2368,7 @@ type SnapshotRequest struct {
 
 func (x *SnapshotRequest) Reset() {
 	*x = SnapshotRequest{}
-	mi := &file_telemetry_proto_msgTypes[18]
+	mi := &file_telemetry_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1802,7 +2380,7 @@ func (x *SnapshotRequest) String() string {
 func (*SnapshotRequest) ProtoMessage() {}
 
 func (x *SnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[18]
+	mi := &file_telemetry_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1815,7 +2393,7 @@ func (x *SnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotRequest.ProtoReflect.Descriptor instead.
 func (*SnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{18}
+	return file_telemetry_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *SnapshotRequest) GetRequestId() string {
@@ -1856,7 +2434,7 @@ type ProbeTarget struct {
 
 func (x *ProbeTarget) Reset() {
 	*x = ProbeTarget{}
-	mi := &file_telemetry_proto_msgTypes[19]
+	mi := &file_telemetry_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1868,7 +2446,7 @@ func (x *ProbeTarget) String() string {
 func (*ProbeTarget) ProtoMessage() {}
 
 func (x *ProbeTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[19]
+	mi := &file_telemetry_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1881,7 +2459,7 @@ func (x *ProbeTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProbeTarget.ProtoReflect.Descriptor instead.
 func (*ProbeTarget) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{19}
+	return file_telemetry_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ProbeTarget) GetKind() string {
@@ -1970,7 +2548,7 @@ type ProxySpec struct {
 
 func (x *ProxySpec) Reset() {
 	*x = ProxySpec{}
-	mi := &file_telemetry_proto_msgTypes[20]
+	mi := &file_telemetry_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1982,7 +2560,7 @@ func (x *ProxySpec) String() string {
 func (*ProxySpec) ProtoMessage() {}
 
 func (x *ProxySpec) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[20]
+	mi := &file_telemetry_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1995,7 +2573,7 @@ func (x *ProxySpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProxySpec.ProtoReflect.Descriptor instead.
 func (*ProxySpec) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{20}
+	return file_telemetry_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ProxySpec) GetId() string {
@@ -2167,7 +2745,7 @@ type ProbeParams struct {
 
 func (x *ProbeParams) Reset() {
 	*x = ProbeParams{}
-	mi := &file_telemetry_proto_msgTypes[21]
+	mi := &file_telemetry_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2179,7 +2757,7 @@ func (x *ProbeParams) String() string {
 func (*ProbeParams) ProtoMessage() {}
 
 func (x *ProbeParams) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[21]
+	mi := &file_telemetry_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2192,7 +2770,7 @@ func (x *ProbeParams) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProbeParams.ProtoReflect.Descriptor instead.
 func (*ProbeParams) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{21}
+	return file_telemetry_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ProbeParams) GetIntervalSeconds() int32 {
@@ -2367,7 +2945,7 @@ type Intervals struct {
 
 func (x *Intervals) Reset() {
 	*x = Intervals{}
-	mi := &file_telemetry_proto_msgTypes[22]
+	mi := &file_telemetry_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2379,7 +2957,7 @@ func (x *Intervals) String() string {
 func (*Intervals) ProtoMessage() {}
 
 func (x *Intervals) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[22]
+	mi := &file_telemetry_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2392,7 +2970,7 @@ func (x *Intervals) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Intervals.ProtoReflect.Descriptor instead.
 func (*Intervals) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{22}
+	return file_telemetry_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *Intervals) GetBaseSeconds() int32 {
@@ -2425,7 +3003,7 @@ type IncidentSnapshotRequest struct {
 
 func (x *IncidentSnapshotRequest) Reset() {
 	*x = IncidentSnapshotRequest{}
-	mi := &file_telemetry_proto_msgTypes[23]
+	mi := &file_telemetry_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2437,7 +3015,7 @@ func (x *IncidentSnapshotRequest) String() string {
 func (*IncidentSnapshotRequest) ProtoMessage() {}
 
 func (x *IncidentSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[23]
+	mi := &file_telemetry_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2450,7 +3028,7 @@ func (x *IncidentSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IncidentSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*IncidentSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{23}
+	return file_telemetry_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *IncidentSnapshotRequest) GetRequestId() string {
@@ -2494,7 +3072,7 @@ type SnapshotTargetRef struct {
 
 func (x *SnapshotTargetRef) Reset() {
 	*x = SnapshotTargetRef{}
-	mi := &file_telemetry_proto_msgTypes[24]
+	mi := &file_telemetry_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2506,7 +3084,7 @@ func (x *SnapshotTargetRef) String() string {
 func (*SnapshotTargetRef) ProtoMessage() {}
 
 func (x *SnapshotTargetRef) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[24]
+	mi := &file_telemetry_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2519,7 +3097,7 @@ func (x *SnapshotTargetRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotTargetRef.ProtoReflect.Descriptor instead.
 func (*SnapshotTargetRef) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{24}
+	return file_telemetry_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *SnapshotTargetRef) GetMonitorId() string {
@@ -2575,7 +3153,7 @@ type TraceRequest struct {
 
 func (x *TraceRequest) Reset() {
 	*x = TraceRequest{}
-	mi := &file_telemetry_proto_msgTypes[25]
+	mi := &file_telemetry_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2587,7 +3165,7 @@ func (x *TraceRequest) String() string {
 func (*TraceRequest) ProtoMessage() {}
 
 func (x *TraceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[25]
+	mi := &file_telemetry_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2600,7 +3178,7 @@ func (x *TraceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TraceRequest.ProtoReflect.Descriptor instead.
 func (*TraceRequest) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{25}
+	return file_telemetry_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *TraceRequest) GetReportId() string {
@@ -2700,7 +3278,7 @@ type IncidentSnapshot struct {
 
 func (x *IncidentSnapshot) Reset() {
 	*x = IncidentSnapshot{}
-	mi := &file_telemetry_proto_msgTypes[26]
+	mi := &file_telemetry_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2712,7 +3290,7 @@ func (x *IncidentSnapshot) String() string {
 func (*IncidentSnapshot) ProtoMessage() {}
 
 func (x *IncidentSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[26]
+	mi := &file_telemetry_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2725,7 +3303,7 @@ func (x *IncidentSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IncidentSnapshot.ProtoReflect.Descriptor instead.
 func (*IncidentSnapshot) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{26}
+	return file_telemetry_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *IncidentSnapshot) GetRequestId() string {
@@ -2797,7 +3375,7 @@ type SnapshotGroupResult struct {
 
 func (x *SnapshotGroupResult) Reset() {
 	*x = SnapshotGroupResult{}
-	mi := &file_telemetry_proto_msgTypes[27]
+	mi := &file_telemetry_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2809,7 +3387,7 @@ func (x *SnapshotGroupResult) String() string {
 func (*SnapshotGroupResult) ProtoMessage() {}
 
 func (x *SnapshotGroupResult) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[27]
+	mi := &file_telemetry_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2822,7 +3400,7 @@ func (x *SnapshotGroupResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotGroupResult.ProtoReflect.Descriptor instead.
 func (*SnapshotGroupResult) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{27}
+	return file_telemetry_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *SnapshotGroupResult) GetGroup() string {
@@ -2865,7 +3443,7 @@ type SnapshotNetwork struct {
 
 func (x *SnapshotNetwork) Reset() {
 	*x = SnapshotNetwork{}
-	mi := &file_telemetry_proto_msgTypes[28]
+	mi := &file_telemetry_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2877,7 +3455,7 @@ func (x *SnapshotNetwork) String() string {
 func (*SnapshotNetwork) ProtoMessage() {}
 
 func (x *SnapshotNetwork) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[28]
+	mi := &file_telemetry_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2890,7 +3468,7 @@ func (x *SnapshotNetwork) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotNetwork.ProtoReflect.Descriptor instead.
 func (*SnapshotNetwork) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{28}
+	return file_telemetry_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *SnapshotNetwork) GetInterfaces() []*SnapshotInterface {
@@ -2927,7 +3505,7 @@ type SnapshotInterface struct {
 
 func (x *SnapshotInterface) Reset() {
 	*x = SnapshotInterface{}
-	mi := &file_telemetry_proto_msgTypes[29]
+	mi := &file_telemetry_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2939,7 +3517,7 @@ func (x *SnapshotInterface) String() string {
 func (*SnapshotInterface) ProtoMessage() {}
 
 func (x *SnapshotInterface) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[29]
+	mi := &file_telemetry_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2952,7 +3530,7 @@ func (x *SnapshotInterface) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotInterface.ProtoReflect.Descriptor instead.
 func (*SnapshotInterface) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{29}
+	return file_telemetry_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *SnapshotInterface) GetName() string {
@@ -2994,7 +3572,7 @@ type SnapshotRoute struct {
 
 func (x *SnapshotRoute) Reset() {
 	*x = SnapshotRoute{}
-	mi := &file_telemetry_proto_msgTypes[30]
+	mi := &file_telemetry_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3006,7 +3584,7 @@ func (x *SnapshotRoute) String() string {
 func (*SnapshotRoute) ProtoMessage() {}
 
 func (x *SnapshotRoute) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[30]
+	mi := &file_telemetry_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3019,7 +3597,7 @@ func (x *SnapshotRoute) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotRoute.ProtoReflect.Descriptor instead.
 func (*SnapshotRoute) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{30}
+	return file_telemetry_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *SnapshotRoute) GetGateway() string {
@@ -3049,7 +3627,7 @@ type SnapshotAgentInfo struct {
 
 func (x *SnapshotAgentInfo) Reset() {
 	*x = SnapshotAgentInfo{}
-	mi := &file_telemetry_proto_msgTypes[31]
+	mi := &file_telemetry_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3061,7 +3639,7 @@ func (x *SnapshotAgentInfo) String() string {
 func (*SnapshotAgentInfo) ProtoMessage() {}
 
 func (x *SnapshotAgentInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[31]
+	mi := &file_telemetry_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3074,7 +3652,7 @@ func (x *SnapshotAgentInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotAgentInfo.ProtoReflect.Descriptor instead.
 func (*SnapshotAgentInfo) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{31}
+	return file_telemetry_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *SnapshotAgentInfo) GetAgentId() string {
@@ -3118,7 +3696,7 @@ type SnapshotResources struct {
 
 func (x *SnapshotResources) Reset() {
 	*x = SnapshotResources{}
-	mi := &file_telemetry_proto_msgTypes[32]
+	mi := &file_telemetry_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3130,7 +3708,7 @@ func (x *SnapshotResources) String() string {
 func (*SnapshotResources) ProtoMessage() {}
 
 func (x *SnapshotResources) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[32]
+	mi := &file_telemetry_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3143,7 +3721,7 @@ func (x *SnapshotResources) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotResources.ProtoReflect.Descriptor instead.
 func (*SnapshotResources) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{32}
+	return file_telemetry_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *SnapshotResources) GetCpuPercent() float64 {
@@ -3182,7 +3760,7 @@ type SnapshotTargetResult struct {
 
 func (x *SnapshotTargetResult) Reset() {
 	*x = SnapshotTargetResult{}
-	mi := &file_telemetry_proto_msgTypes[33]
+	mi := &file_telemetry_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3194,7 +3772,7 @@ func (x *SnapshotTargetResult) String() string {
 func (*SnapshotTargetResult) ProtoMessage() {}
 
 func (x *SnapshotTargetResult) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[33]
+	mi := &file_telemetry_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3207,7 +3785,7 @@ func (x *SnapshotTargetResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotTargetResult.ProtoReflect.Descriptor instead.
 func (*SnapshotTargetResult) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{33}
+	return file_telemetry_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *SnapshotTargetResult) GetMonitorId() string {
@@ -3279,7 +3857,7 @@ type TraceResult struct {
 
 func (x *TraceResult) Reset() {
 	*x = TraceResult{}
-	mi := &file_telemetry_proto_msgTypes[34]
+	mi := &file_telemetry_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3291,7 +3869,7 @@ func (x *TraceResult) String() string {
 func (*TraceResult) ProtoMessage() {}
 
 func (x *TraceResult) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[34]
+	mi := &file_telemetry_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3304,7 +3882,7 @@ func (x *TraceResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TraceResult.ProtoReflect.Descriptor instead.
 func (*TraceResult) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{34}
+	return file_telemetry_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *TraceResult) GetReportId() string {
@@ -3409,7 +3987,7 @@ type TraceHop struct {
 
 func (x *TraceHop) Reset() {
 	*x = TraceHop{}
-	mi := &file_telemetry_proto_msgTypes[35]
+	mi := &file_telemetry_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3421,7 +3999,7 @@ func (x *TraceHop) String() string {
 func (*TraceHop) ProtoMessage() {}
 
 func (x *TraceHop) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[35]
+	mi := &file_telemetry_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3434,7 +4012,7 @@ func (x *TraceHop) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TraceHop.ProtoReflect.Descriptor instead.
 func (*TraceHop) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{35}
+	return file_telemetry_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *TraceHop) GetTtl() int32 {
@@ -3465,7 +4043,7 @@ type TraceAttempt struct {
 
 func (x *TraceAttempt) Reset() {
 	*x = TraceAttempt{}
-	mi := &file_telemetry_proto_msgTypes[36]
+	mi := &file_telemetry_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3477,7 +4055,7 @@ func (x *TraceAttempt) String() string {
 func (*TraceAttempt) ProtoMessage() {}
 
 func (x *TraceAttempt) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[36]
+	mi := &file_telemetry_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3490,7 +4068,7 @@ func (x *TraceAttempt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TraceAttempt.ProtoReflect.Descriptor instead.
 func (*TraceAttempt) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{36}
+	return file_telemetry_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *TraceAttempt) GetResponderAddr() string {
@@ -3569,7 +4147,7 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x10snapshot_request\x18\x06 \x01(\v2 .nettact.wire.v1.SnapshotRequestH\x00R\x0fsnapshotRequest\x12f\n" +
 	"\x19incident_snapshot_request\x18\b \x01(\v2(.nettact.wire.v1.IncidentSnapshotRequestH\x00R\x17incidentSnapshotRequest\x12D\n" +
 	"\rtrace_request\x18\t \x01(\v2\x1d.nettact.wire.v1.TraceRequestH\x00R\ftraceRequestB\x05\n" +
-	"\x03msg\"\x82\x04\n" +
+	"\x03msg\"\xf9\x04\n" +
 	"\x06Packet\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\x05R\rschemaVersion\x12\x19\n" +
 	"\bagent_id\x18\x02 \x01(\tR\aagentId\x12\x17\n" +
@@ -3580,7 +4158,9 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x06events\x18\a \x03(\v2\x16.nettact.wire.v1.EventR\x06events\x12G\n" +
 	"\x0finventory_delta\x18\b \x03(\v2\x1e.nettact.wire.v1.InventoryItemR\x0einventoryDelta\x126\n" +
 	"\x17reported_config_version\x18\t \x01(\x05R\x15reportedConfigVersion\x12S\n" +
-	"\x13interface_snapshots\x18\v \x03(\v2\".nettact.wire.v1.InterfaceSnapshotR\x12interfaceSnapshotsJ\x04\b\n" +
+	"\x13interface_snapshots\x18\v \x03(\v2\".nettact.wire.v1.InterfaceSnapshotR\x12interfaceSnapshots\x125\n" +
+	"\tgame_runs\x18\f \x03(\v2\x18.nettact.wire.v1.GameRunR\bgameRuns\x12>\n" +
+	"\fgame_buckets\x18\r \x03(\v2\x1b.nettact.wire.v1.GameBucketR\vgameBucketsJ\x04\b\n" +
 	"\x10\vR\rhost_snapshot\"\xdc\x02\n" +
 	"\x06Metric\x12*\n" +
 	"\x02ts\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x12\n" +
@@ -3595,7 +4175,65 @@ const file_telemetry_proto_rawDesc = "" +
 	"\rconfig_serial\x18\t \x01(\x05R\fconfigSerial\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x96\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9f\x02\n" +
+	"\aGameRun\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04proc\x18\x02 \x01(\tR\x04proc\x12\x14\n" +
+	"\x05title\x18\x03 \x01(\tR\x05title\x129\n" +
+	"\n" +
+	"started_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12<\n" +
+	"\flast_seen_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"lastSeenAt\x125\n" +
+	"\bended_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\aendedAt\x12\x16\n" +
+	"\x06source\x18\a \x01(\tR\x06source\x12\x12\n" +
+	"\x04caps\x18\b \x03(\tR\x04caps\"\xf1\x02\n" +
+	"\n" +
+	"GameBucket\x12\x15\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12*\n" +
+	"\x02ts\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x123\n" +
+	"\x06frames\x18\x03 \x01(\v2\x1b.nettact.wire.v1.GameFramesR\x06frames\x12/\n" +
+	"\x02ft\x18\x04 \x01(\v2\x1f.nettact.wire.v1.GameFrameTimesR\x02ft\x122\n" +
+	"\x04hist\x18\x05 \x01(\v2\x1e.nettact.wire.v1.GameHistogramR\x04hist\x124\n" +
+	"\adisp_ft\x18\x06 \x01(\v2\x1b.nettact.wire.v1.GameDispFTR\x06dispFt\x126\n" +
+	"\apresent\x18\a \x01(\v2\x1c.nettact.wire.v1.GamePresentR\apresent\x12\x18\n" +
+	"\aquality\x18\b \x03(\tR\aquality\"\xd6\x01\n" +
+	"\n" +
+	"GameFrames\x12\x1c\n" +
+	"\tpresented\x18\x01 \x01(\x05R\tpresented\x12!\n" +
+	"\tdisplayed\x18\x02 \x01(\x05H\x00R\tdisplayed\x88\x01\x01\x12\x1d\n" +
+	"\adropped\x18\x03 \x01(\x05H\x01R\adropped\x88\x01\x01\x12\x15\n" +
+	"\x03app\x18\x04 \x01(\x05H\x02R\x03app\x88\x01\x01\x12!\n" +
+	"\tgenerated\x18\x05 \x01(\x05H\x03R\tgenerated\x88\x01\x01B\f\n" +
+	"\n" +
+	"_displayedB\n" +
+	"\n" +
+	"\b_droppedB\x06\n" +
+	"\x04_appB\f\n" +
+	"\n" +
+	"_generated\"z\n" +
+	"\x0eGameFrameTimes\x12\x10\n" +
+	"\x03avg\x18\x01 \x01(\x01R\x03avg\x12\x10\n" +
+	"\x03p50\x18\x02 \x01(\x01R\x03p50\x12\x10\n" +
+	"\x03p95\x18\x03 \x01(\x01R\x03p95\x12\x10\n" +
+	"\x03p99\x18\x04 \x01(\x01R\x03p99\x12\x10\n" +
+	"\x03max\x18\x05 \x01(\x01R\x03max\x12\x0e\n" +
+	"\x02sd\x18\x06 \x01(\x01R\x02sd\"?\n" +
+	"\rGameHistogram\x12\x16\n" +
+	"\x06layout\x18\x01 \x01(\tR\x06layout\x12\x16\n" +
+	"\x06counts\x18\x02 \x03(\rR\x06counts\"0\n" +
+	"\n" +
+	"GameDispFT\x12\x10\n" +
+	"\x03avg\x18\x01 \x01(\x01R\x03avg\x12\x10\n" +
+	"\x03p95\x18\x02 \x01(\x01R\x03p95\"\x9a\x01\n" +
+	"\vGamePresent\x12\x12\n" +
+	"\x04mode\x18\x01 \x01(\tR\x04mode\x12\x17\n" +
+	"\x04sync\x18\x02 \x01(\x05H\x00R\x04sync\x88\x01\x01\x12\x1d\n" +
+	"\atearing\x18\x03 \x01(\bH\x01R\atearing\x88\x01\x01\x12\x10\n" +
+	"\x03api\x18\x04 \x01(\tR\x03api\x12\x18\n" +
+	"\achanged\x18\x05 \x01(\bR\achangedB\a\n" +
+	"\x05_syncB\n" +
+	"\n" +
+	"\b_tearing\"\x96\x02\n" +
 	"\x05Event\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12*\n" +
 	"\x02ts\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x12\n" +
@@ -3890,7 +4528,7 @@ func file_telemetry_proto_rawDescGZIP() []byte {
 	return file_telemetry_proto_rawDescData
 }
 
-var file_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
+var file_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 47)
 var file_telemetry_proto_goTypes = []any{
 	(*Hello)(nil),                   // 0: nettact.wire.v1.Hello
 	(*PermissionReport)(nil),        // 1: nettact.wire.v1.PermissionReport
@@ -3899,98 +4537,116 @@ var file_telemetry_proto_goTypes = []any{
 	(*Frame)(nil),                   // 4: nettact.wire.v1.Frame
 	(*Packet)(nil),                  // 5: nettact.wire.v1.Packet
 	(*Metric)(nil),                  // 6: nettact.wire.v1.Metric
-	(*Event)(nil),                   // 7: nettact.wire.v1.Event
-	(*InventoryItem)(nil),           // 8: nettact.wire.v1.InventoryItem
-	(*InterfaceSnapshot)(nil),       // 9: nettact.wire.v1.InterfaceSnapshot
-	(*InterfaceState)(nil),          // 10: nettact.wire.v1.InterfaceState
-	(*WiFiInfo)(nil),                // 11: nettact.wire.v1.WiFiInfo
-	(*HostSnapshot)(nil),            // 12: nettact.wire.v1.HostSnapshot
-	(*SnapshotScopeResult)(nil),     // 13: nettact.wire.v1.SnapshotScopeResult
-	(*ProcessInfo)(nil),             // 14: nettact.wire.v1.ProcessInfo
-	(*ConnectionInfo)(nil),          // 15: nettact.wire.v1.ConnectionInfo
-	(*TelemetryAck)(nil),            // 16: nettact.wire.v1.TelemetryAck
-	(*DesiredState)(nil),            // 17: nettact.wire.v1.DesiredState
-	(*SnapshotRequest)(nil),         // 18: nettact.wire.v1.SnapshotRequest
-	(*ProbeTarget)(nil),             // 19: nettact.wire.v1.ProbeTarget
-	(*ProxySpec)(nil),               // 20: nettact.wire.v1.ProxySpec
-	(*ProbeParams)(nil),             // 21: nettact.wire.v1.ProbeParams
-	(*Intervals)(nil),               // 22: nettact.wire.v1.Intervals
-	(*IncidentSnapshotRequest)(nil), // 23: nettact.wire.v1.IncidentSnapshotRequest
-	(*SnapshotTargetRef)(nil),       // 24: nettact.wire.v1.SnapshotTargetRef
-	(*TraceRequest)(nil),            // 25: nettact.wire.v1.TraceRequest
-	(*IncidentSnapshot)(nil),        // 26: nettact.wire.v1.IncidentSnapshot
-	(*SnapshotGroupResult)(nil),     // 27: nettact.wire.v1.SnapshotGroupResult
-	(*SnapshotNetwork)(nil),         // 28: nettact.wire.v1.SnapshotNetwork
-	(*SnapshotInterface)(nil),       // 29: nettact.wire.v1.SnapshotInterface
-	(*SnapshotRoute)(nil),           // 30: nettact.wire.v1.SnapshotRoute
-	(*SnapshotAgentInfo)(nil),       // 31: nettact.wire.v1.SnapshotAgentInfo
-	(*SnapshotResources)(nil),       // 32: nettact.wire.v1.SnapshotResources
-	(*SnapshotTargetResult)(nil),    // 33: nettact.wire.v1.SnapshotTargetResult
-	(*TraceResult)(nil),             // 34: nettact.wire.v1.TraceResult
-	(*TraceHop)(nil),                // 35: nettact.wire.v1.TraceHop
-	(*TraceAttempt)(nil),            // 36: nettact.wire.v1.TraceAttempt
-	nil,                             // 37: nettact.wire.v1.Metric.LabelsEntry
-	nil,                             // 38: nettact.wire.v1.Event.AttrsEntry
-	nil,                             // 39: nettact.wire.v1.ProbeParams.HeadersEntry
-	(*timestamppb.Timestamp)(nil),   // 40: google.protobuf.Timestamp
+	(*GameRun)(nil),                 // 7: nettact.wire.v1.GameRun
+	(*GameBucket)(nil),              // 8: nettact.wire.v1.GameBucket
+	(*GameFrames)(nil),              // 9: nettact.wire.v1.GameFrames
+	(*GameFrameTimes)(nil),          // 10: nettact.wire.v1.GameFrameTimes
+	(*GameHistogram)(nil),           // 11: nettact.wire.v1.GameHistogram
+	(*GameDispFT)(nil),              // 12: nettact.wire.v1.GameDispFT
+	(*GamePresent)(nil),             // 13: nettact.wire.v1.GamePresent
+	(*Event)(nil),                   // 14: nettact.wire.v1.Event
+	(*InventoryItem)(nil),           // 15: nettact.wire.v1.InventoryItem
+	(*InterfaceSnapshot)(nil),       // 16: nettact.wire.v1.InterfaceSnapshot
+	(*InterfaceState)(nil),          // 17: nettact.wire.v1.InterfaceState
+	(*WiFiInfo)(nil),                // 18: nettact.wire.v1.WiFiInfo
+	(*HostSnapshot)(nil),            // 19: nettact.wire.v1.HostSnapshot
+	(*SnapshotScopeResult)(nil),     // 20: nettact.wire.v1.SnapshotScopeResult
+	(*ProcessInfo)(nil),             // 21: nettact.wire.v1.ProcessInfo
+	(*ConnectionInfo)(nil),          // 22: nettact.wire.v1.ConnectionInfo
+	(*TelemetryAck)(nil),            // 23: nettact.wire.v1.TelemetryAck
+	(*DesiredState)(nil),            // 24: nettact.wire.v1.DesiredState
+	(*SnapshotRequest)(nil),         // 25: nettact.wire.v1.SnapshotRequest
+	(*ProbeTarget)(nil),             // 26: nettact.wire.v1.ProbeTarget
+	(*ProxySpec)(nil),               // 27: nettact.wire.v1.ProxySpec
+	(*ProbeParams)(nil),             // 28: nettact.wire.v1.ProbeParams
+	(*Intervals)(nil),               // 29: nettact.wire.v1.Intervals
+	(*IncidentSnapshotRequest)(nil), // 30: nettact.wire.v1.IncidentSnapshotRequest
+	(*SnapshotTargetRef)(nil),       // 31: nettact.wire.v1.SnapshotTargetRef
+	(*TraceRequest)(nil),            // 32: nettact.wire.v1.TraceRequest
+	(*IncidentSnapshot)(nil),        // 33: nettact.wire.v1.IncidentSnapshot
+	(*SnapshotGroupResult)(nil),     // 34: nettact.wire.v1.SnapshotGroupResult
+	(*SnapshotNetwork)(nil),         // 35: nettact.wire.v1.SnapshotNetwork
+	(*SnapshotInterface)(nil),       // 36: nettact.wire.v1.SnapshotInterface
+	(*SnapshotRoute)(nil),           // 37: nettact.wire.v1.SnapshotRoute
+	(*SnapshotAgentInfo)(nil),       // 38: nettact.wire.v1.SnapshotAgentInfo
+	(*SnapshotResources)(nil),       // 39: nettact.wire.v1.SnapshotResources
+	(*SnapshotTargetResult)(nil),    // 40: nettact.wire.v1.SnapshotTargetResult
+	(*TraceResult)(nil),             // 41: nettact.wire.v1.TraceResult
+	(*TraceHop)(nil),                // 42: nettact.wire.v1.TraceHop
+	(*TraceAttempt)(nil),            // 43: nettact.wire.v1.TraceAttempt
+	nil,                             // 44: nettact.wire.v1.Metric.LabelsEntry
+	nil,                             // 45: nettact.wire.v1.Event.AttrsEntry
+	nil,                             // 46: nettact.wire.v1.ProbeParams.HeadersEntry
+	(*timestamppb.Timestamp)(nil),   // 47: google.protobuf.Timestamp
 }
 var file_telemetry_proto_depIdxs = []int32{
 	1,  // 0: nettact.wire.v1.Hello.permissions:type_name -> nettact.wire.v1.PermissionReport
 	3,  // 1: nettact.wire.v1.MonitorStatus.statuses:type_name -> nettact.wire.v1.MonitorStatusEntry
 	0,  // 2: nettact.wire.v1.Frame.hello:type_name -> nettact.wire.v1.Hello
 	5,  // 3: nettact.wire.v1.Frame.packet:type_name -> nettact.wire.v1.Packet
-	12, // 4: nettact.wire.v1.Frame.host_snapshot:type_name -> nettact.wire.v1.HostSnapshot
+	19, // 4: nettact.wire.v1.Frame.host_snapshot:type_name -> nettact.wire.v1.HostSnapshot
 	2,  // 5: nettact.wire.v1.Frame.monitor_status:type_name -> nettact.wire.v1.MonitorStatus
-	26, // 6: nettact.wire.v1.Frame.incident_snapshot:type_name -> nettact.wire.v1.IncidentSnapshot
-	34, // 7: nettact.wire.v1.Frame.trace_result:type_name -> nettact.wire.v1.TraceResult
-	16, // 8: nettact.wire.v1.Frame.ack:type_name -> nettact.wire.v1.TelemetryAck
-	17, // 9: nettact.wire.v1.Frame.desired_state:type_name -> nettact.wire.v1.DesiredState
-	18, // 10: nettact.wire.v1.Frame.snapshot_request:type_name -> nettact.wire.v1.SnapshotRequest
-	23, // 11: nettact.wire.v1.Frame.incident_snapshot_request:type_name -> nettact.wire.v1.IncidentSnapshotRequest
-	25, // 12: nettact.wire.v1.Frame.trace_request:type_name -> nettact.wire.v1.TraceRequest
-	40, // 13: nettact.wire.v1.Packet.sent_at:type_name -> google.protobuf.Timestamp
+	33, // 6: nettact.wire.v1.Frame.incident_snapshot:type_name -> nettact.wire.v1.IncidentSnapshot
+	41, // 7: nettact.wire.v1.Frame.trace_result:type_name -> nettact.wire.v1.TraceResult
+	23, // 8: nettact.wire.v1.Frame.ack:type_name -> nettact.wire.v1.TelemetryAck
+	24, // 9: nettact.wire.v1.Frame.desired_state:type_name -> nettact.wire.v1.DesiredState
+	25, // 10: nettact.wire.v1.Frame.snapshot_request:type_name -> nettact.wire.v1.SnapshotRequest
+	30, // 11: nettact.wire.v1.Frame.incident_snapshot_request:type_name -> nettact.wire.v1.IncidentSnapshotRequest
+	32, // 12: nettact.wire.v1.Frame.trace_request:type_name -> nettact.wire.v1.TraceRequest
+	47, // 13: nettact.wire.v1.Packet.sent_at:type_name -> google.protobuf.Timestamp
 	6,  // 14: nettact.wire.v1.Packet.metrics:type_name -> nettact.wire.v1.Metric
-	7,  // 15: nettact.wire.v1.Packet.events:type_name -> nettact.wire.v1.Event
-	8,  // 16: nettact.wire.v1.Packet.inventory_delta:type_name -> nettact.wire.v1.InventoryItem
-	9,  // 17: nettact.wire.v1.Packet.interface_snapshots:type_name -> nettact.wire.v1.InterfaceSnapshot
-	40, // 18: nettact.wire.v1.Metric.ts:type_name -> google.protobuf.Timestamp
-	37, // 19: nettact.wire.v1.Metric.labels:type_name -> nettact.wire.v1.Metric.LabelsEntry
-	40, // 20: nettact.wire.v1.Event.ts:type_name -> google.protobuf.Timestamp
-	38, // 21: nettact.wire.v1.Event.attrs:type_name -> nettact.wire.v1.Event.AttrsEntry
-	40, // 22: nettact.wire.v1.InventoryItem.last_seen:type_name -> google.protobuf.Timestamp
-	40, // 23: nettact.wire.v1.InterfaceSnapshot.sampled_at:type_name -> google.protobuf.Timestamp
-	10, // 24: nettact.wire.v1.InterfaceSnapshot.interfaces:type_name -> nettact.wire.v1.InterfaceState
-	30, // 25: nettact.wire.v1.InterfaceSnapshot.default_route:type_name -> nettact.wire.v1.SnapshotRoute
-	11, // 26: nettact.wire.v1.InterfaceState.wifi:type_name -> nettact.wire.v1.WiFiInfo
-	40, // 27: nettact.wire.v1.HostSnapshot.ts:type_name -> google.protobuf.Timestamp
-	14, // 28: nettact.wire.v1.HostSnapshot.processes:type_name -> nettact.wire.v1.ProcessInfo
-	15, // 29: nettact.wire.v1.HostSnapshot.connections:type_name -> nettact.wire.v1.ConnectionInfo
-	13, // 30: nettact.wire.v1.HostSnapshot.scopes:type_name -> nettact.wire.v1.SnapshotScopeResult
-	40, // 31: nettact.wire.v1.TelemetryAck.server_time:type_name -> google.protobuf.Timestamp
-	19, // 32: nettact.wire.v1.DesiredState.probe_targets:type_name -> nettact.wire.v1.ProbeTarget
-	22, // 33: nettact.wire.v1.DesiredState.intervals:type_name -> nettact.wire.v1.Intervals
-	20, // 34: nettact.wire.v1.DesiredState.proxies:type_name -> nettact.wire.v1.ProxySpec
-	21, // 35: nettact.wire.v1.ProbeTarget.params:type_name -> nettact.wire.v1.ProbeParams
-	39, // 36: nettact.wire.v1.ProbeParams.headers:type_name -> nettact.wire.v1.ProbeParams.HeadersEntry
-	24, // 37: nettact.wire.v1.IncidentSnapshotRequest.targets:type_name -> nettact.wire.v1.SnapshotTargetRef
-	40, // 38: nettact.wire.v1.IncidentSnapshot.collected_at:type_name -> google.protobuf.Timestamp
-	27, // 39: nettact.wire.v1.IncidentSnapshot.groups:type_name -> nettact.wire.v1.SnapshotGroupResult
-	28, // 40: nettact.wire.v1.IncidentSnapshot.network:type_name -> nettact.wire.v1.SnapshotNetwork
-	31, // 41: nettact.wire.v1.IncidentSnapshot.agent:type_name -> nettact.wire.v1.SnapshotAgentInfo
-	32, // 42: nettact.wire.v1.IncidentSnapshot.resources:type_name -> nettact.wire.v1.SnapshotResources
-	33, // 43: nettact.wire.v1.IncidentSnapshot.targets:type_name -> nettact.wire.v1.SnapshotTargetResult
-	40, // 44: nettact.wire.v1.SnapshotGroupResult.collected_at:type_name -> google.protobuf.Timestamp
-	29, // 45: nettact.wire.v1.SnapshotNetwork.interfaces:type_name -> nettact.wire.v1.SnapshotInterface
-	30, // 46: nettact.wire.v1.SnapshotNetwork.default_route:type_name -> nettact.wire.v1.SnapshotRoute
-	40, // 47: nettact.wire.v1.TraceResult.started_at:type_name -> google.protobuf.Timestamp
-	40, // 48: nettact.wire.v1.TraceResult.completed_at:type_name -> google.protobuf.Timestamp
-	35, // 49: nettact.wire.v1.TraceResult.hops:type_name -> nettact.wire.v1.TraceHop
-	36, // 50: nettact.wire.v1.TraceHop.attempts:type_name -> nettact.wire.v1.TraceAttempt
-	51, // [51:51] is the sub-list for method output_type
-	51, // [51:51] is the sub-list for method input_type
-	51, // [51:51] is the sub-list for extension type_name
-	51, // [51:51] is the sub-list for extension extendee
-	0,  // [0:51] is the sub-list for field type_name
+	14, // 15: nettact.wire.v1.Packet.events:type_name -> nettact.wire.v1.Event
+	15, // 16: nettact.wire.v1.Packet.inventory_delta:type_name -> nettact.wire.v1.InventoryItem
+	16, // 17: nettact.wire.v1.Packet.interface_snapshots:type_name -> nettact.wire.v1.InterfaceSnapshot
+	7,  // 18: nettact.wire.v1.Packet.game_runs:type_name -> nettact.wire.v1.GameRun
+	8,  // 19: nettact.wire.v1.Packet.game_buckets:type_name -> nettact.wire.v1.GameBucket
+	47, // 20: nettact.wire.v1.Metric.ts:type_name -> google.protobuf.Timestamp
+	44, // 21: nettact.wire.v1.Metric.labels:type_name -> nettact.wire.v1.Metric.LabelsEntry
+	47, // 22: nettact.wire.v1.GameRun.started_at:type_name -> google.protobuf.Timestamp
+	47, // 23: nettact.wire.v1.GameRun.last_seen_at:type_name -> google.protobuf.Timestamp
+	47, // 24: nettact.wire.v1.GameRun.ended_at:type_name -> google.protobuf.Timestamp
+	47, // 25: nettact.wire.v1.GameBucket.ts:type_name -> google.protobuf.Timestamp
+	9,  // 26: nettact.wire.v1.GameBucket.frames:type_name -> nettact.wire.v1.GameFrames
+	10, // 27: nettact.wire.v1.GameBucket.ft:type_name -> nettact.wire.v1.GameFrameTimes
+	11, // 28: nettact.wire.v1.GameBucket.hist:type_name -> nettact.wire.v1.GameHistogram
+	12, // 29: nettact.wire.v1.GameBucket.disp_ft:type_name -> nettact.wire.v1.GameDispFT
+	13, // 30: nettact.wire.v1.GameBucket.present:type_name -> nettact.wire.v1.GamePresent
+	47, // 31: nettact.wire.v1.Event.ts:type_name -> google.protobuf.Timestamp
+	45, // 32: nettact.wire.v1.Event.attrs:type_name -> nettact.wire.v1.Event.AttrsEntry
+	47, // 33: nettact.wire.v1.InventoryItem.last_seen:type_name -> google.protobuf.Timestamp
+	47, // 34: nettact.wire.v1.InterfaceSnapshot.sampled_at:type_name -> google.protobuf.Timestamp
+	17, // 35: nettact.wire.v1.InterfaceSnapshot.interfaces:type_name -> nettact.wire.v1.InterfaceState
+	37, // 36: nettact.wire.v1.InterfaceSnapshot.default_route:type_name -> nettact.wire.v1.SnapshotRoute
+	18, // 37: nettact.wire.v1.InterfaceState.wifi:type_name -> nettact.wire.v1.WiFiInfo
+	47, // 38: nettact.wire.v1.HostSnapshot.ts:type_name -> google.protobuf.Timestamp
+	21, // 39: nettact.wire.v1.HostSnapshot.processes:type_name -> nettact.wire.v1.ProcessInfo
+	22, // 40: nettact.wire.v1.HostSnapshot.connections:type_name -> nettact.wire.v1.ConnectionInfo
+	20, // 41: nettact.wire.v1.HostSnapshot.scopes:type_name -> nettact.wire.v1.SnapshotScopeResult
+	47, // 42: nettact.wire.v1.TelemetryAck.server_time:type_name -> google.protobuf.Timestamp
+	26, // 43: nettact.wire.v1.DesiredState.probe_targets:type_name -> nettact.wire.v1.ProbeTarget
+	29, // 44: nettact.wire.v1.DesiredState.intervals:type_name -> nettact.wire.v1.Intervals
+	27, // 45: nettact.wire.v1.DesiredState.proxies:type_name -> nettact.wire.v1.ProxySpec
+	28, // 46: nettact.wire.v1.ProbeTarget.params:type_name -> nettact.wire.v1.ProbeParams
+	46, // 47: nettact.wire.v1.ProbeParams.headers:type_name -> nettact.wire.v1.ProbeParams.HeadersEntry
+	31, // 48: nettact.wire.v1.IncidentSnapshotRequest.targets:type_name -> nettact.wire.v1.SnapshotTargetRef
+	47, // 49: nettact.wire.v1.IncidentSnapshot.collected_at:type_name -> google.protobuf.Timestamp
+	34, // 50: nettact.wire.v1.IncidentSnapshot.groups:type_name -> nettact.wire.v1.SnapshotGroupResult
+	35, // 51: nettact.wire.v1.IncidentSnapshot.network:type_name -> nettact.wire.v1.SnapshotNetwork
+	38, // 52: nettact.wire.v1.IncidentSnapshot.agent:type_name -> nettact.wire.v1.SnapshotAgentInfo
+	39, // 53: nettact.wire.v1.IncidentSnapshot.resources:type_name -> nettact.wire.v1.SnapshotResources
+	40, // 54: nettact.wire.v1.IncidentSnapshot.targets:type_name -> nettact.wire.v1.SnapshotTargetResult
+	47, // 55: nettact.wire.v1.SnapshotGroupResult.collected_at:type_name -> google.protobuf.Timestamp
+	36, // 56: nettact.wire.v1.SnapshotNetwork.interfaces:type_name -> nettact.wire.v1.SnapshotInterface
+	37, // 57: nettact.wire.v1.SnapshotNetwork.default_route:type_name -> nettact.wire.v1.SnapshotRoute
+	47, // 58: nettact.wire.v1.TraceResult.started_at:type_name -> google.protobuf.Timestamp
+	47, // 59: nettact.wire.v1.TraceResult.completed_at:type_name -> google.protobuf.Timestamp
+	42, // 60: nettact.wire.v1.TraceResult.hops:type_name -> nettact.wire.v1.TraceHop
+	43, // 61: nettact.wire.v1.TraceHop.attempts:type_name -> nettact.wire.v1.TraceAttempt
+	62, // [62:62] is the sub-list for method output_type
+	62, // [62:62] is the sub-list for method input_type
+	62, // [62:62] is the sub-list for extension type_name
+	62, // [62:62] is the sub-list for extension extendee
+	0,  // [0:62] is the sub-list for field type_name
 }
 
 func init() { file_telemetry_proto_init() }
@@ -4011,17 +4667,19 @@ func file_telemetry_proto_init() {
 		(*Frame_IncidentSnapshotRequest)(nil),
 		(*Frame_TraceRequest)(nil),
 	}
-	file_telemetry_proto_msgTypes[12].OneofWrappers = []any{}
-	file_telemetry_proto_msgTypes[14].OneofWrappers = []any{}
-	file_telemetry_proto_msgTypes[15].OneofWrappers = []any{}
-	file_telemetry_proto_msgTypes[32].OneofWrappers = []any{}
+	file_telemetry_proto_msgTypes[9].OneofWrappers = []any{}
+	file_telemetry_proto_msgTypes[13].OneofWrappers = []any{}
+	file_telemetry_proto_msgTypes[19].OneofWrappers = []any{}
+	file_telemetry_proto_msgTypes[21].OneofWrappers = []any{}
+	file_telemetry_proto_msgTypes[22].OneofWrappers = []any{}
+	file_telemetry_proto_msgTypes[39].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_telemetry_proto_rawDesc), len(file_telemetry_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   40,
+			NumMessages:   47,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

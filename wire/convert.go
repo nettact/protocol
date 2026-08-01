@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/nettact/protocol/config"
+	"github.com/nettact/protocol/gamesense"
 	"github.com/nettact/protocol/permission"
 	"github.com/nettact/protocol/telemetry"
 	"github.com/nettact/protocol/wire/pb"
@@ -30,6 +31,41 @@ func tsFromProto(t *timestamppb.Timestamp) time.Time {
 		return time.Time{}
 	}
 	return t.AsTime()
+}
+
+// Optional-value mapping: a Go nil pointer and an absent protobuf field mean the
+// same thing — the value was never measured — so the two representations map
+// straight onto each other and a zero never appears in place of an unknown.
+
+func tsPtrToProto(t *time.Time) *timestamppb.Timestamp {
+	if t == nil {
+		return nil
+	}
+	return tsToProto(*t)
+}
+
+func tsPtrFromProto(t *timestamppb.Timestamp) *time.Time {
+	if t == nil {
+		return nil
+	}
+	v := t.AsTime()
+	return &v
+}
+
+func intPtrToProto(v *int) *int32 {
+	if v == nil {
+		return nil
+	}
+	n := int32(*v)
+	return &n
+}
+
+func intPtrFromProto(v *int32) *int {
+	if v == nil {
+		return nil
+	}
+	n := int(*v)
+	return &n
 }
 
 // ---- Packet ----
@@ -65,6 +101,18 @@ func packetToProto(p telemetry.Packet) *pb.Packet {
 		out.InterfaceSnapshots = make([]*pb.InterfaceSnapshot, len(p.InterfaceSnapshots))
 		for i, s := range p.InterfaceSnapshots {
 			out.InterfaceSnapshots[i] = interfaceSnapshotToProto(s)
+		}
+	}
+	if len(p.GameRuns) > 0 {
+		out.GameRuns = make([]*pb.GameRun, len(p.GameRuns))
+		for i, r := range p.GameRuns {
+			out.GameRuns[i] = gameRunToProto(r)
+		}
+	}
+	if len(p.GameBuckets) > 0 {
+		out.GameBuckets = make([]*pb.GameBucket, len(p.GameBuckets))
+		for i, b := range p.GameBuckets {
+			out.GameBuckets[i] = gameBucketToProto(b)
 		}
 	}
 	return out
@@ -106,6 +154,125 @@ func packetFromProto(p *pb.Packet) telemetry.Packet {
 			out.InterfaceSnapshots[i] = interfaceSnapshotFromProto(s)
 		}
 	}
+	if len(p.GameRuns) > 0 {
+		out.GameRuns = make([]gamesense.Run, len(p.GameRuns))
+		for i, r := range p.GameRuns {
+			out.GameRuns[i] = gameRunFromProto(r)
+		}
+	}
+	if len(p.GameBuckets) > 0 {
+		out.GameBuckets = make([]gamesense.Bucket, len(p.GameBuckets))
+		for i, b := range p.GameBuckets {
+			out.GameBuckets[i] = gameBucketFromProto(b)
+		}
+	}
+	return out
+}
+
+// ---- Game runs and second buckets ----
+
+func gameRunToProto(r gamesense.Run) *pb.GameRun {
+	return &pb.GameRun{
+		Id:         r.ID,
+		Proc:       r.Proc,
+		Title:      r.Title,
+		StartedAt:  tsToProto(r.StartedAt),
+		LastSeenAt: tsToProto(r.LastSeenAt),
+		EndedAt:    tsPtrToProto(r.EndedAt),
+		Source:     r.Source,
+		Caps:       r.Caps,
+	}
+}
+
+func gameRunFromProto(r *pb.GameRun) gamesense.Run {
+	if r == nil {
+		return gamesense.Run{}
+	}
+	return gamesense.Run{
+		ID:         r.Id,
+		Proc:       r.Proc,
+		Title:      r.Title,
+		StartedAt:  tsFromProto(r.StartedAt),
+		LastSeenAt: tsFromProto(r.LastSeenAt),
+		EndedAt:    tsPtrFromProto(r.EndedAt),
+		Source:     r.Source,
+		Caps:       r.Caps,
+	}
+}
+
+func gameBucketToProto(b gamesense.Bucket) *pb.GameBucket {
+	out := &pb.GameBucket{
+		RunId: b.RunID,
+		Ts:    tsToProto(b.TS),
+		Frames: &pb.GameFrames{
+			Presented: int32(b.Frames.Presented),
+			Displayed: intPtrToProto(b.Frames.Displayed),
+			Dropped:   intPtrToProto(b.Frames.Dropped),
+			App:       intPtrToProto(b.Frames.App),
+			Generated: intPtrToProto(b.Frames.Generated),
+		},
+		Ft: &pb.GameFrameTimes{
+			Avg: b.FT.Avg,
+			P50: b.FT.P50,
+			P95: b.FT.P95,
+			P99: b.FT.P99,
+			Max: b.FT.Max,
+			Sd:  b.FT.SD,
+		},
+		Hist:    &pb.GameHistogram{Layout: b.Hist.Layout, Counts: b.Hist.Counts},
+		Quality: b.Quality,
+	}
+	if b.DispFT != nil {
+		out.DispFt = &pb.GameDispFT{Avg: b.DispFT.Avg, P95: b.DispFT.P95}
+	}
+	if b.Present != nil {
+		out.Present = &pb.GamePresent{
+			Mode:    b.Present.Mode,
+			Sync:    intPtrToProto(b.Present.Sync),
+			Tearing: b.Present.Tearing,
+			Api:     b.Present.API,
+			Changed: b.Present.Changed,
+		}
+	}
+	return out
+}
+
+func gameBucketFromProto(b *pb.GameBucket) gamesense.Bucket {
+	if b == nil {
+		return gamesense.Bucket{}
+	}
+	out := gamesense.Bucket{RunID: b.RunId, TS: tsFromProto(b.Ts)}
+	if f := b.Frames; f != nil {
+		out.Frames = gamesense.Frames{
+			Presented: int(f.Presented),
+			Displayed: intPtrFromProto(f.Displayed),
+			Dropped:   intPtrFromProto(f.Dropped),
+			App:       intPtrFromProto(f.App),
+			Generated: intPtrFromProto(f.Generated),
+		}
+	}
+	if ft := b.Ft; ft != nil {
+		out.FT = gamesense.FrameTimes{
+			Avg: ft.Avg, P50: ft.P50, P95: ft.P95,
+			P99: ft.P99, Max: ft.Max, SD: ft.Sd,
+		}
+	}
+	if h := b.Hist; h != nil {
+		out.Hist = gamesense.Histogram{Layout: h.Layout, Counts: h.Counts}
+	}
+	if d := b.DispFt; d != nil {
+		out.DispFT = &gamesense.DispFT{Avg: d.Avg, P95: d.P95}
+	}
+	if pr := b.Present; pr != nil {
+		out.Present = &gamesense.Present{
+			Mode:    pr.Mode,
+			Sync:    intPtrFromProto(pr.Sync),
+			Tearing: pr.Tearing,
+			API:     pr.Api,
+			Changed: pr.Changed,
+		}
+	}
+	out.Quality = b.Quality
 	return out
 }
 

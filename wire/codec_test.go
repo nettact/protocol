@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/nettact/protocol/config"
+	"github.com/nettact/protocol/gamesense"
 	"github.com/nettact/protocol/permission"
 	"github.com/nettact/protocol/telemetry"
 )
@@ -49,6 +50,64 @@ func samplePacket() telemetry.Packet {
 			// Explicit empty is a semantic shape: protobuf decode must reconstruct
 			// a non-nil empty slice so JSON remains `interfaces: []`, not null.
 			{SampledAt: ts.Add(time.Second), WiFiState: telemetry.WiFiCollectionOK, Interfaces: []telemetry.InterfaceState{}},
+		},
+		GameRuns:    sampleGameRuns(ts),
+		GameBuckets: sampleGameBuckets(ts),
+	}
+}
+
+// sampleGameRuns covers both run shapes: one still going (no end) and one
+// finished. The distinction is carried by presence alone, so a converter that
+// substituted a zero time would pass every other assertion and silently declare
+// live runs to have ended in year one.
+func sampleGameRuns(ts time.Time) []gamesense.Run {
+	ended := ts.Add(90 * time.Second)
+	return []gamesense.Run{
+		{
+			ID: "run-live", Proc: "eldenring.exe", Title: "ELDEN RING",
+			StartedAt: ts, LastSeenAt: ts.Add(30 * time.Second),
+			Source: gamesense.SourcePresentMonService,
+			Caps:   []string{gamesense.CapDisplayed, gamesense.CapFrameType, gamesense.CapPresentMeta, gamesense.CapPerFrameComplete},
+		},
+		{
+			ID: "run-done", Proc: "cs2.exe",
+			StartedAt: ts, LastSeenAt: ended, EndedAt: &ended,
+			Source: gamesense.SourcePresentMonService,
+		},
+	}
+}
+
+// sampleGameBuckets covers a fully-observed second and a minimally-observed one.
+// The second bucket is the important case: every optional field is nil, and the
+// round-trip must bring back nil rather than a zero that would read as "this
+// game dropped no frames" when nothing ever looked.
+func sampleGameBuckets(ts time.Time) []gamesense.Bucket {
+	displayed, dropped, app, generated := 140, 2, 71, 71
+	sync := 0
+	tearing := true
+	full := make([]uint32, gamesense.HistBins)
+	full[12], full[16] = 140, 2
+	sparse := make([]uint32, gamesense.HistBins)
+	sparse[9] = 143
+	return []gamesense.Bucket{
+		{
+			RunID: "run-live", TS: ts,
+			Sample: gamesense.Sample{
+				Frames:  gamesense.Frames{Presented: 142, Displayed: &displayed, Dropped: &dropped, App: &app, Generated: &generated},
+				FT:      gamesense.FrameTimes{Avg: 6.944, P50: 6.8, P95: 8.1, P99: 11.2, Max: 23.5, SD: 1.42},
+				Hist:    gamesense.Histogram{Layout: gamesense.HistLayoutLog24V1, Counts: full},
+				DispFT:  &gamesense.DispFT{Avg: 7.1, P95: 8.4},
+				Present: &gamesense.Present{Mode: gamesense.PresentModeHardwareIndependentFlip, Sync: &sync, Tearing: &tearing, API: gamesense.APIDXGI, Changed: true},
+				Quality: []string{gamesense.QualityHistClipped},
+			},
+		},
+		{
+			RunID: "run-done", TS: ts.Add(time.Second),
+			Sample: gamesense.Sample{
+				Frames: gamesense.Frames{Presented: 143},
+				FT:     gamesense.FrameTimes{Avg: 6.99, P50: 6.9, P95: 7.4, P99: 7.9, Max: 8.2, SD: 0.31},
+				Hist:   gamesense.Histogram{Layout: gamesense.HistLayoutLog24V1, Counts: sparse},
+			},
 		},
 	}
 }

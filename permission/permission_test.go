@@ -218,15 +218,14 @@ func TestGamePerformanceRequiresProcessDetect(t *testing.T) {
 	}
 }
 
-// TestRequiredForHostMetricGatesGameMetrics pins the whole game.* family to the
-// performance permission; the console uses this to explain a missing series.
-func TestRequiredForHostMetricGatesGameMetrics(t *testing.T) {
-	for _, kind := range []string{
-		"game.fps.current", "game.frame_time.avg_ms", "game.frame_time.p95_ms",
-	} {
-		got := RequiredForHostMetric(kind)
-		if len(got) != 1 || got[0] != GamePerformanceRead {
-			t.Fatalf("RequiredForHostMetric(%q) = %v, want [%s]", kind, got, GamePerformanceRead)
+// TestGameDataIsNotGatedThroughTheMetricPath pins the fact that game presentation
+// data never travels as a metric: it has its own run/bucket model, and the server
+// gates that on GamePerformanceRead where it is ingested. Anyone reintroducing a
+// game.* metric kind would find it silently ungated, which is what this catches.
+func TestGameDataIsNotGatedThroughTheMetricPath(t *testing.T) {
+	for _, kind := range []string{"game.fps.current", "game.frame_time.avg_ms"} {
+		if got := RequiredForHostMetric(kind); got != nil {
+			t.Fatalf("RequiredForHostMetric(%q) = %v, want nil — game data is not a metric", kind, got)
 		}
 	}
 }

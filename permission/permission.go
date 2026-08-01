@@ -477,8 +477,6 @@ func RequiredForHostMetric(metricKind string) []ID {
 		return []ID{HostNetworkIORead}
 	case strings.HasPrefix(metricKind, "host.temp."):
 		return []ID{HostTemperatureRead}
-	case strings.HasPrefix(metricKind, "game."):
-		return []ID{GamePerformanceRead}
 	case strings.HasPrefix(metricKind, "wifi."):
 		return []ID{NetWiFiStatusRead}
 	case metricKind == "iface.up":

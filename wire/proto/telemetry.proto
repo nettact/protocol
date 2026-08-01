@@ -111,6 +111,8 @@ message Packet {
   repeated InventoryItem inventory_delta = 8;
   int32 reported_config_version = 9;
   repeated InterfaceSnapshot interface_snapshots = 11;
+  repeated GameRun game_runs = 12;
+  repeated GameBucket game_buckets = 13;
 }
 
 // Metric mirrors telemetry.Metric.
@@ -128,6 +130,85 @@ message Metric {
   // The probe target's material config generation (probe_tasks.config_serial)
   // this sample was produced under. 0 for system metrics (monitor_id == "").
   int32 config_serial = 9;
+}
+
+// GameRun mirrors gamesense.Run — one continuous stretch of a game presenting
+// frames. Re-sent whenever its mutable fields change, so the server upserts by
+// id. ended_at uses message presence: absent means the run is still going, which
+// is a different fact from a run whose end was never observed.
+message GameRun {
+  string id = 1;
+  string proc = 2;
+  string title = 3;
+  google.protobuf.Timestamp started_at = 4;
+  google.protobuf.Timestamp last_seen_at = 5;
+  google.protobuf.Timestamp ended_at = 6;
+  string source = 7;
+  repeated string caps = 8;
+}
+
+// GameBucket mirrors gamesense.Bucket — one second of a run, keyed by
+// (run_id, ts) so replays are idempotent.
+//
+// The nested messages mirror the Go structs one-for-one rather than flattening
+// them, because their optionality is the contract: an absent disp_ft means the
+// source could not see frames reach the screen, and flattening would force that
+// distinction onto field-presence bookkeeping the reader has to reassemble.
+message GameBucket {
+  string run_id = 1;
+  google.protobuf.Timestamp ts = 2;
+  GameFrames frames = 3;
+  GameFrameTimes ft = 4;
+  GameHistogram hist = 5;
+  GameDispFT disp_ft = 6;
+  GamePresent present = 7;
+  repeated string quality = 8;
+}
+
+// GameFrames mirrors gamesense.Frames. Only presented is universal; the others
+// use proto3 presence so "no frames were dropped" and "drops are not observable
+// here" stay distinguishable.
+message GameFrames {
+  int32 presented = 1;
+  optional int32 displayed = 2;
+  optional int32 dropped = 3;
+  optional int32 app = 4;
+  optional int32 generated = 5;
+}
+
+// GameFrameTimes mirrors gamesense.FrameTimes — within-second statistics in
+// milliseconds.
+message GameFrameTimes {
+  double avg = 1;
+  double p50 = 2;
+  double p95 = 3;
+  double p99 = 4;
+  double max = 5;
+  double sd = 6;
+}
+
+// GameHistogram mirrors gamesense.Histogram. layout names frozen bin edges; a
+// reader that does not know the layout must not interpret the counts.
+message GameHistogram {
+  string layout = 1;
+  repeated uint32 counts = 2;
+}
+
+// GameDispFT mirrors gamesense.DispFT — intervals between frames reaching the
+// screen, as opposed to being produced.
+message GameDispFT {
+  double avg = 1;
+  double p95 = 2;
+}
+
+// GamePresent mirrors gamesense.Present. sync and tearing carry presence because
+// their zero values are real observations (vsync off; no tearing).
+message GamePresent {
+  string mode = 1;
+  optional int32 sync = 2;
+  optional bool tearing = 3;
+  string api = 4;
+  bool changed = 5;
 }
 
 // Event mirrors telemetry.Event.
