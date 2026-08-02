@@ -684,8 +684,14 @@ message IncidentSnapshotRequest {
 message SnapshotTargetRef {
   string monitor_id = 1;
   string kind = 2;
+  // Literal/host/URL as configured. For kind=gateway this is the
+  // server-normalized sentinel "gateway", not a hostname — the agent resolves
+  // it from its own routing table (see iface), never through DNS.
   string target = 3;
   int32 port = 4;
+  // kind=gateway only: the NIC to resolve the gateway from (ProbeParams.
+  // interface); empty means the default NIC.
+  string iface = 5;
 }
 
 // TraceRequest mirrors config.TraceRequest — the one-shot server->agent ask to

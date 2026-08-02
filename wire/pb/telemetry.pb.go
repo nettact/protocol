@@ -4160,11 +4160,17 @@ func (x *IncidentSnapshotRequest) GetBudgetMs() int32 {
 
 // SnapshotTargetRef mirrors config.SnapshotTargetRef.
 type SnapshotTargetRef struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MonitorId     string                 `protobuf:"bytes,1,opt,name=monitor_id,json=monitorId,proto3" json:"monitor_id,omitempty"`
-	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
-	Target        string                 `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	Port          int32                  `protobuf:"varint,4,opt,name=port,proto3" json:"port,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	MonitorId string                 `protobuf:"bytes,1,opt,name=monitor_id,json=monitorId,proto3" json:"monitor_id,omitempty"`
+	Kind      string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	// Literal/host/URL as configured. For kind=gateway this is the
+	// server-normalized sentinel "gateway", not a hostname — the agent resolves
+	// it from its own routing table (see iface), never through DNS.
+	Target string `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Port   int32  `protobuf:"varint,4,opt,name=port,proto3" json:"port,omitempty"`
+	// kind=gateway only: the NIC to resolve the gateway from (ProbeParams.
+	// interface); empty means the default NIC.
+	Iface         string `protobuf:"bytes,5,opt,name=iface,proto3" json:"iface,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4225,6 +4231,13 @@ func (x *SnapshotTargetRef) GetPort() int32 {
 		return x.Port
 	}
 	return 0
+}
+
+func (x *SnapshotTargetRef) GetIface() string {
+	if x != nil {
+		return x.Iface
+	}
+	return ""
 }
 
 // TraceRequest mirrors config.TraceRequest — the one-shot server->agent ask to
@@ -5617,13 +5630,14 @@ const file_telemetry_proto_rawDesc = "" +
 	"\vincident_id\x18\x02 \x01(\tR\n" +
 	"incidentId\x12<\n" +
 	"\atargets\x18\x04 \x03(\v2\".nettact.wire.v1.SnapshotTargetRefR\atargets\x12\x1b\n" +
-	"\tbudget_ms\x18\x05 \x01(\x05R\bbudgetMsJ\x04\b\x03\x10\x04R\bdeadline\"r\n" +
+	"\tbudget_ms\x18\x05 \x01(\x05R\bbudgetMsJ\x04\b\x03\x10\x04R\bdeadline\"\x88\x01\n" +
 	"\x11SnapshotTargetRef\x12\x1d\n" +
 	"\n" +
 	"monitor_id\x18\x01 \x01(\tR\tmonitorId\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x16\n" +
 	"\x06target\x18\x03 \x01(\tR\x06target\x12\x12\n" +
-	"\x04port\x18\x04 \x01(\x05R\x04port\"\xaf\x03\n" +
+	"\x04port\x18\x04 \x01(\x05R\x04port\x12\x14\n" +
+	"\x05iface\x18\x05 \x01(\tR\x05iface\"\xaf\x03\n" +
 	"\fTraceRequest\x12\x1b\n" +
 	"\treport_id\x18\x01 \x01(\tR\breportId\x12\x12\n" +
 	"\x04mode\x18\x02 \x01(\tR\x04mode\x12)\n" +

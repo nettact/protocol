@@ -638,6 +638,11 @@ func TestFrameRoundTrip(t *testing.T) {
 		Targets: []config.SnapshotTargetRef{
 			{MonitorID: "probe_mon1", Kind: "http", Target: "http://example.com/generate_204", Port: 80},
 			{MonitorID: "probe_mon2", Kind: "icmp", Target: "1.1.1.1"},
+			// Gateway ref: the sentinel target plus the NIC selection, which is the
+			// only thing that tells the agent WHICH gateway to resolve from its
+			// routing table. Dropping Iface in either converter half silently
+			// retargets the snapshot at the default NIC's gateway.
+			{MonitorID: "probe_gw1", Kind: "gateway", Target: "gateway", Iface: "以太网"},
 		},
 	}
 	tr := config.TraceRequest{

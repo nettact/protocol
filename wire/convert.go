@@ -1107,6 +1107,7 @@ func incidentSnapshotRequestToProto(r config.IncidentSnapshotRequest) *pb.Incide
 				Kind:      t.Kind,
 				Target:    t.Target,
 				Port:      int32(t.Port),
+				Iface:     t.Iface,
 			}
 		}
 	}
@@ -1130,6 +1131,7 @@ func incidentSnapshotRequestFromProto(r *pb.IncidentSnapshotRequest) config.Inci
 				Kind:      t.Kind,
 				Target:    t.Target,
 				Port:      int(t.Port),
+				Iface:     t.Iface,
 			}
 		}
 	}

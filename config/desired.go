@@ -87,11 +87,18 @@ type IncidentSnapshotRequest struct {
 // SnapshotTargetRef identifies one monitor target the incident snapshot should
 // resolve. It carries enough to key the result by monitor id, choose the probe
 // semantics (Kind), and reconstruct the endpoint (Target + Port).
+//
+// Kind decides how Target is interpreted, and NOT every kind carries a
+// resolvable host: gateway monitors carry the server-normalized sentinel
+// "gateway" and are resolved from the agent's routing table (via Iface), never
+// through DNS. The server does not send host-anchor monitors here at all — they
+// name a metric series ("host", "*", "C:"), not a network destination.
 type SnapshotTargetRef struct {
-	MonitorID string `json:"monitor_id"`     // stable server-side monitor id (probe_tasks.id)
-	Kind      string `json:"kind"`           // "icmp" | "dns" | "http" | "tcp" | "nat" | "gateway"
-	Target    string `json:"target"`         // literal/host/URL as configured
-	Port      int    `json:"port,omitempty"` // TCP/UDP port when the kind carries one
+	MonitorID string `json:"monitor_id"`      // stable server-side monitor id (probe_tasks.id)
+	Kind      string `json:"kind"`            // "icmp" | "dns" | "http" | "tcp" | "nat" | "gateway"
+	Target    string `json:"target"`          // literal/host/URL as configured; the sentinel "gateway" for kind=gateway
+	Port      int    `json:"port,omitempty"`  // TCP/UDP port when the kind carries one
+	Iface     string `json:"iface,omitempty"` // kind=gateway only: the NIC to resolve the gateway from (ProbeParams.Interface); "" = default NIC
 }
 
 // Traceroute modes (TraceRequest.Mode / telemetry.TraceResult.Mode). ICMP and
