@@ -28,4 +28,13 @@ type Packet struct {
 	// safe to replay — which is what makes an at-least-once upload path work.
 	GameRuns    []gamesense.Run    `json:"game_runs,omitempty"`
 	GameBuckets []gamesense.Bucket `json:"game_buckets,omitempty"`
+	// Gaps are the stretches of a run that produced no frames, with the reason
+	// for each. Re-sent as they grow and upserted by id, like runs and for the
+	// same reason: a silence has to be visible before it ends.
+	GameGaps []gamesense.Gap `json:"game_gaps,omitempty"`
+	// Machine-level seconds, keyed by (agent, second) rather than by a run. They
+	// ride this packet because they come from the same sensor on the same
+	// schedule, not because they belong to the game data — the server stores them
+	// in their own table and a run reads whichever of them its window covers.
+	GameHostSeconds []gamesense.HostSecond `json:"game_host_seconds,omitempty"`
 }

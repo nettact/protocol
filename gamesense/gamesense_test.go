@@ -13,8 +13,8 @@ func TestEnvelopeDiscriminatesBeforeTheTypedDecode(t *testing.T) {
 	// carry, which is why the reader is two-pass. Decoding either as the other
 	// must not be attempted, and the envelope is what makes that decidable.
 	lines := []string{
-		`{"type":"probe","proto":3,"ok":true}`,
-		`{"type":"hello","proto":3,"caps":["displayed"]}`,
+		`{"type":"probe","proto":4,"ok":true}`,
+		`{"type":"hello","proto":4,"caps":["displayed"]}`,
 	}
 	want := []string{TypeProbe, TypeHello}
 	for i, line := range lines {
@@ -37,7 +37,7 @@ func TestProbeOmitsTheReasonWhenThereIsNone(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(b)
-	want := `{"type":"probe","proto":3,"sensor_version":"1.2.3","ok":true,"pm_version":"3.3.0"}`
+	want := `{"type":"probe","proto":4,"sensor_version":"1.2.3","ok":true,"pm_version":"3.3.0"}`
 	if got != want {
 		t.Errorf("probe = %s, want %s", got, want)
 	}
@@ -48,7 +48,7 @@ func TestProbeOmitsTheReasonWhenThereIsNone(t *testing.T) {
 		t.Fatal(err)
 	}
 	got = string(b)
-	want = `{"type":"probe","proto":3,"sensor_version":"1.2.3","ok":false,"reason":"service_unavailable"}`
+	want = `{"type":"probe","proto":4,"sensor_version":"1.2.3","ok":false,"reason":"service_unavailable"}`
 	if got != want {
 		t.Errorf("blocked probe = %s, want %s", got, want)
 	}
@@ -61,7 +61,7 @@ func TestProbeOmitsTheReasonWhenThereIsNone(t *testing.T) {
 		t.Fatal(err)
 	}
 	got = string(b)
-	want = `{"type":"probe","proto":3,"sensor_version":"1.2.3","ok":true,"gpu_ok":true,"pm_version":"3.3.0"}`
+	want = `{"type":"probe","proto":4,"sensor_version":"1.2.3","ok":true,"gpu_ok":true,"pm_version":"3.3.0"}`
 	if got != want {
 		t.Errorf("gpu-capable probe = %s, want %s", got, want)
 	}
@@ -108,7 +108,7 @@ func TestConfigStatesTheWholeRunUpFront(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"type":"config","proto":3,"gpu":false,"mode":"all"}`
+	want := `{"type":"config","proto":4,"gpu":false,"mode":"all"}`
 	if got := string(b); got != want {
 		t.Errorf("open config = %s, want %s", got, want)
 	}
@@ -364,7 +364,6 @@ func TestSecAndBucketShareOneSampleShape(t *testing.T) {
 func TestSampleKeysDoNotCollideWithTheirWrappers(t *testing.T) {
 	cpu := 42.5
 	var ws uint64 = 1 << 30
-	util, core := 96.5, 88.0
 	var vram uint64 = 6 << 30
 	sample := Sample{
 		Frames:  Frames{Presented: 142},
@@ -374,12 +373,10 @@ func TestSampleKeysDoNotCollideWithTheirWrappers(t *testing.T) {
 		ProcRes: &ProcRes{CPUPct: &cpu, WSBytes: &ws},
 		// The diag blocks are the newest arrivals and so the likeliest to have
 		// picked a key one of the wrappers already owns.
-		CPUSplit:       &CPUSplit{BusyAvg: 4.1, BusyP95: 5.9, WaitAvg: 2.8, WaitP95: 3.4},
-		GPUSplit:       &GPUSplit{LatencyAvg: 1.2, TimeAvg: 6.1, TimeP95: 7.7, BusyAvg: 5.8, BusyP95: 7.2, WaitAvg: 0.3, InPresentAvg: 0.9, RenderLatencyAvg: 5.2},
-		Latency:        &Latency{DisplayAvg: 21.4, AnimErrAvg: 1.1, AnimErrP95: 3.6},
-		GPUTel:         &GPUTel{UtilPct: &util},
-		ProcVRAM:       &ProcVRAM{Used: vram},
-		BusiestCorePct: &core,
+		CPUSplit: &CPUSplit{BusyAvg: 4.1, BusyP95: 5.9, WaitAvg: 2.8, WaitP95: 3.4},
+		GPUSplit: &GPUSplit{LatencyAvg: 1.2, TimeAvg: 6.1, TimeP95: 7.7, BusyAvg: 5.8, BusyP95: 7.2, WaitAvg: 0.3, InPresentAvg: 0.9, RenderLatencyAvg: 5.2},
+		Latency:  &Latency{DisplayAvg: 21.4, AnimErrAvg: 1.1, AnimErrP95: 3.6},
+		ProcVRAM: &ProcVRAM{Used: vram},
 	}
 	sampleKeys := make(map[string]struct{})
 	for _, key := range ownJSONKeys(Sample{}) {
@@ -420,14 +417,102 @@ func TestSampleKeysDoNotCollideWithTheirWrappers(t *testing.T) {
 	if out.Latency == nil || *out.Latency != *sample.Latency {
 		t.Errorf("latency did not survive the sec line: %+v (%s)", out.Latency, b)
 	}
-	if out.GPUTel == nil || out.GPUTel.UtilPct == nil || *out.GPUTel.UtilPct != util {
-		t.Errorf("gpu telemetry did not survive the sec line: %+v (%s)", out.GPUTel, b)
-	}
 	if out.ProcVRAM == nil || out.ProcVRAM.Used != vram {
 		t.Errorf("process vram did not survive the sec line: %+v (%s)", out.ProcVRAM, b)
 	}
-	if out.BusiestCorePct == nil || *out.BusiestCorePct != core {
-		t.Errorf("busiest core did not survive the sec line: %+v (%s)", out.BusiestCorePct, b)
+}
+
+// HostSample is inlined into two wrappers the same way Sample is, so it carries
+// the same silent-drop hazard and gets the same check. Its keys are shorter and
+// more generic than Sample's — "cpu", "mem", "gpu" — which makes a future
+// collision likelier here, not less.
+func TestHostSampleKeysDoNotCollideWithTheirWrappers(t *testing.T) {
+	util := 96.5
+	sample := HostSample{
+		CPU: &HostCPU{TotalPct: 41.5, BusiestPct: 99.0},
+		Mem: &HostMem{Used: 12 << 30, Total: 32 << 30},
+		GPU: &GPUTel{UtilPct: &util},
+	}
+	sampleKeys := make(map[string]struct{})
+	for _, key := range ownJSONKeys(HostSample{}) {
+		sampleKeys[key] = struct{}{}
+	}
+	for _, wrapper := range []any{HostSec{}, HostSecond{}} {
+		for _, key := range ownJSONKeys(wrapper) {
+			if _, ok := sampleKeys[key]; ok {
+				t.Errorf("%T's %q key is also a HostSample key: one of them will never reach the wire", wrapper, key)
+			}
+		}
+	}
+
+	var out HostSec
+	b, err := json.Marshal(HostSec{Type: TypeHost, TS: time.Now(), HostSample: sample})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.CPU == nil || *out.CPU != *sample.CPU {
+		t.Errorf("host cpu did not survive the host line: %+v (%s)", out.CPU, b)
+	}
+	if out.Mem == nil || *out.Mem != *sample.Mem {
+		t.Errorf("host memory did not survive the host line: %+v (%s)", out.Mem, b)
+	}
+	if out.GPU == nil || out.GPU.UtilPct == nil || *out.GPU.UtilPct != util {
+		t.Errorf("adapter telemetry did not survive the host line: %+v (%s)", out.GPU, b)
+	}
+}
+
+// An idle machine reads as two zeros, and two zeros must reach the wire. The
+// block would be worthless otherwise: "the machine was idle" is the answer a
+// reader wants when a game's frame rate collapsed, and omitempty on the fields
+// would make it indistinguishable from counters that could not be read.
+func TestHostCPUZeroIsAMeasurement(t *testing.T) {
+	b, err := json.Marshal(HostSec{Type: TypeHost, TS: time.Now(), HostSample: HostSample{CPU: &HostCPU{}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"total_pct":0`) || !strings.Contains(string(b), `"busiest_pct":0`) {
+		t.Errorf("an idle machine did not travel: %s", b)
+	}
+	var out HostSec
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.CPU == nil {
+		t.Errorf("an idle machine decoded as an unread one: %s", b)
+	}
+}
+
+// Empty is what stops an all-NULL row from being written, so the boundary it
+// draws matters: a quality flag alone is a sample worth keeping (it explains the
+// absence), while nothing at all is not.
+func TestHostSampleEmpty(t *testing.T) {
+	util := 12.0
+	for _, tc := range []struct {
+		name  string
+		in    HostSample
+		empty bool
+	}{
+		{"nothing at all", HostSample{}, true},
+		{"quality only", HostSample{Quality: []string{QualityHostDegraded}}, false},
+		{"cpu only", HostSample{CPU: &HostCPU{}}, false},
+		{"memory only", HostSample{Mem: &HostMem{}}, false},
+		{"adapter only", HostSample{GPU: &GPUTel{UtilPct: &util}}, false},
+	} {
+		if got := tc.in.Empty(); got != tc.empty {
+			t.Errorf("%s: Empty() = %v, want %v", tc.name, got, tc.empty)
+		}
+	}
+}
+
+// The two gap reasons are matched as strings by the agent, the server and the
+// console, so a shared value would not fail to compile — it would merge two
+// opposite findings into one shaded band.
+func TestGapReasonsAreDistinct(t *testing.T) {
+	if GapBackground == GapNoFrames {
+		t.Errorf("the two gap reasons share the value %q", GapBackground)
 	}
 }
 
@@ -626,10 +711,11 @@ func TestDegradedSecondKeepsWhatTheFramesStillProvide(t *testing.T) {
 	if err := json.Unmarshal(b, &out); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"gpu_tel", "proc_vram", "busiest_core_pct"} {
-		if strings.Contains(string(b), key) {
-			t.Errorf("a degraded second still carries the polled %q: %s", key, b)
-		}
+	// proc_vram is the only polled block left on a bucket; the whole-card and
+	// whole-machine readings degradation also costs are on the machine stream,
+	// where QualityHostDegraded says so on their own records.
+	if strings.Contains(string(b), "proc_vram") {
+		t.Errorf("a degraded second still carries the polled process vram: %s", b)
 	}
 	if out.CPUSplit == nil || out.GPUSplit == nil || out.Latency == nil {
 		t.Errorf("degradation cost the frame-derived blocks: %s", b)
@@ -647,7 +733,7 @@ func TestCapabilitiesAreDistinct(t *testing.T) {
 	for _, cap := range []string{
 		CapDisplayed, CapFrameType, CapPresentMeta, CapPerFrameComplete, CapStutter,
 		CapProcCPU, CapProcMem,
-		CapCPUSplit, CapGPUSplit, CapLatency, CapGPUTel, CapProcVRAM, CapBusiestCore,
+		CapCPUSplit, CapGPUSplit, CapLatency, CapProcVRAM,
 	} {
 		if _, dup := seen[cap]; dup {
 			t.Errorf("capability %q is declared twice", cap)

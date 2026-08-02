@@ -119,6 +119,8 @@ message Packet {
   repeated InterfaceSnapshot interface_snapshots = 11;
   repeated GameRun game_runs = 12;
   repeated GameBucket game_buckets = 13;
+  repeated GameGap game_gaps = 14;
+  repeated GameHostSecond game_host_seconds = 15;
 }
 
 // Metric mirrors telemetry.Metric.
@@ -180,9 +182,74 @@ message GameBucket {
   GameCPUSplit cpu_split = 11;
   GameGPUSplit gpu_split = 12;
   GameLatency lat = 13;
-  GameGPUTel gpu_tel = 14;
   GameProcVRAM proc_vram = 15;
-  optional double busiest_core_pct = 16;
+
+  // 14 held the whole-adapter telemetry and 16 the busiest logical core. Both
+  // describe the MACHINE, so both moved to GameHostSecond, which is keyed by
+  // (agent, second) instead of by a run. Reserved rather than reused: a field
+  // number that once meant "this card was at 80%" must never come back meaning
+  // something else, or a stored packet from before the move decodes into the
+  // wrong field without erroring.
+  reserved 14, 16;
+  reserved "gpu_tel", "busiest_core_pct";
+}
+
+// GameGap mirrors gamesense.Gap — one continuous stretch of a run that produced
+// no frames, and which of the two silences it was.
+//
+// started_at and ended_at are both required and both absolute: a stretch still
+// accumulating reports the last second it has seen and reports a later one on
+// the next upload, so there is no "open" state for a reader to branch on. The
+// server upserts by id and keeps the later end, which is what makes a redelivered
+// stale copy harmless.
+message GameGap {
+  string id = 1;
+  string run_id = 2;
+  string reason = 3; // open enum: "background" | "no_frames"
+  google.protobuf.Timestamp started_at = 4;
+  google.protobuf.Timestamp ended_at = 5;
+}
+
+// GameHostSecond mirrors gamesense.HostSecond — one second of MACHINE-level
+// readings, addressed by time alone.
+//
+// No run id and no pid, deliberately. The server keys it by (agent, second), so
+// two runs overlapping a second read the same row rather than each holding a
+// private copy of one machine's load, and deleting a run does not take the
+// machine's history with it.
+//
+// Every block carries message presence and they fail apart: a machine whose
+// driver publishes no adapter telemetry still reports its CPU. A second with no
+// block at all and no quality flag is never sent — an empty row asserts "covered
+// and nothing readable", which has to be earned by an explanation.
+message GameHostSecond {
+  google.protobuf.Timestamp ts = 1;
+  GameHostCPU cpu = 2;
+  GameHostMem mem = 3;
+  GameGPUTel gpu = 4;
+  repeated string quality = 5;
+  // Separate from cpu because the two come from different calls that fail
+  // independently: one differences performance counters, the other reads power
+  // management.
+  GameHostCPUClock cpu_clock = 6;
+}
+
+// GameHostCPU mirrors gamesense.HostCPU. The fields take no presence because one
+// read is differenced into both: a machine that answered has both figures and
+// one that did not has neither, which message presence already carries. Two
+// zeros is a genuinely idle machine.
+message GameHostCPU {
+  double total_pct = 1; // busy share of every logical core, 0-100
+  double busiest_pct = 2; // busiest single logical core, 0-100
+}
+
+// GameHostMem mirrors gamesense.HostMem. total travels every second rather than
+// once per run because it is what makes used readable — 12 GB in use means
+// opposite things on a 16 GB and a 32 GB machine. One call returns both, so
+// neither takes presence of its own.
+message GameHostMem {
+  uint64 used = 1; // bytes of physical memory in use
+  uint64 total = 2; // bytes of physical memory installed
 }
 
 // GameFrames mirrors gamesense.Frames. Only presented is universal; the others
@@ -295,10 +362,33 @@ message GameLatency {
 // second, describing the adapter rather than this process. Every field carries
 // presence: which telemetry a driver publishes varies by vendor and by metric,
 // so a card reporting utilization but not memory is ordinary, not broken.
+//
+// It hangs off GameHostSecond and nowhere else. The card is shared by every
+// process on the machine, so filing it under whichever one drew the second
+// answered a machine-level question only for the seconds one game was drawing.
 message GameGPUTel {
   optional double util_pct = 1; // whole-GPU utilization 0-100
   optional uint64 mem_used = 2; // whole-GPU dedicated memory used, bytes
   optional uint64 mem_size = 3; // dedicated memory capacity, bytes
+  // The clocks the card is running at, MHz. Two because they throttle for
+  // different reasons and independently — a frame rate that fell alongside the
+  // core clock is a card out of headroom, and one that fell while both held is
+  // not.
+  optional double core_mhz = 4;
+  optional double mem_mhz = 5;
+}
+
+// GameHostCPUClock mirrors gamesense.HostCPUClock — the processor's clock in MHz.
+//
+// current_mhz is the HIGHEST clock any logical core is at rather than a mean:
+// processors boost a few cores well past the all-core clock and the game's own
+// thread is often one of them, so an average reports an idle processor while the
+// thread that matters is at its ceiling. max_mhz travels with it because it is
+// what makes the other readable. One call returns both, so neither takes
+// presence of its own.
+message GameHostCPUClock {
+  double current_mhz = 1;
+  double max_mhz = 2;
 }
 
 // GameProcVRAM mirrors gamesense.ProcVRAM — the game process's own dedicated

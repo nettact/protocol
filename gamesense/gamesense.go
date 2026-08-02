@@ -33,7 +33,14 @@ import (
 // ProtoVersion is the sensor protocol this build speaks. The agent requires an
 // exact match: a sensor ships with the agent rather than independently, so a
 // mismatch is a broken install, not a version to negotiate.
-const ProtoVersion = 3
+//
+// 4 added the machine-level second and the frameless-second line, and removed
+// the whole-adapter telemetry and the busiest core from Sec. Both directions of
+// a mismatched pair lose data silently without this bump — an older agent
+// ignores lines it has no case for, and a newer one decodes a Sec whose moved
+// fields simply are not there — which is exactly what the exact-match check is
+// for.
+const ProtoVersion = 4
 
 // Message types. Every line is exactly one of these, discriminated by Type. A
 // reader decodes Envelope first and then the matching struct: probe and hello
@@ -48,6 +55,23 @@ const (
 	TypeSec    = "sec"
 	TypeStatus = "status"
 	TypeConfig = "config"
+	// TypeHost is the machine-level per-second line: what the WHOLE MACHINE was
+	// doing during the second that just closed, as opposed to what the tracked
+	// game was doing in it.
+	//
+	// It is a separate line rather than a block on Sec because the two have
+	// different subjects and different lifetimes. A Sec belongs to one process and
+	// exists only for a second that held frames; this exists for every second the
+	// sensor is watching anything at all — including the alt-tabbed minute and the
+	// loading screen, where the game produced nothing and the machine is precisely
+	// what a reader wants to see. Folding it into Sec would make the machine's
+	// record disappear exactly when it matters, and would file a fact about the
+	// adapter under whichever process happened to win the second.
+	TypeHost = "host"
+	// TypeGap is the per-second line for a second the tracked game presented
+	// nothing, carrying which of the two silences it was. Sec's counterpart for
+	// the seconds Sec cannot describe.
+	TypeGap = "gap"
 )
 
 // Tracking modes carried by a Config, deciding which presenting processes the
@@ -182,20 +206,26 @@ const (
 	// the second can say how long a frame took to reach the screen and how far
 	// the game's own pacing drifted from what was shown.
 	CapLatency = "latency"
-	// CapGPUTel: whole-GPU telemetry is polled once a second. It is the adapter,
-	// not the process — the two together are what separates "this game is asking
-	// too much of the card" from "something else on the machine is".
-	CapGPUTel = "gpu_tel"
 	// CapProcVRAM: the game process's own dedicated video memory is read once a
-	// second. Distinct from the whole-card figure in CapGPUTel for the same
-	// reason CapProcCPU is distinct from the machine's CPU usage.
+	// second. Distinct from the whole-card figure on the machine-level stream for
+	// the same reason CapProcCPU is distinct from the machine's CPU usage.
 	CapProcVRAM = "proc_vram"
-	// CapBusiestCore: per-core utilization is read once a second and the busiest
-	// logical core reported. A game bound to one thread pins a single core while
-	// the machine-wide average stays comfortable, and the average is what hides
-	// it.
-	CapBusiestCore = "busiest_core"
 )
+
+// There is deliberately no capability for the whole-card or whole-machine
+// readings, and their absence from this list is the point.
+//
+// A capability is a promise about what a RUN will contain, stated once when the
+// run opens and never revised. HostSample is not part of a run: it is keyed by
+// the machine and the second, it is collected for seconds no run covers, and one
+// second of it is read by every run that overlaps it. There is no run whose
+// opening could promise it and no run whose caps could describe its absence.
+//
+// What replaces the promise is the schema's own rule: NULL means NOT MEASURED.
+// A reader asking "does this machine report adapter utilization" answers it by
+// looking for a non-null reading in the window it cares about, which is a
+// stronger answer than a capability anyway — a capability says the sensor
+// intended to collect it, while a value says it did.
 
 // Sources. The identifier is stored with every run so a later comparison
 // between two runs can tell apart a real change in the machine from a change in
@@ -225,6 +255,36 @@ const (
 	// earlier second retroactively unexplainable. The flag marks exactly the
 	// seconds that lost the polled blocks, which is the honest granularity.
 	QualityDiagDegraded = "diag_degraded"
+	// QualityHostDegraded is QualityDiagDegraded's counterpart on the
+	// machine-level stream: the sensor's boundary work exceeded its wall-clock
+	// budget and the polled readings were given up for the rest of the run.
+	//
+	// A second flag rather than a reuse of QualityDiagDegraded because the two
+	// travel on records with different subjects, and a reader holding a machine
+	// second has no bucket to read the other flag off. It is also the only thing
+	// that tells an all-empty host second apart from one the machine simply had
+	// nothing to report for: without it, "we stopped asking" and "we asked and
+	// the driver publishes nothing" would be the same row.
+	QualityHostDegraded = "host_degraded"
+)
+
+// Gap reasons, naming which of the two silences a frameless second was.
+//
+// There are two because the remedies are opposite, and a chart that shaded both
+// alike would answer neither question. Recording only "no frames" would be the
+// same as recording nothing: the blank stretch is already visible, and what a
+// reader cannot see is which kind it was.
+const (
+	// GapBackground: the tracked program did not own the focused window. The
+	// player alt-tabbed, minimized, or moved to a second monitor. Nothing is
+	// wrong; the blank stretch is time nobody was playing, and the figures around
+	// it should not be read as though the game had stalled.
+	GapBackground = "background"
+	// GapNoFrames: the tracked program owned the focused window and presented
+	// nothing anyway — a loading screen, a shader cache being built, a
+	// pre-rendered cutscene, a paused menu. The player was sitting there waiting,
+	// which is an experience worth measuring and the opposite of the above.
+	GapNoFrames = "no_frames"
 )
 
 // Presentation modes, mapped from the source's own enumeration. The wire carries
@@ -496,8 +556,8 @@ type ProcRes struct {
 // breakdown lines up frame for frame with the interval it exists to explain.
 // Their values are milliseconds, and like FrameTimes they are within-second
 // statistics — averaging a run's per-second p95s does not produce the run's p95.
-// GPUTel and ProcVRAM are the other kind: single readings taken once at the
-// second boundary, in the units their comments name.
+// ProcVRAM is the other kind: a single reading taken once at the second
+// boundary, in the units its comment names.
 //
 // The shared rule is that a block is group-atomic — if it is present, every
 // field in it was measured. That mirrors how the sensor acquires them: whole
@@ -556,10 +616,26 @@ type Latency struct {
 // The inner fields are pointers, breaking the group-atomic rule above, because
 // which telemetry a driver publishes varies by vendor and by metric. A card that
 // reports utilization but not memory is an ordinary card, not a broken read.
+//
+// It lives on HostSample and nowhere else. It describes the card every process
+// on the machine shares, so filing it under whichever process happened to draw
+// the second — which is what it used to do — answered a machine-level question
+// only for the seconds one particular game was drawing in.
 type GPUTel struct {
 	UtilPct *float64 `json:"util_pct,omitempty"` // whole-GPU utilization 0-100 (NOT this process)
 	MemUsed *uint64  `json:"mem_used,omitempty"` // whole-GPU dedicated memory used, bytes
 	MemSize *uint64  `json:"mem_size,omitempty"` // dedicated memory capacity, bytes
+	// The clocks the card is actually running at, in MHz. Two of them because
+	// they throttle for different reasons and independently: the core drops on
+	// power or thermal limits, while memory holds its clock through most of that
+	// and drops on its own. A frame rate that fell while the core clock fell with
+	// it is a card that ran out of headroom; one that fell while both clocks
+	// stayed up is not, and that is the fork these two decide.
+	//
+	// Independently nullable like the three above and for the same reason: which
+	// figures a driver publishes varies by vendor and by metric.
+	CoreMHz *float64 `json:"core_mhz,omitempty"`
+	MemMHz  *float64 `json:"mem_mhz,omitempty"`
 }
 
 // ProcVRAM is the game process's own dedicated video memory, read once a second
@@ -579,6 +655,11 @@ type ProcVRAM struct {
 // that contained frames: an idle second produces no sample at all, because
 // "nothing was rendering" and "rendering happened at zero" are different facts
 // and only one of them can be plotted honestly.
+//
+// A frameless second is not silent, though — it produces a GapSec saying which
+// kind of silence it was, and a HostSample saying what the machine was doing
+// through it. The rule this comment states is about the frame data specifically,
+// not about the second.
 type Sample struct {
 	Frames  Frames     `json:"frames"`
 	FT      FrameTimes `json:"ft"`
@@ -592,14 +673,8 @@ type Sample struct {
 	CPUSplit *CPUSplit `json:"cpu_split,omitempty"`
 	GPUSplit *GPUSplit `json:"gpu_split,omitempty"`
 	Latency  *Latency  `json:"lat,omitempty"`
-	GPUTel   *GPUTel   `json:"gpu_tel,omitempty"`
 	ProcVRAM *ProcVRAM `json:"proc_vram,omitempty"`
-	// BusiestCorePct is the busiest logical core, % 0-100. It stands alone
-	// rather than joining ProcRes because it describes the machine, not the
-	// process: a single-threaded game pins one core while ProcRes.CPUPct — a
-	// share of all cores — reads low, and that gap is the finding.
-	BusiestCorePct *float64 `json:"busiest_core_pct,omitempty"`
-	Quality        []string `json:"quality,omitempty"`
+	Quality  []string  `json:"quality,omitempty"`
 }
 
 // Sec is the per-second line on the sensor's stdout: a Sample plus the process
@@ -650,4 +725,177 @@ type Bucket struct {
 	RunID  string    `json:"run_id"`
 	TS     time.Time `json:"ts"`
 	Sample           // inlined for the same reason as in Sec
+}
+
+// HostCPU is the machine's processor load for one second, differenced from the
+// per-core counters.
+//
+// The two figures come from one read and one differencing pass, so the block is
+// group-atomic in the sense the diag blocks are: if the counters answered, both
+// numbers exist, and if they did not, neither does. That is why the fields are
+// plain floats and the presence lives on the block.
+//
+// They are BOTH here because either alone misleads. A single-threaded game pins
+// one core at 100% while a sixteen-thread machine reports 6% busy, so TotalPct
+// on its own says the machine is idle while the game is starved, and BusiestPct
+// on its own says the machine is saturated while fifteen cores sit free. The GAP
+// between them is the finding, and a reader can only see a gap that is reported
+// as a pair.
+//
+// Two zeros is a genuinely idle machine and a real measurement. Only an absent
+// block means the counters could not be read.
+type HostCPU struct {
+	TotalPct   float64 `json:"total_pct"`   // busy share of every logical core, 0-100
+	BusiestPct float64 `json:"busiest_pct"` // busiest single logical core, 0-100
+}
+
+// HostCPUClock is the processor's clock for one second, in MHz.
+//
+// Separate from HostCPU rather than a field on it, because they come from
+// different calls that fail independently: the busy percentages are differenced
+// from performance counters, and this is a power-management reading. Folding it
+// in would break HostCPU's group-atomic rule — the one that lets its two figures
+// be plain floats — for a value that can be absent on its own.
+//
+// CurrentMHz is the HIGHEST clock any logical core is running at, not a mean.
+// Modern processors boost a small number of cores well past the all-core clock,
+// and the game's own thread is very often one of them; averaging that away
+// reports a processor idling at its base clock while the thread that matters is
+// at 5 GHz. It is the same argument HostCPU.BusiestPct makes about utilization,
+// and the two are read together.
+//
+// MaxMHz travels with it every second for the reason HostMem.Total does: it is
+// what makes the current figure readable. 3.2 GHz is a processor coasting on one
+// machine and one pinned at its ceiling on another, and nothing else in the
+// record says which.
+//
+// Group-atomic: one call returns both, so they arrive and vanish together.
+type HostCPUClock struct {
+	CurrentMHz float64 `json:"current_mhz"` // the fastest logical core right now
+	MaxMHz     float64 `json:"max_mhz"`     // the processor's nominal maximum
+}
+
+// HostMem is the machine's physical memory for one second.
+//
+// Total travels with Used every second rather than being stated once per run,
+// because it is what makes Used readable: 12 GB in use is comfortable on a 32 GB
+// machine and terminal on a 16 GB one, and a reader looking at a stored second
+// months later has no other way to learn which. It costs eight bytes a second
+// and removes a whole class of misreading.
+//
+// Group-atomic for the same reason HostCPU is: one call returns both.
+type HostMem struct {
+	Used  uint64 `json:"used"`  // bytes of physical memory in use
+	Total uint64 `json:"total"` // bytes of physical memory installed
+}
+
+// HostSample is one second of machine-level readings.
+//
+// Every block is optional and independent, because their sources fail apart: a
+// machine whose driver publishes no adapter telemetry still reports its CPU, and
+// a per-core read that comes back malformed does not stop memory being a level
+// anyone can ask for. A sample in which every block is absent is not recorded at
+// all unless Quality explains why — an empty row that says nothing is worse than
+// no row, because a reader would have to treat it as evidence of something.
+//
+// # Why this is not gated on the diag tier
+//
+// A tier is a property of a game profile, and this is a property of the machine.
+// One second can hold a base-tier process and a diag-tier one at once, so there
+// is no per-second answer to "which tier is this machine second", and picking
+// one would make the same reading appear and disappear with whichever window
+// happened to draw. The consequence is deliberate and worth stating plainly: a
+// base-tier run's detail view now shows whole-card and whole-machine curves.
+// They describe the box the game ran on, which is not something the tier was
+// ever choosing between.
+//
+// The GPU block alone is gated on game.gpu.read (and on the adapter publishing
+// telemetry at all). CPU and memory need no graphics permission: the busiest
+// core is a fact about the processor, and so is the rest of this.
+type HostSample struct {
+	CPU      *HostCPU      `json:"cpu,omitempty"`
+	CPUClock *HostCPUClock `json:"cpu_clock,omitempty"`
+	Mem      *HostMem      `json:"mem,omitempty"`
+	GPU      *GPUTel       `json:"gpu,omitempty"`
+	Quality  []string      `json:"quality,omitempty"`
+}
+
+// Empty reports whether a sample carries nothing at all — no reading and no
+// explanation for their absence.
+//
+// Such a sample must not be emitted or stored. An all-NULL row asserts "this
+// second was covered and nothing was readable", which is a claim that has to be
+// earned by a quality flag; without one, a reader has to treat the row as
+// evidence of something, and there is nothing behind it.
+func (h HostSample) Empty() bool {
+	return h.CPU == nil && h.CPUClock == nil && h.Mem == nil && h.GPU == nil && len(h.Quality) == 0
+}
+
+// HostSec is the per-second machine line on the sensor's stdout.
+type HostSec struct {
+	Type       string    `json:"type"` // TypeHost
+	TS         time.Time `json:"ts"`
+	HostSample           // inlined, for the reason Sec inlines Sample
+}
+
+// HostSecond is one machine second as uploaded to the server: the sensor's
+// HostSample, addressed by time alone.
+//
+// There is no run id and no process id on purpose. This stream is keyed by
+// (agent, second) on the server, so two runs overlapping the same second read
+// the same row rather than each holding a private copy of one machine's load —
+// and a run deleted from the console does not take the machine's history with
+// it. A run detail view reads the window [started_at, ended_at] out of it.
+type HostSecond struct {
+	TS         time.Time `json:"ts"`
+	HostSample           // inlined for the same reason as in HostSec
+}
+
+// GapSec is the per-second line for a second that held no frames, and why.
+//
+// A per-second line rather than an interval the sensor closes, because the
+// interval has to hang off a RUN and the sensor knows nothing about runs — run
+// ids are minted by the agent, which is also the only party that knows a session
+// parked at second thirty is still the same session at second forty. An interval
+// the sensor closed would have to be re-attributed on arrival anyway, so the
+// split is not extra work; it is the work, in the only place that can do it.
+//
+// PID and Proc name the process that most recently DREW, not the tracker's root:
+// they are what the agent matches its sessions on, and for a launcher pair or a
+// Chromium window the two are different processes.
+type GapSec struct {
+	Type   string    `json:"type"` // TypeGap
+	TS     time.Time `json:"ts"`   // the moment the frameless second CLOSED
+	PID    int       `json:"pid"`
+	Proc   string    `json:"proc"`
+	Reason string    `json:"reason"` // GapBackground | GapNoFrames
+}
+
+// Gap is one continuous stretch of a run that produced no frames, as uploaded.
+//
+// Re-sent whenever it grows, so the server upserts by id — the same shape as Run
+// and for the same reason: a stretch that is still going has to be visible
+// before it ends, and an at-least-once uploader must be able to redeliver a
+// stale copy without rewinding the current one.
+//
+// StartedAt is the moment the first frameless second BEGAN and EndedAt the
+// moment the last one closed, so the interval spans the same axis a bucket's TS
+// sits on. A single frameless second is StartedAt = EndedAt − 1s, matching how a
+// bucket's point at TS describes the second ending there.
+//
+// EndedAt is never absent. An interval still accumulating reports the last
+// second it has seen and reports a later one next time; a nullable end would add
+// a state ("open") that no reader would render differently from "ends here for
+// now", while costing every reader a branch.
+//
+// A gap may end AFTER its run does, and that must not be clipped. A run ends at
+// its last frame; a player who minimized the game and never came back leaves
+// fifty minutes of silence after it, and "did they stop playing or just alt-tab"
+// is exactly the question this record exists to answer.
+type Gap struct {
+	ID        string    `json:"id"`
+	RunID     string    `json:"run_id"`
+	Reason    string    `json:"reason"` // GapBackground | GapNoFrames
+	StartedAt time.Time `json:"started_at"`
+	EndedAt   time.Time `json:"ended_at"`
 }

@@ -115,6 +115,18 @@ func packetToProto(p telemetry.Packet) *pb.Packet {
 			out.GameBuckets[i] = gameBucketToProto(b)
 		}
 	}
+	if len(p.GameGaps) > 0 {
+		out.GameGaps = make([]*pb.GameGap, len(p.GameGaps))
+		for i, g := range p.GameGaps {
+			out.GameGaps[i] = gameGapToProto(g)
+		}
+	}
+	if len(p.GameHostSeconds) > 0 {
+		out.GameHostSeconds = make([]*pb.GameHostSecond, len(p.GameHostSeconds))
+		for i, h := range p.GameHostSeconds {
+			out.GameHostSeconds[i] = gameHostSecondToProto(h)
+		}
+	}
 	return out
 }
 
@@ -164,6 +176,18 @@ func packetFromProto(p *pb.Packet) telemetry.Packet {
 		out.GameBuckets = make([]gamesense.Bucket, len(p.GameBuckets))
 		for i, b := range p.GameBuckets {
 			out.GameBuckets[i] = gameBucketFromProto(b)
+		}
+	}
+	if len(p.GameGaps) > 0 {
+		out.GameGaps = make([]gamesense.Gap, len(p.GameGaps))
+		for i, g := range p.GameGaps {
+			out.GameGaps[i] = gameGapFromProto(g)
+		}
+	}
+	if len(p.GameHostSeconds) > 0 {
+		out.GameHostSeconds = make([]gamesense.HostSecond, len(p.GameHostSeconds))
+		for i, h := range p.GameHostSeconds {
+			out.GameHostSeconds[i] = gameHostSecondFromProto(h)
 		}
 	}
 	return out
@@ -276,13 +300,9 @@ func gameBucketToProto(b gamesense.Bucket) *pb.GameBucket {
 			AnimErrP95: l.AnimErrP95,
 		}
 	}
-	if g := b.GPUTel; g != nil {
-		out.GpuTel = &pb.GameGPUTel{UtilPct: g.UtilPct, MemUsed: g.MemUsed, MemSize: g.MemSize}
-	}
 	if v := b.ProcVRAM; v != nil {
 		out.ProcVram = &pb.GameProcVRAM{Used: v.Used, Budget: v.Budget}
 	}
-	out.BusiestCorePct = b.BusiestCorePct
 	return out
 }
 
@@ -356,14 +376,81 @@ func gameBucketFromProto(b *pb.GameBucket) gamesense.Bucket {
 			AnimErrP95: l.AnimErrP95,
 		}
 	}
-	if g := b.GpuTel; g != nil {
-		out.GPUTel = &gamesense.GPUTel{UtilPct: g.UtilPct, MemUsed: g.MemUsed, MemSize: g.MemSize}
-	}
 	if v := b.ProcVram; v != nil {
 		out.ProcVRAM = &gamesense.ProcVRAM{Used: v.Used, Budget: v.Budget}
 	}
-	out.BusiestCorePct = b.BusiestCorePct
 	out.Quality = b.Quality
+	return out
+}
+
+// ---- Game gaps ----
+
+func gameGapToProto(g gamesense.Gap) *pb.GameGap {
+	return &pb.GameGap{
+		Id:        g.ID,
+		RunId:     g.RunID,
+		Reason:    g.Reason,
+		StartedAt: tsToProto(g.StartedAt),
+		EndedAt:   tsToProto(g.EndedAt),
+	}
+}
+
+func gameGapFromProto(g *pb.GameGap) gamesense.Gap {
+	if g == nil {
+		return gamesense.Gap{}
+	}
+	return gamesense.Gap{
+		ID:        g.Id,
+		RunID:     g.RunId,
+		Reason:    g.Reason,
+		StartedAt: tsFromProto(g.StartedAt),
+		EndedAt:   tsFromProto(g.EndedAt),
+	}
+}
+
+// ---- Machine-level seconds ----
+
+func gameHostSecondToProto(h gamesense.HostSecond) *pb.GameHostSecond {
+	out := &pb.GameHostSecond{Ts: tsToProto(h.TS), Quality: h.Quality}
+	if c := h.CPU; c != nil {
+		out.Cpu = &pb.GameHostCPU{TotalPct: c.TotalPct, BusiestPct: c.BusiestPct}
+	}
+	if m := h.Mem; m != nil {
+		out.Mem = &pb.GameHostMem{Used: m.Used, Total: m.Total}
+	}
+	if c := h.CPUClock; c != nil {
+		out.CpuClock = &pb.GameHostCPUClock{CurrentMhz: c.CurrentMHz, MaxMhz: c.MaxMHz}
+	}
+	if g := h.GPU; g != nil {
+		out.Gpu = &pb.GameGPUTel{
+			UtilPct: g.UtilPct, MemUsed: g.MemUsed, MemSize: g.MemSize,
+			CoreMhz: g.CoreMHz, MemMhz: g.MemMHz,
+		}
+	}
+	return out
+}
+
+func gameHostSecondFromProto(h *pb.GameHostSecond) gamesense.HostSecond {
+	if h == nil {
+		return gamesense.HostSecond{}
+	}
+	out := gamesense.HostSecond{TS: tsFromProto(h.Ts)}
+	out.Quality = h.Quality
+	if c := h.Cpu; c != nil {
+		out.CPU = &gamesense.HostCPU{TotalPct: c.TotalPct, BusiestPct: c.BusiestPct}
+	}
+	if m := h.Mem; m != nil {
+		out.Mem = &gamesense.HostMem{Used: m.Used, Total: m.Total}
+	}
+	if c := h.CpuClock; c != nil {
+		out.CPUClock = &gamesense.HostCPUClock{CurrentMHz: c.CurrentMhz, MaxMHz: c.MaxMhz}
+	}
+	if g := h.Gpu; g != nil {
+		out.GPU = &gamesense.GPUTel{
+			UtilPct: g.UtilPct, MemUsed: g.MemUsed, MemSize: g.MemSize,
+			CoreMHz: g.CoreMhz, MemMHz: g.MemMhz,
+		}
+	}
 	return out
 }
 

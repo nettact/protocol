@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	protocol "github.com/nettact/protocol"
 	"github.com/nettact/protocol/config"
 	"github.com/nettact/protocol/gamesense"
 	"github.com/nettact/protocol/permission"
@@ -51,8 +52,73 @@ func samplePacket() telemetry.Packet {
 			// a non-nil empty slice so JSON remains `interfaces: []`, not null.
 			{SampledAt: ts.Add(time.Second), WiFiState: telemetry.WiFiCollectionOK, Interfaces: []telemetry.InterfaceState{}},
 		},
-		GameRuns:    sampleGameRuns(ts),
-		GameBuckets: sampleGameBuckets(ts),
+		GameRuns:        sampleGameRuns(ts),
+		GameBuckets:     sampleGameBuckets(ts),
+		GameGaps:        sampleGameGaps(ts),
+		GameHostSeconds: sampleGameHostSeconds(ts),
+	}
+}
+
+// sampleGameGaps covers the three shapes a gap comes in: each reason, and one
+// that outlives its run. The last is the one a converter can quietly break —
+// clamping an end to the run's would look like tidiness and would erase the
+// difference between quitting and walking away with the game still open.
+func sampleGameGaps(ts time.Time) []gamesense.Gap {
+	return []gamesense.Gap{
+		{
+			ID: "gap-1", RunID: "run-live", Reason: gamesense.GapNoFrames,
+			StartedAt: ts.Add(4 * time.Second), EndedAt: ts.Add(19 * time.Second),
+		},
+		{
+			ID: "gap-2", RunID: "run-live", Reason: gamesense.GapBackground,
+			StartedAt: ts.Add(25 * time.Second), EndedAt: ts.Add(29 * time.Second),
+		},
+		{
+			// run-done's last second is at ts+90; this one runs well past it.
+			ID: "gap-3", RunID: "run-done", Reason: gamesense.GapBackground,
+			StartedAt: ts.Add(91 * time.Second), EndedAt: ts.Add(50 * time.Minute),
+		},
+	}
+}
+
+// sampleGameHostSeconds covers the four machine-level shapes, in the order the
+// presence test reads them: everything readable, an idle machine with no
+// graphics permission, a partially-publishing adapter, and a degraded second
+// carrying nothing but its explanation.
+func sampleGameHostSeconds(ts time.Time) []gamesense.HostSecond {
+	util := 96.5
+	coreMHz, memMHz := 2610.5, 1313.3
+	var memUsed, memSize uint64 = 7 << 30, 8 << 30
+	return []gamesense.HostSecond{
+		{
+			TS: ts,
+			HostSample: gamesense.HostSample{
+				CPU:      &gamesense.HostCPU{TotalPct: 41.5, BusiestPct: 99.25},
+				CPUClock: &gamesense.HostCPUClock{CurrentMHz: 4900, MaxMHz: 3600},
+				Mem:      &gamesense.HostMem{Used: 12 << 30, Total: 32 << 30},
+				GPU: &gamesense.GPUTel{
+					UtilPct: &util, MemUsed: &memUsed, MemSize: &memSize,
+					CoreMHz: &coreMHz, MemMHz: &memMHz,
+				},
+			},
+		},
+		{
+			TS: ts.Add(time.Second),
+			HostSample: gamesense.HostSample{
+				CPU: &gamesense.HostCPU{},
+				Mem: &gamesense.HostMem{Used: 4 << 30, Total: 32 << 30},
+			},
+		},
+		{
+			TS: ts.Add(2 * time.Second),
+			HostSample: gamesense.HostSample{
+				GPU: &gamesense.GPUTel{UtilPct: &util},
+			},
+		},
+		{
+			TS:         ts.Add(3 * time.Second),
+			HostSample: gamesense.HostSample{Quality: []string{gamesense.QualityHostDegraded}},
+		},
 	}
 }
 
@@ -109,8 +175,7 @@ func sampleGameBuckets(ts time.Time) []gamesense.Bucket {
 	tearing := true
 	cpu := 42.5
 	var ws, priv uint64 = 1 << 30, 1<<30 + 1<<28
-	util, core := 96.5, 88.25
-	var memUsed, memSize, vram, budget uint64 = 7 << 30, 8 << 30, 6 << 30, 7<<30 + 1<<29
+	var vram, budget uint64 = 6 << 30, 7<<30 + 1<<29
 	full := make([]uint32, gamesense.HistBins)
 	full[12], full[16] = 140, 2
 	sparse := make([]uint32, gamesense.HistBins)
@@ -123,20 +188,18 @@ func sampleGameBuckets(ts time.Time) []gamesense.Bucket {
 		{
 			RunID: "run-live", TS: ts,
 			Sample: gamesense.Sample{
-				Frames:         gamesense.Frames{Presented: 142, Displayed: &displayed, Dropped: &dropped, App: &app, Generated: &generated},
-				FT:             gamesense.FrameTimes{Avg: 6.944, P50: 6.8, P95: 8.1, P99: 11.2, Max: 23.5, SD: 1.42},
-				Hist:           gamesense.Histogram{Layout: gamesense.HistLayoutLog24V1, Counts: full},
-				DispFT:         &gamesense.DispFT{Avg: 7.1, P95: 8.4},
-				Present:        &gamesense.Present{Mode: gamesense.PresentModeHardwareIndependentFlip, Sync: &sync, Tearing: &tearing, API: gamesense.APIDXGI, Changed: true},
-				Stutter:        &gamesense.Stutter{Count: 2, ExcessMs: 118.4},
-				ProcRes:        &gamesense.ProcRes{CPUPct: &cpu, WSBytes: &ws, PrivBytes: &priv},
-				CPUSplit:       &gamesense.CPUSplit{BusyAvg: 4.12, BusyP95: 5.9, WaitAvg: 2.81, WaitP95: 3.44},
-				GPUSplit:       &gamesense.GPUSplit{LatencyAvg: 1.21, TimeAvg: 6.13, TimeP95: 7.72, BusyAvg: 5.86, BusyP95: 7.21, WaitAvg: 0.27, InPresentAvg: 0.94, RenderLatencyAvg: 5.18},
-				Latency:        &gamesense.Latency{DisplayAvg: 21.43, AnimErrAvg: 1.12, AnimErrP95: 3.61},
-				GPUTel:         &gamesense.GPUTel{UtilPct: &util, MemUsed: &memUsed, MemSize: &memSize},
-				ProcVRAM:       &gamesense.ProcVRAM{Used: vram, Budget: &budget},
-				BusiestCorePct: &core,
-				Quality:        []string{gamesense.QualityHistClipped},
+				Frames:   gamesense.Frames{Presented: 142, Displayed: &displayed, Dropped: &dropped, App: &app, Generated: &generated},
+				FT:       gamesense.FrameTimes{Avg: 6.944, P50: 6.8, P95: 8.1, P99: 11.2, Max: 23.5, SD: 1.42},
+				Hist:     gamesense.Histogram{Layout: gamesense.HistLayoutLog24V1, Counts: full},
+				DispFT:   &gamesense.DispFT{Avg: 7.1, P95: 8.4},
+				Present:  &gamesense.Present{Mode: gamesense.PresentModeHardwareIndependentFlip, Sync: &sync, Tearing: &tearing, API: gamesense.APIDXGI, Changed: true},
+				Stutter:  &gamesense.Stutter{Count: 2, ExcessMs: 118.4},
+				ProcRes:  &gamesense.ProcRes{CPUPct: &cpu, WSBytes: &ws, PrivBytes: &priv},
+				CPUSplit: &gamesense.CPUSplit{BusyAvg: 4.12, BusyP95: 5.9, WaitAvg: 2.81, WaitP95: 3.44},
+				GPUSplit: &gamesense.GPUSplit{LatencyAvg: 1.21, TimeAvg: 6.13, TimeP95: 7.72, BusyAvg: 5.86, BusyP95: 7.21, WaitAvg: 0.27, InPresentAvg: 0.94, RenderLatencyAvg: 5.18},
+				Latency:  &gamesense.Latency{DisplayAvg: 21.43, AnimErrAvg: 1.12, AnimErrP95: 3.61},
+				ProcVRAM: &gamesense.ProcVRAM{Used: vram, Budget: &budget},
+				Quality:  []string{gamesense.QualityHistClipped},
 			},
 		},
 		{
@@ -155,7 +218,6 @@ func sampleGameBuckets(ts time.Time) []gamesense.Bucket {
 				Hist:     gamesense.Histogram{Layout: gamesense.HistLayoutLog24V1, Counts: steady},
 				Stutter:  &gamesense.Stutter{},
 				ProcRes:  &gamesense.ProcRes{WSBytes: &ws, PrivBytes: &priv},
-				GPUTel:   &gamesense.GPUTel{UtilPct: &util},
 				ProcVRAM: &gamesense.ProcVRAM{},
 			},
 		},
@@ -386,20 +448,10 @@ func TestGameDiagBlocksSurviveTheirPartialShapes(t *testing.T) {
 			t.Fatalf("%s: %d buckets, want 4", ct, len(out.GameBuckets))
 		}
 		// The base-tier second buys none of this and must not acquire any of it.
-		if b := out.GameBuckets[1]; b.CPUSplit != nil || b.GPUSplit != nil || b.Latency != nil ||
-			b.GPUTel != nil || b.ProcVRAM != nil || b.BusiestCorePct != nil {
+		if b := out.GameBuckets[1]; b.CPUSplit != nil || b.GPUSplit != nil || b.Latency != nil || b.ProcVRAM != nil {
 			t.Errorf("%s: an unobserved second gained diag blocks: %+v", ct, b.Sample)
 		}
 		half := out.GameBuckets[2]
-		if half.GPUTel == nil {
-			t.Fatalf("%s: partially-published adapter telemetry was dropped entirely", ct)
-		}
-		if half.GPUTel.UtilPct == nil || *half.GPUTel.UtilPct != 96.5 {
-			t.Errorf("%s: gpu utilization = %v", ct, half.GPUTel.UtilPct)
-		}
-		if half.GPUTel.MemUsed != nil || half.GPUTel.MemSize != nil {
-			t.Errorf("%s: memory appeared from a card that never published it: %+v", ct, *half.GPUTel)
-		}
 		// An all-defaults block is the emptiest thing on the wire and the easiest
 		// to mistake for nothing: zero committed bytes with no budget is a reading.
 		if half.ProcVRAM == nil {
@@ -408,15 +460,12 @@ func TestGameDiagBlocksSurviveTheirPartialShapes(t *testing.T) {
 		if half.ProcVRAM.Used != 0 || half.ProcVRAM.Budget != nil {
 			t.Errorf("%s: process vram = %+v, want a zeroed, budget-less block", ct, *half.ProcVRAM)
 		}
-		if half.BusiestCorePct != nil {
-			t.Errorf("%s: busiest core appeared unmeasured: %v", ct, *half.BusiestCorePct)
-		}
 		// Degradation stops the polling, not the frame stream.
 		deg := out.GameBuckets[3]
 		if deg.CPUSplit == nil || deg.GPUSplit == nil || deg.Latency == nil {
 			t.Errorf("%s: a degraded second lost its frame-derived blocks: %+v", ct, deg.Sample)
 		}
-		if deg.GPUTel != nil || deg.ProcVRAM != nil || deg.BusiestCorePct != nil {
+		if deg.ProcVRAM != nil {
 			t.Errorf("%s: a degraded second still carries polled blocks: %+v", ct, deg.Sample)
 		}
 		if len(deg.Quality) != 1 || deg.Quality[0] != gamesense.QualityDiagDegraded {
@@ -437,8 +486,123 @@ func TestGameDiagBlocksSurviveTheirPartialShapes(t *testing.T) {
 		if full.ProcVRAM == nil || full.ProcVRAM.Budget == nil || *full.ProcVRAM.Budget != *in.GameBuckets[0].ProcVRAM.Budget {
 			t.Errorf("%s: process vram = %+v", ct, full.ProcVRAM)
 		}
-		if full.BusiestCorePct == nil || *full.BusiestCorePct != *in.GameBuckets[0].BusiestCorePct {
-			t.Errorf("%s: busiest core = %v", ct, full.BusiestCorePct)
+	}
+}
+
+// The machine-level stream carries the same presence hazards the diag blocks do,
+// on records with a different subject: three independent blocks, a pair whose
+// two zeros are a real reading, and a partially-publishing adapter. Checked in
+// both formats because only one of them has a wire-level notion of presence.
+func TestGameHostSecondSurvivesItsPartialShapes(t *testing.T) {
+	in := samplePacket()
+	for _, ct := range []string{ContentTypeJSON, ContentTypeProtobuf} {
+		data, err := MarshalPacket(in, ct)
+		if err != nil {
+			t.Fatalf("MarshalPacket(%s): %v", ct, err)
+		}
+		out, err := UnmarshalPacket(data, ct)
+		if err != nil {
+			t.Fatalf("UnmarshalPacket(%s): %v", ct, err)
+		}
+		if len(out.GameHostSeconds) != len(in.GameHostSeconds) {
+			t.Fatalf("%s: %d host seconds, want %d", ct, len(out.GameHostSeconds), len(in.GameHostSeconds))
+		}
+		// Everything readable, and every value intact.
+		full := out.GameHostSeconds[0]
+		if full.CPU == nil || *full.CPU != *in.GameHostSeconds[0].CPU {
+			t.Errorf("%s: host cpu = %+v, want %+v", ct, full.CPU, in.GameHostSeconds[0].CPU)
+		}
+		if full.Mem == nil || *full.Mem != *in.GameHostSeconds[0].Mem {
+			t.Errorf("%s: host memory = %+v, want %+v", ct, full.Mem, in.GameHostSeconds[0].Mem)
+		}
+		if full.GPU == nil || full.GPU.MemSize == nil || *full.GPU.MemSize != *in.GameHostSeconds[0].GPU.MemSize {
+			t.Errorf("%s: adapter telemetry = %+v", ct, full.GPU)
+		}
+		if full.GPU == nil || full.GPU.CoreMHz == nil || *full.GPU.CoreMHz != *in.GameHostSeconds[0].GPU.CoreMHz {
+			t.Errorf("%s: adapter core clock = %v", ct, full.GPU.CoreMHz)
+		}
+		// A boost clock above the nominal maximum is what boost IS, and the
+		// round-trip must not tidy it away.
+		if full.CPUClock == nil || *full.CPUClock != *in.GameHostSeconds[0].CPUClock {
+			t.Errorf("%s: cpu clock = %+v, want %+v", ct, full.CPUClock, in.GameHostSeconds[0].CPUClock)
+		}
+		// An idle machine. Two zeros must arrive as a block, or "idle" and "could
+		// not read the counters" become the same record.
+		idle := out.GameHostSeconds[1]
+		if idle.CPU == nil {
+			t.Fatalf("%s: an idle machine was read as an unmeasured one", ct)
+		}
+		if idle.CPU.TotalPct != 0 || idle.CPU.BusiestPct != 0 {
+			t.Errorf("%s: idle cpu = %+v, want two zeros", ct, *idle.CPU)
+		}
+		// No graphics permission: the adapter block is absent while CPU and memory,
+		// which need none, are not.
+		if idle.GPU != nil {
+			t.Errorf("%s: adapter telemetry appeared without permission: %+v", ct, *idle.GPU)
+		}
+		if idle.CPUClock != nil {
+			t.Errorf("%s: a clock appeared from a second that carried none: %+v", ct, *idle.CPUClock)
+		}
+		if idle.Mem == nil {
+			t.Errorf("%s: memory was lost alongside the ungranted adapter block", ct)
+		}
+		// A partially-publishing card: a vendor gap inside the block stays a gap
+		// rather than collapsing the whole block or inventing a zero.
+		half := out.GameHostSeconds[2]
+		if half.GPU == nil {
+			t.Fatalf("%s: partially-published adapter telemetry was dropped entirely", ct)
+		}
+		if half.GPU.UtilPct == nil || *half.GPU.UtilPct != 96.5 {
+			t.Errorf("%s: gpu utilization = %v", ct, half.GPU.UtilPct)
+		}
+		if half.GPU.MemUsed != nil || half.GPU.MemSize != nil {
+			t.Errorf("%s: memory appeared from a card that never published it: %+v", ct, *half.GPU)
+		}
+		// Degradation: nothing readable, and the flag is the only thing that makes
+		// the record worth storing at all.
+		deg := out.GameHostSeconds[3]
+		if deg.CPU != nil || deg.Mem != nil || deg.GPU != nil {
+			t.Errorf("%s: a degraded machine second still carries readings: %+v", ct, deg.HostSample)
+		}
+		if len(deg.Quality) != 1 || deg.Quality[0] != gamesense.QualityHostDegraded {
+			t.Errorf("%s: degraded quality = %v", ct, deg.Quality)
+		}
+	}
+}
+
+// Gaps are upserted by id and re-sent as they grow, so both ends have to survive
+// intact — an end that arrived as a zero time would collapse the interval, and a
+// start that drifted would move a band away from the seconds it explains.
+func TestGameGapsRoundTrip(t *testing.T) {
+	in := samplePacket()
+	for _, ct := range []string{ContentTypeJSON, ContentTypeProtobuf} {
+		data, err := MarshalPacket(in, ct)
+		if err != nil {
+			t.Fatalf("MarshalPacket(%s): %v", ct, err)
+		}
+		out, err := UnmarshalPacket(data, ct)
+		if err != nil {
+			t.Fatalf("UnmarshalPacket(%s): %v", ct, err)
+		}
+		if len(out.GameGaps) != len(in.GameGaps) {
+			t.Fatalf("%s: %d gaps, want %d", ct, len(out.GameGaps), len(in.GameGaps))
+		}
+		for i, want := range in.GameGaps {
+			got := out.GameGaps[i]
+			if got.ID != want.ID || got.RunID != want.RunID || got.Reason != want.Reason {
+				t.Errorf("%s: gap %d = %+v, want %+v", ct, i, got, want)
+			}
+			if !got.StartedAt.Equal(want.StartedAt) || !got.EndedAt.Equal(want.EndedAt) {
+				t.Errorf("%s: gap %d spans %s→%s, want %s→%s", ct, i,
+					got.StartedAt, got.EndedAt, want.StartedAt, want.EndedAt)
+			}
+		}
+		// A gap that outlives its run is the record of a game left minimized and
+		// never returned to. Clipping it would erase the distinction between that
+		// and quitting, which is the whole reason gaps exist.
+		last := out.GameGaps[len(out.GameGaps)-1]
+		if !last.EndedAt.After(in.GameRuns[len(in.GameRuns)-1].LastSeenAt) {
+			t.Errorf("%s: the trailing gap no longer outlives its run: %s", ct, last.EndedAt)
 		}
 	}
 }
@@ -451,7 +615,7 @@ func TestFrameRoundTrip(t *testing.T) {
 	ds := sampleDesiredState()
 	sr := config.SnapshotRequest{RequestID: "req-1", Scopes: []string{"host.process.basic.read", "host.connection.summary.read"}}
 	hello := Hello{
-		SchemaVersion: 2, Hostname: "host-1", Platform: "windows", AgentVersion: "0.3.0",
+		SchemaVersion: protocol.SchemaVersion, Hostname: "host-1", Platform: "windows", AgentVersion: "0.3.0",
 		Permissions: permission.PermissionReport{
 			Supported:  []string{"probe.icmp", "probe.dns"},
 			Granted:    []string{"probe.icmp", "probe.dns"},
@@ -560,7 +724,7 @@ func TestHelloUnsupportedReasons(t *testing.T) {
 	}
 	for name, tc := range cases {
 		hello := Hello{
-			SchemaVersion: 2, Hostname: "host-1", Platform: "windows", AgentVersion: "0.3.0",
+			SchemaVersion: protocol.SchemaVersion, Hostname: "host-1", Platform: "windows", AgentVersion: "0.3.0",
 			Permissions: permission.PermissionReport{
 				Supported:          []string{"probe.icmp"},
 				Granted:            []string{"probe.icmp", "game.process.detect"},
