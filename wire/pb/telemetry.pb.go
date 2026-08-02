@@ -127,14 +127,20 @@ func (x *Hello) GetPermissions() *PermissionReport {
 // authoritative supported/granted/effective permission views plus policy source
 // and hash. Carried by both Hello and (at enrollment) the HTTP EnrollRequest.
 type PermissionReport struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Supported     []string               `protobuf:"bytes,1,rep,name=supported,proto3" json:"supported,omitempty"`
-	Granted       []string               `protobuf:"bytes,2,rep,name=granted,proto3" json:"granted,omitempty"`
-	Effective     []string               `protobuf:"bytes,3,rep,name=effective,proto3" json:"effective,omitempty"`
-	Source        string                 `protobuf:"bytes,4,opt,name=source,proto3" json:"source,omitempty"`
-	PolicyHash    string                 `protobuf:"bytes,5,opt,name=policy_hash,json=policyHash,proto3" json:"policy_hash,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Supported  []string               `protobuf:"bytes,1,rep,name=supported,proto3" json:"supported,omitempty"`
+	Granted    []string               `protobuf:"bytes,2,rep,name=granted,proto3" json:"granted,omitempty"`
+	Effective  []string               `protobuf:"bytes,3,rep,name=effective,proto3" json:"effective,omitempty"`
+	Source     string                 `protobuf:"bytes,4,opt,name=source,proto3" json:"source,omitempty"`
+	PolicyHash string                 `protobuf:"bytes,5,opt,name=policy_hash,json=policyHash,proto3" json:"policy_hash,omitempty"`
+	// Why a capability-probed permission is not in supported, keyed by permission
+	// id. The values are an open enum owned by whichever probe answered (game
+	// capture uses protocol/gamesense), so unknown codes must be tolerated. An
+	// absent key means the probe never ran, not that it ran without a reason —
+	// see permission.PermissionReport.UnsupportedReasons for the full contract.
+	UnsupportedReasons map[string]string `protobuf:"bytes,6,rep,name=unsupported_reasons,json=unsupportedReasons,proto3" json:"unsupported_reasons,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *PermissionReport) Reset() {
@@ -200,6 +206,13 @@ func (x *PermissionReport) GetPolicyHash() string {
 		return x.PolicyHash
 	}
 	return ""
+}
+
+func (x *PermissionReport) GetUnsupportedReasons() map[string]string {
+	if x != nil {
+		return x.UnsupportedReasons
+	}
+	return nil
 }
 
 // MonitorStatus mirrors wire.MonitorStatus — the agent's full-state evaluation
@@ -4817,14 +4830,18 @@ const file_telemetry_proto_rawDesc = "" +
 	"\bplatform\x18\x03 \x01(\tR\bplatform\x12#\n" +
 	"\ragent_version\x18\x04 \x01(\tR\fagentVersion\x126\n" +
 	"\x17reported_config_version\x18\x06 \x01(\x05R\x15reportedConfigVersion\x12C\n" +
-	"\vpermissions\x18\a \x01(\v2!.nettact.wire.v1.PermissionReportR\vpermissionsJ\x04\b\x05\x10\x06R\fcapabilities\"\xa1\x01\n" +
+	"\vpermissions\x18\a \x01(\v2!.nettact.wire.v1.PermissionReportR\vpermissionsJ\x04\b\x05\x10\x06R\fcapabilities\"\xd4\x02\n" +
 	"\x10PermissionReport\x12\x1c\n" +
 	"\tsupported\x18\x01 \x03(\tR\tsupported\x12\x18\n" +
 	"\agranted\x18\x02 \x03(\tR\agranted\x12\x1c\n" +
 	"\teffective\x18\x03 \x03(\tR\teffective\x12\x16\n" +
 	"\x06source\x18\x04 \x01(\tR\x06source\x12\x1f\n" +
 	"\vpolicy_hash\x18\x05 \x01(\tR\n" +
-	"policyHash\"\xd0\x01\n" +
+	"policyHash\x12j\n" +
+	"\x13unsupported_reasons\x18\x06 \x03(\v29.nettact.wire.v1.PermissionReport.UnsupportedReasonsEntryR\x12unsupportedReasons\x1aE\n" +
+	"\x17UnsupportedReasonsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd0\x01\n" +
 	"\rMonitorStatus\x12%\n" +
 	"\x0econfig_version\x18\x01 \x01(\x05R\rconfigVersion\x12\x1f\n" +
 	"\vpolicy_hash\x18\x02 \x01(\tR\n" +
@@ -5306,7 +5323,7 @@ func file_telemetry_proto_rawDescGZIP() []byte {
 	return file_telemetry_proto_rawDescData
 }
 
-var file_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 56)
+var file_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 57)
 var file_telemetry_proto_goTypes = []any{
 	(*Hello)(nil),                   // 0: nettact.wire.v1.Hello
 	(*PermissionReport)(nil),        // 1: nettact.wire.v1.PermissionReport
@@ -5361,88 +5378,90 @@ var file_telemetry_proto_goTypes = []any{
 	(*TraceResult)(nil),             // 50: nettact.wire.v1.TraceResult
 	(*TraceHop)(nil),                // 51: nettact.wire.v1.TraceHop
 	(*TraceAttempt)(nil),            // 52: nettact.wire.v1.TraceAttempt
-	nil,                             // 53: nettact.wire.v1.Metric.LabelsEntry
-	nil,                             // 54: nettact.wire.v1.Event.AttrsEntry
-	nil,                             // 55: nettact.wire.v1.ProbeParams.HeadersEntry
-	(*timestamppb.Timestamp)(nil),   // 56: google.protobuf.Timestamp
+	nil,                             // 53: nettact.wire.v1.PermissionReport.UnsupportedReasonsEntry
+	nil,                             // 54: nettact.wire.v1.Metric.LabelsEntry
+	nil,                             // 55: nettact.wire.v1.Event.AttrsEntry
+	nil,                             // 56: nettact.wire.v1.ProbeParams.HeadersEntry
+	(*timestamppb.Timestamp)(nil),   // 57: google.protobuf.Timestamp
 }
 var file_telemetry_proto_depIdxs = []int32{
 	1,  // 0: nettact.wire.v1.Hello.permissions:type_name -> nettact.wire.v1.PermissionReport
-	3,  // 1: nettact.wire.v1.MonitorStatus.statuses:type_name -> nettact.wire.v1.MonitorStatusEntry
-	0,  // 2: nettact.wire.v1.Frame.hello:type_name -> nettact.wire.v1.Hello
-	5,  // 3: nettact.wire.v1.Frame.packet:type_name -> nettact.wire.v1.Packet
-	26, // 4: nettact.wire.v1.Frame.host_snapshot:type_name -> nettact.wire.v1.HostSnapshot
-	2,  // 5: nettact.wire.v1.Frame.monitor_status:type_name -> nettact.wire.v1.MonitorStatus
-	42, // 6: nettact.wire.v1.Frame.incident_snapshot:type_name -> nettact.wire.v1.IncidentSnapshot
-	50, // 7: nettact.wire.v1.Frame.trace_result:type_name -> nettact.wire.v1.TraceResult
-	30, // 8: nettact.wire.v1.Frame.ack:type_name -> nettact.wire.v1.TelemetryAck
-	31, // 9: nettact.wire.v1.Frame.desired_state:type_name -> nettact.wire.v1.DesiredState
-	34, // 10: nettact.wire.v1.Frame.snapshot_request:type_name -> nettact.wire.v1.SnapshotRequest
-	39, // 11: nettact.wire.v1.Frame.incident_snapshot_request:type_name -> nettact.wire.v1.IncidentSnapshotRequest
-	41, // 12: nettact.wire.v1.Frame.trace_request:type_name -> nettact.wire.v1.TraceRequest
-	56, // 13: nettact.wire.v1.Packet.sent_at:type_name -> google.protobuf.Timestamp
-	6,  // 14: nettact.wire.v1.Packet.metrics:type_name -> nettact.wire.v1.Metric
-	21, // 15: nettact.wire.v1.Packet.events:type_name -> nettact.wire.v1.Event
-	22, // 16: nettact.wire.v1.Packet.inventory_delta:type_name -> nettact.wire.v1.InventoryItem
-	23, // 17: nettact.wire.v1.Packet.interface_snapshots:type_name -> nettact.wire.v1.InterfaceSnapshot
-	7,  // 18: nettact.wire.v1.Packet.game_runs:type_name -> nettact.wire.v1.GameRun
-	8,  // 19: nettact.wire.v1.Packet.game_buckets:type_name -> nettact.wire.v1.GameBucket
-	56, // 20: nettact.wire.v1.Metric.ts:type_name -> google.protobuf.Timestamp
-	53, // 21: nettact.wire.v1.Metric.labels:type_name -> nettact.wire.v1.Metric.LabelsEntry
-	56, // 22: nettact.wire.v1.GameRun.started_at:type_name -> google.protobuf.Timestamp
-	56, // 23: nettact.wire.v1.GameRun.last_seen_at:type_name -> google.protobuf.Timestamp
-	56, // 24: nettact.wire.v1.GameRun.ended_at:type_name -> google.protobuf.Timestamp
-	56, // 25: nettact.wire.v1.GameBucket.ts:type_name -> google.protobuf.Timestamp
-	9,  // 26: nettact.wire.v1.GameBucket.frames:type_name -> nettact.wire.v1.GameFrames
-	10, // 27: nettact.wire.v1.GameBucket.ft:type_name -> nettact.wire.v1.GameFrameTimes
-	11, // 28: nettact.wire.v1.GameBucket.hist:type_name -> nettact.wire.v1.GameHistogram
-	12, // 29: nettact.wire.v1.GameBucket.disp_ft:type_name -> nettact.wire.v1.GameDispFT
-	13, // 30: nettact.wire.v1.GameBucket.present:type_name -> nettact.wire.v1.GamePresent
-	14, // 31: nettact.wire.v1.GameBucket.stutter:type_name -> nettact.wire.v1.GameStutter
-	15, // 32: nettact.wire.v1.GameBucket.proc_res:type_name -> nettact.wire.v1.GameProcRes
-	16, // 33: nettact.wire.v1.GameBucket.cpu_split:type_name -> nettact.wire.v1.GameCPUSplit
-	17, // 34: nettact.wire.v1.GameBucket.gpu_split:type_name -> nettact.wire.v1.GameGPUSplit
-	18, // 35: nettact.wire.v1.GameBucket.lat:type_name -> nettact.wire.v1.GameLatency
-	19, // 36: nettact.wire.v1.GameBucket.gpu_tel:type_name -> nettact.wire.v1.GameGPUTel
-	20, // 37: nettact.wire.v1.GameBucket.proc_vram:type_name -> nettact.wire.v1.GameProcVRAM
-	56, // 38: nettact.wire.v1.Event.ts:type_name -> google.protobuf.Timestamp
-	54, // 39: nettact.wire.v1.Event.attrs:type_name -> nettact.wire.v1.Event.AttrsEntry
-	56, // 40: nettact.wire.v1.InventoryItem.last_seen:type_name -> google.protobuf.Timestamp
-	56, // 41: nettact.wire.v1.InterfaceSnapshot.sampled_at:type_name -> google.protobuf.Timestamp
-	24, // 42: nettact.wire.v1.InterfaceSnapshot.interfaces:type_name -> nettact.wire.v1.InterfaceState
-	46, // 43: nettact.wire.v1.InterfaceSnapshot.default_route:type_name -> nettact.wire.v1.SnapshotRoute
-	25, // 44: nettact.wire.v1.InterfaceState.wifi:type_name -> nettact.wire.v1.WiFiInfo
-	56, // 45: nettact.wire.v1.HostSnapshot.ts:type_name -> google.protobuf.Timestamp
-	28, // 46: nettact.wire.v1.HostSnapshot.processes:type_name -> nettact.wire.v1.ProcessInfo
-	29, // 47: nettact.wire.v1.HostSnapshot.connections:type_name -> nettact.wire.v1.ConnectionInfo
-	27, // 48: nettact.wire.v1.HostSnapshot.scopes:type_name -> nettact.wire.v1.SnapshotScopeResult
-	56, // 49: nettact.wire.v1.TelemetryAck.server_time:type_name -> google.protobuf.Timestamp
-	35, // 50: nettact.wire.v1.DesiredState.probe_targets:type_name -> nettact.wire.v1.ProbeTarget
-	38, // 51: nettact.wire.v1.DesiredState.intervals:type_name -> nettact.wire.v1.Intervals
-	36, // 52: nettact.wire.v1.DesiredState.proxies:type_name -> nettact.wire.v1.ProxySpec
-	32, // 53: nettact.wire.v1.DesiredState.game:type_name -> nettact.wire.v1.GameConfig
-	33, // 54: nettact.wire.v1.GameConfig.profiles:type_name -> nettact.wire.v1.GameProfile
-	37, // 55: nettact.wire.v1.ProbeTarget.params:type_name -> nettact.wire.v1.ProbeParams
-	55, // 56: nettact.wire.v1.ProbeParams.headers:type_name -> nettact.wire.v1.ProbeParams.HeadersEntry
-	40, // 57: nettact.wire.v1.IncidentSnapshotRequest.targets:type_name -> nettact.wire.v1.SnapshotTargetRef
-	56, // 58: nettact.wire.v1.IncidentSnapshot.collected_at:type_name -> google.protobuf.Timestamp
-	43, // 59: nettact.wire.v1.IncidentSnapshot.groups:type_name -> nettact.wire.v1.SnapshotGroupResult
-	44, // 60: nettact.wire.v1.IncidentSnapshot.network:type_name -> nettact.wire.v1.SnapshotNetwork
-	47, // 61: nettact.wire.v1.IncidentSnapshot.agent:type_name -> nettact.wire.v1.SnapshotAgentInfo
-	48, // 62: nettact.wire.v1.IncidentSnapshot.resources:type_name -> nettact.wire.v1.SnapshotResources
-	49, // 63: nettact.wire.v1.IncidentSnapshot.targets:type_name -> nettact.wire.v1.SnapshotTargetResult
-	56, // 64: nettact.wire.v1.SnapshotGroupResult.collected_at:type_name -> google.protobuf.Timestamp
-	45, // 65: nettact.wire.v1.SnapshotNetwork.interfaces:type_name -> nettact.wire.v1.SnapshotInterface
-	46, // 66: nettact.wire.v1.SnapshotNetwork.default_route:type_name -> nettact.wire.v1.SnapshotRoute
-	56, // 67: nettact.wire.v1.TraceResult.started_at:type_name -> google.protobuf.Timestamp
-	56, // 68: nettact.wire.v1.TraceResult.completed_at:type_name -> google.protobuf.Timestamp
-	51, // 69: nettact.wire.v1.TraceResult.hops:type_name -> nettact.wire.v1.TraceHop
-	52, // 70: nettact.wire.v1.TraceHop.attempts:type_name -> nettact.wire.v1.TraceAttempt
-	71, // [71:71] is the sub-list for method output_type
-	71, // [71:71] is the sub-list for method input_type
-	71, // [71:71] is the sub-list for extension type_name
-	71, // [71:71] is the sub-list for extension extendee
-	0,  // [0:71] is the sub-list for field type_name
+	53, // 1: nettact.wire.v1.PermissionReport.unsupported_reasons:type_name -> nettact.wire.v1.PermissionReport.UnsupportedReasonsEntry
+	3,  // 2: nettact.wire.v1.MonitorStatus.statuses:type_name -> nettact.wire.v1.MonitorStatusEntry
+	0,  // 3: nettact.wire.v1.Frame.hello:type_name -> nettact.wire.v1.Hello
+	5,  // 4: nettact.wire.v1.Frame.packet:type_name -> nettact.wire.v1.Packet
+	26, // 5: nettact.wire.v1.Frame.host_snapshot:type_name -> nettact.wire.v1.HostSnapshot
+	2,  // 6: nettact.wire.v1.Frame.monitor_status:type_name -> nettact.wire.v1.MonitorStatus
+	42, // 7: nettact.wire.v1.Frame.incident_snapshot:type_name -> nettact.wire.v1.IncidentSnapshot
+	50, // 8: nettact.wire.v1.Frame.trace_result:type_name -> nettact.wire.v1.TraceResult
+	30, // 9: nettact.wire.v1.Frame.ack:type_name -> nettact.wire.v1.TelemetryAck
+	31, // 10: nettact.wire.v1.Frame.desired_state:type_name -> nettact.wire.v1.DesiredState
+	34, // 11: nettact.wire.v1.Frame.snapshot_request:type_name -> nettact.wire.v1.SnapshotRequest
+	39, // 12: nettact.wire.v1.Frame.incident_snapshot_request:type_name -> nettact.wire.v1.IncidentSnapshotRequest
+	41, // 13: nettact.wire.v1.Frame.trace_request:type_name -> nettact.wire.v1.TraceRequest
+	57, // 14: nettact.wire.v1.Packet.sent_at:type_name -> google.protobuf.Timestamp
+	6,  // 15: nettact.wire.v1.Packet.metrics:type_name -> nettact.wire.v1.Metric
+	21, // 16: nettact.wire.v1.Packet.events:type_name -> nettact.wire.v1.Event
+	22, // 17: nettact.wire.v1.Packet.inventory_delta:type_name -> nettact.wire.v1.InventoryItem
+	23, // 18: nettact.wire.v1.Packet.interface_snapshots:type_name -> nettact.wire.v1.InterfaceSnapshot
+	7,  // 19: nettact.wire.v1.Packet.game_runs:type_name -> nettact.wire.v1.GameRun
+	8,  // 20: nettact.wire.v1.Packet.game_buckets:type_name -> nettact.wire.v1.GameBucket
+	57, // 21: nettact.wire.v1.Metric.ts:type_name -> google.protobuf.Timestamp
+	54, // 22: nettact.wire.v1.Metric.labels:type_name -> nettact.wire.v1.Metric.LabelsEntry
+	57, // 23: nettact.wire.v1.GameRun.started_at:type_name -> google.protobuf.Timestamp
+	57, // 24: nettact.wire.v1.GameRun.last_seen_at:type_name -> google.protobuf.Timestamp
+	57, // 25: nettact.wire.v1.GameRun.ended_at:type_name -> google.protobuf.Timestamp
+	57, // 26: nettact.wire.v1.GameBucket.ts:type_name -> google.protobuf.Timestamp
+	9,  // 27: nettact.wire.v1.GameBucket.frames:type_name -> nettact.wire.v1.GameFrames
+	10, // 28: nettact.wire.v1.GameBucket.ft:type_name -> nettact.wire.v1.GameFrameTimes
+	11, // 29: nettact.wire.v1.GameBucket.hist:type_name -> nettact.wire.v1.GameHistogram
+	12, // 30: nettact.wire.v1.GameBucket.disp_ft:type_name -> nettact.wire.v1.GameDispFT
+	13, // 31: nettact.wire.v1.GameBucket.present:type_name -> nettact.wire.v1.GamePresent
+	14, // 32: nettact.wire.v1.GameBucket.stutter:type_name -> nettact.wire.v1.GameStutter
+	15, // 33: nettact.wire.v1.GameBucket.proc_res:type_name -> nettact.wire.v1.GameProcRes
+	16, // 34: nettact.wire.v1.GameBucket.cpu_split:type_name -> nettact.wire.v1.GameCPUSplit
+	17, // 35: nettact.wire.v1.GameBucket.gpu_split:type_name -> nettact.wire.v1.GameGPUSplit
+	18, // 36: nettact.wire.v1.GameBucket.lat:type_name -> nettact.wire.v1.GameLatency
+	19, // 37: nettact.wire.v1.GameBucket.gpu_tel:type_name -> nettact.wire.v1.GameGPUTel
+	20, // 38: nettact.wire.v1.GameBucket.proc_vram:type_name -> nettact.wire.v1.GameProcVRAM
+	57, // 39: nettact.wire.v1.Event.ts:type_name -> google.protobuf.Timestamp
+	55, // 40: nettact.wire.v1.Event.attrs:type_name -> nettact.wire.v1.Event.AttrsEntry
+	57, // 41: nettact.wire.v1.InventoryItem.last_seen:type_name -> google.protobuf.Timestamp
+	57, // 42: nettact.wire.v1.InterfaceSnapshot.sampled_at:type_name -> google.protobuf.Timestamp
+	24, // 43: nettact.wire.v1.InterfaceSnapshot.interfaces:type_name -> nettact.wire.v1.InterfaceState
+	46, // 44: nettact.wire.v1.InterfaceSnapshot.default_route:type_name -> nettact.wire.v1.SnapshotRoute
+	25, // 45: nettact.wire.v1.InterfaceState.wifi:type_name -> nettact.wire.v1.WiFiInfo
+	57, // 46: nettact.wire.v1.HostSnapshot.ts:type_name -> google.protobuf.Timestamp
+	28, // 47: nettact.wire.v1.HostSnapshot.processes:type_name -> nettact.wire.v1.ProcessInfo
+	29, // 48: nettact.wire.v1.HostSnapshot.connections:type_name -> nettact.wire.v1.ConnectionInfo
+	27, // 49: nettact.wire.v1.HostSnapshot.scopes:type_name -> nettact.wire.v1.SnapshotScopeResult
+	57, // 50: nettact.wire.v1.TelemetryAck.server_time:type_name -> google.protobuf.Timestamp
+	35, // 51: nettact.wire.v1.DesiredState.probe_targets:type_name -> nettact.wire.v1.ProbeTarget
+	38, // 52: nettact.wire.v1.DesiredState.intervals:type_name -> nettact.wire.v1.Intervals
+	36, // 53: nettact.wire.v1.DesiredState.proxies:type_name -> nettact.wire.v1.ProxySpec
+	32, // 54: nettact.wire.v1.DesiredState.game:type_name -> nettact.wire.v1.GameConfig
+	33, // 55: nettact.wire.v1.GameConfig.profiles:type_name -> nettact.wire.v1.GameProfile
+	37, // 56: nettact.wire.v1.ProbeTarget.params:type_name -> nettact.wire.v1.ProbeParams
+	56, // 57: nettact.wire.v1.ProbeParams.headers:type_name -> nettact.wire.v1.ProbeParams.HeadersEntry
+	40, // 58: nettact.wire.v1.IncidentSnapshotRequest.targets:type_name -> nettact.wire.v1.SnapshotTargetRef
+	57, // 59: nettact.wire.v1.IncidentSnapshot.collected_at:type_name -> google.protobuf.Timestamp
+	43, // 60: nettact.wire.v1.IncidentSnapshot.groups:type_name -> nettact.wire.v1.SnapshotGroupResult
+	44, // 61: nettact.wire.v1.IncidentSnapshot.network:type_name -> nettact.wire.v1.SnapshotNetwork
+	47, // 62: nettact.wire.v1.IncidentSnapshot.agent:type_name -> nettact.wire.v1.SnapshotAgentInfo
+	48, // 63: nettact.wire.v1.IncidentSnapshot.resources:type_name -> nettact.wire.v1.SnapshotResources
+	49, // 64: nettact.wire.v1.IncidentSnapshot.targets:type_name -> nettact.wire.v1.SnapshotTargetResult
+	57, // 65: nettact.wire.v1.SnapshotGroupResult.collected_at:type_name -> google.protobuf.Timestamp
+	45, // 66: nettact.wire.v1.SnapshotNetwork.interfaces:type_name -> nettact.wire.v1.SnapshotInterface
+	46, // 67: nettact.wire.v1.SnapshotNetwork.default_route:type_name -> nettact.wire.v1.SnapshotRoute
+	57, // 68: nettact.wire.v1.TraceResult.started_at:type_name -> google.protobuf.Timestamp
+	57, // 69: nettact.wire.v1.TraceResult.completed_at:type_name -> google.protobuf.Timestamp
+	51, // 70: nettact.wire.v1.TraceResult.hops:type_name -> nettact.wire.v1.TraceHop
+	52, // 71: nettact.wire.v1.TraceHop.attempts:type_name -> nettact.wire.v1.TraceAttempt
+	72, // [72:72] is the sub-list for method output_type
+	72, // [72:72] is the sub-list for method input_type
+	72, // [72:72] is the sub-list for extension type_name
+	72, // [72:72] is the sub-list for extension extendee
+	0,  // [0:72] is the sub-list for field type_name
 }
 
 func init() { file_telemetry_proto_init() }
@@ -5479,7 +5498,7 @@ func file_telemetry_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_telemetry_proto_rawDesc), len(file_telemetry_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   56,
+			NumMessages:   57,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

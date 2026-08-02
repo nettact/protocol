@@ -525,6 +525,74 @@ func TestFrameRoundTrip(t *testing.T) {
 	}
 }
 
+// The unsupported reasons are what lets a console say why a capability is
+// missing instead of guessing the one remedy it knows, so every shape of the map
+// has to survive both encodings: nothing probed, one permission explained, and
+// several at once. The "several" case deliberately mixes codes this module
+// defines with ones it does not — the vocabulary belongs to whatever ran the
+// probe, and a converter that filtered on known values would silently drop
+// exactly the newer-agent reasons the field exists to deliver.
+func TestHelloUnsupportedReasons(t *testing.T) {
+	cases := map[string]struct{ in, want map[string]string }{
+		"absent": {nil, nil},
+		// An agent that probed nothing and an agent that built an empty map are
+		// saying the same thing, and only one shape can come back: both formats
+		// drop an empty map, so it decodes to nil either way.
+		"empty": {map[string]string{}, nil},
+		"one": {
+			map[string]string{string(permission.GamePerformanceRead): gamesense.ReasonPresentMonMissing},
+			map[string]string{string(permission.GamePerformanceRead): gamesense.ReasonPresentMonMissing},
+		},
+		"several": {
+			map[string]string{
+				string(permission.GameProcessDetect):   gamesense.ReasonSensorMissing,
+				string(permission.GamePerformanceRead): "proto_mismatch", // agent-local code, not a constant here
+				string(permission.GameGPURead):         gamesense.ReasonGPUTelemetryUnavailable,
+				string(permission.HostTemperatureRead): "some.future.probe.code",
+			},
+			map[string]string{
+				string(permission.GameProcessDetect):   gamesense.ReasonSensorMissing,
+				string(permission.GamePerformanceRead): "proto_mismatch",
+				string(permission.GameGPURead):         gamesense.ReasonGPUTelemetryUnavailable,
+				string(permission.HostTemperatureRead): "some.future.probe.code",
+			},
+		},
+	}
+	for name, tc := range cases {
+		hello := Hello{
+			SchemaVersion: 2, Hostname: "host-1", Platform: "windows", AgentVersion: "0.3.0",
+			Permissions: permission.PermissionReport{
+				Supported:          []string{"probe.icmp"},
+				Granted:            []string{"probe.icmp", "game.process.detect"},
+				Effective:          []string{"probe.icmp"},
+				Source:             "environment",
+				PolicyHash:         "abc123",
+				UnsupportedReasons: tc.in,
+			},
+			ReportedConfigVersion: 7,
+		}
+		for _, ct := range []string{ContentTypeJSON, ContentTypeProtobuf} {
+			data, err := MarshalFrame(Frame{Hello: &hello}, ct)
+			if err != nil {
+				t.Fatalf("MarshalFrame %s(%s): %v", name, ct, err)
+			}
+			out, err := UnmarshalFrame(data, ct)
+			if err != nil {
+				t.Fatalf("UnmarshalFrame %s(%s): %v", name, ct, err)
+			}
+			got := out.Hello.Permissions.UnsupportedReasons
+			if !reflect.DeepEqual(tc.want, got) {
+				t.Errorf("%s(%s) unsupported reasons = %v, want %v", name, ct, got, tc.want)
+			}
+			// The rest of the report must not have moved because a map arrived
+			// beside it.
+			if out.Hello.Permissions.PolicyHash != "abc123" || len(out.Hello.Permissions.Supported) != 1 {
+				t.Errorf("%s(%s) report mangled: %+v", name, ct, out.Hello.Permissions)
+			}
+		}
+	}
+}
+
 // The game block is optional, and its absence is a claim: "the server has
 // nothing to say about game capture" is not the same as "record everything with
 // no profiles defined". Both must survive both encodings intact, because a

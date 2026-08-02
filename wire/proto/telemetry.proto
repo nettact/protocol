@@ -42,6 +42,12 @@ message PermissionReport {
   repeated string effective = 3;
   string source = 4;
   string policy_hash = 5;
+  // Why a capability-probed permission is not in supported, keyed by permission
+  // id. The values are an open enum owned by whichever probe answered (game
+  // capture uses protocol/gamesense), so unknown codes must be tolerated. An
+  // absent key means the probe never ran, not that it ran without a reason —
+  // see permission.PermissionReport.UnsupportedReasons for the full contract.
+  map<string, string> unsupported_reasons = 6;
 }
 
 // MonitorStatus mirrors wire.MonitorStatus — the agent's full-state evaluation

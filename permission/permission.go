@@ -405,6 +405,31 @@ type PermissionReport struct {
 	Effective  []string `json:"effective"`
 	Source     string   `json:"source"`
 	PolicyHash string   `json:"policy_hash"`
+	// UnsupportedReasons explains, per permission id, why a capability probe
+	// concluded the permission is not supported here. Without it the three sets
+	// say only "supported: false", which leaves a console guessing the single
+	// remediation it happens to know — and a guess sends people to install
+	// software they already have when the real cause was something else.
+	//
+	// Keyed by permission ID, and it only ever holds ids ABSENT from Supported: a
+	// supported permission has nothing to explain.
+	//
+	// An absent key is not "no reason" — it means the question was never asked.
+	// The probe did not run, typically because nothing granted the capability and
+	// an agent refuses to probe what it was not granted. A reader must render a
+	// missing entry as unprobed, never as an unexplained failure.
+	//
+	// The value vocabulary is owned by whatever probes the capability, not by this
+	// package: game capture uses the codes in protocol/gamesense, and a future
+	// temperature probe would bring its own. This package only transports them,
+	// which is why the values are plain strings and are never validated here.
+	// Readers MUST tolerate codes they do not know — a newer agent reporting to an
+	// older console is ordinary, not a fault — and fall back to their own generic
+	// text rather than putting a raw identifier in front of a user.
+	//
+	// Full-state on every report, like the three sets beside it: it describes the
+	// last probe and carries no history.
+	UnsupportedReasons map[string]string `json:"unsupported_reasons,omitempty"`
 }
 
 // RequiredForTarget returns the permissions a probe monitor needs. HTTP with a

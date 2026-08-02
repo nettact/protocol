@@ -81,16 +81,33 @@ const (
 	StateError    = "error"
 )
 
-// Reason codes. A closed set, so the console can explain the state and offer the
-// matching fix rather than printing whatever string arrived.
+// Reason codes for game capture, naming why it is not available. They travel on
+// a probe or status line, and they are also the vocabulary the agent puts in
+// permission.PermissionReport.UnsupportedReasons for the game permissions — so
+// the block covers causes the AGENT observes about the sensor as much as ones
+// the sensor reports about itself.
 //
 // Each reason exists because its remedy differs. Missing middleware is an
 // install problem, an unavailable service is a "start or repair it" problem, and
 // a version mismatch means the middleware and the service were upgraded apart —
 // telling a user "frame capture failed" for all three would be true and useless.
+//
+// This block is not the whole vocabulary. The agent adds three codes of its own
+// in agent/internal/gamesense — "probe_failed", "proto_mismatch" and
+// "sensor_exited" — for the failures that happen around a sensor run rather than
+// inside one, where no line from the sensor exists to carry a reason. They are
+// not defined here because nothing in this contract emits them, but a reader of
+// a permission report will see them, which is the other half of why a reader
+// must fall back to generic text on an unrecognized code instead of assuming
+// this list is exhaustive.
 const (
 	// ReasonUnsupportedOS: this platform has no frame source at all. Terminal.
 	ReasonUnsupportedOS = "unsupported_os"
+	// ReasonSensorMissing: no sensor component was found beside the agent — the
+	// build ships none, or it was removed. Nothing about the machine is wrong, so
+	// there is nothing on it to install; the fix is an agent build that carries a
+	// sensor.
+	ReasonSensorMissing = "sensor_missing"
 	// ReasonPresentMonMissing: the PresentMon middleware library was not found in
 	// any of the locations the sensor searches. The component is not installed.
 	ReasonPresentMonMissing = "presentmon_missing"
@@ -107,6 +124,12 @@ const (
 	// ReasonInternalError: a defect in the sensor itself. Distinct from the
 	// environmental reasons above because no user action fixes it.
 	ReasonInternalError = "internal_error"
+	// ReasonGPUTelemetryUnavailable: capture works, but this adapter or driver
+	// publishes no telemetry, so game.gpu.read cannot be supported. An ordinary
+	// machine, not a fault — and nothing to install. It is the one reason here
+	// that leaves frame capture entirely intact, which is why it can only ever
+	// explain game.gpu.read and never the two permissions beneath it.
+	ReasonGPUTelemetryUnavailable = "gpu_telemetry_unavailable"
 )
 
 // Capabilities a sensor declares on Hello, naming the optional fields this

@@ -720,13 +720,19 @@ func monitorStatusFromProto(m *pb.MonitorStatus) MonitorStatus {
 
 // ---- PermissionReport ----
 
+// UnsupportedReasons is carried by reference like every other map here (Metric
+// labels, Event attrs, ProbeParams headers). An empty map needs no special case:
+// protobuf encodes no entries for it and JSON omits it, so both formats decode
+// back to nil — which is the shape that means "nothing was probed" and is what
+// an agent with nothing to explain should be sending anyway.
 func permissionReportToProto(r permission.PermissionReport) *pb.PermissionReport {
 	return &pb.PermissionReport{
-		Supported:  r.Supported,
-		Granted:    r.Granted,
-		Effective:  r.Effective,
-		Source:     r.Source,
-		PolicyHash: r.PolicyHash,
+		Supported:          r.Supported,
+		Granted:            r.Granted,
+		Effective:          r.Effective,
+		Source:             r.Source,
+		PolicyHash:         r.PolicyHash,
+		UnsupportedReasons: r.UnsupportedReasons,
 	}
 }
 
@@ -735,11 +741,12 @@ func permissionReportFromProto(r *pb.PermissionReport) permission.PermissionRepo
 		return permission.PermissionReport{}
 	}
 	return permission.PermissionReport{
-		Supported:  r.Supported,
-		Granted:    r.Granted,
-		Effective:  r.Effective,
-		Source:     r.Source,
-		PolicyHash: r.PolicyHash,
+		Supported:          r.Supported,
+		Granted:            r.Granted,
+		Effective:          r.Effective,
+		Source:             r.Source,
+		PolicyHash:         r.PolicyHash,
+		UnsupportedReasons: r.UnsupportedReasons,
 	}
 }
 
