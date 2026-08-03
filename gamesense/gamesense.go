@@ -154,6 +154,11 @@ const (
 	// that leaves frame capture entirely intact, which is why it can only ever
 	// explain game.gpu.read and never the two permissions beneath it.
 	ReasonGPUTelemetryUnavailable = "gpu_telemetry_unavailable"
+	// ReasonNotLicensed: a Store-edition sensor found no active Microsoft Store
+	// license for the app, so it refuses to collect. The machine is capable; the
+	// remedy is to install (or purchase) NetTact from the Microsoft Store rather
+	// than to fix anything about the capture stack.
+	ReasonNotLicensed = "not_licensed"
 )
 
 // Capabilities a sensor declares on Hello, naming the optional fields this
