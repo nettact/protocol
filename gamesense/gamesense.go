@@ -757,10 +757,11 @@ type HostCPU struct {
 // HostCPUClock is the processor's clock for one second, in MHz.
 //
 // Separate from HostCPU rather than a field on it, because they come from
-// different calls that fail independently: the busy percentages are differenced
-// from performance counters, and this is a power-management reading. Folding it
-// in would break HostCPU's group-atomic rule — the one that lets its two figures
-// be plain floats — for a value that can be absent on its own.
+// different sources that fail independently: the busy percentages are
+// differenced from kernel counters, and this pairs a performance counter with a
+// power-management reading. Folding it in would break HostCPU's group-atomic
+// rule — the one that lets its two figures be plain floats — for a value that
+// can be absent on its own.
 //
 // CurrentMHz is the HIGHEST clock any logical core is running at, not a mean.
 // Modern processors boost a small number of cores well past the all-core clock,
@@ -772,9 +773,10 @@ type HostCPU struct {
 // MaxMHz travels with it every second for the reason HostMem.Total does: it is
 // what makes the current figure readable. 3.2 GHz is a processor coasting on one
 // machine and one pinned at its ceiling on another, and nothing else in the
-// record says which.
+// record says which. It is the NOMINAL maximum rather than the boost ceiling, so
+// CurrentMHz above it is ordinary — that is what boost is.
 //
-// Group-atomic: one call returns both, so they arrive and vanish together.
+// Group-atomic: one reading produces both, so they arrive and vanish together.
 type HostCPUClock struct {
 	CurrentMHz float64 `json:"current_mhz"` // the fastest logical core right now
 	MaxMHz     float64 `json:"max_mhz"`     // the processor's nominal maximum
