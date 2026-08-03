@@ -40,19 +40,19 @@ func TestProbeScheduleContract(t *testing.T) {
 		upload   time.Duration
 		want     time.Duration
 	}{
-		// upload ≤ 0 falls back to DefaultUploadInterval (5s → +2×5s = +10s).
-		{"interval-dominant, upload fallback", 10 * time.Second, 5800 * time.Millisecond, 0, 40 * time.Second},
-		{"cycle-dominant, upload fallback", 10 * time.Second, 25 * time.Second, 0, 70 * time.Second},
+		// upload ≤ 0 falls back to DefaultUploadInterval (30s → +2×30s = +60s).
+		{"interval-dominant, upload fallback", 10 * time.Second, 5800 * time.Millisecond, 0, 90 * time.Second},
+		{"cycle-dominant, upload fallback", 10 * time.Second, 25 * time.Second, 0, 120 * time.Second},
 		// An explicit upload interval replaces the default in the +2×upload term.
 		{"explicit upload", 10 * time.Second, 5800 * time.Millisecond, 8 * time.Second, 46 * time.Second},
-		{"negative upload uses default", 10 * time.Second, 5800 * time.Millisecond, -1, 40 * time.Second},
-		// The three configured tiers at their default cycle, default 5s upload:
-		// icmp 10s  -> max(30s, 21.6s)=30s  + 10s = 40s
-		// http 30s  -> max(90s, 50s)=90s    + 10s = 100s
-		// nat 30min -> max(90m, 30m50s)=90m + 10s = 90m10s
-		{"icmp tier 10s", DefaultICMPInterval, 5800 * time.Millisecond, DefaultUploadInterval, 40 * time.Second},
-		{"regular tier 30s", DefaultHTTPInterval, DefaultHTTPTimeout, DefaultUploadInterval, 100 * time.Second},
-		{"nat tier 30min", DefaultNATInterval, DefaultNATCycleDeadline, DefaultUploadInterval, 90*time.Minute + 10*time.Second},
+		{"negative upload uses default", 10 * time.Second, 5800 * time.Millisecond, -1, 90 * time.Second},
+		// The three configured tiers at their default cycle, default 30s upload:
+		// icmp 10s  -> max(30s, 21.6s)=30s  + 60s = 90s
+		// http 30s  -> max(90s, 50s)=90s    + 60s = 150s
+		// nat 30min -> max(90m, 30m50s)=90m + 60s = 91m
+		{"icmp tier 10s", DefaultICMPInterval, 5800 * time.Millisecond, DefaultUploadInterval, 90 * time.Second},
+		{"regular tier 30s", DefaultHTTPInterval, DefaultHTTPTimeout, DefaultUploadInterval, 150 * time.Second},
+		{"nat tier 30min", DefaultNATInterval, DefaultNATCycleDeadline, DefaultUploadInterval, 91 * time.Minute},
 	}
 	for _, tt := range staleTests {
 		if got := StaleAfter(tt.interval, tt.cycle, tt.upload); got != tt.want {

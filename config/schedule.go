@@ -129,7 +129,16 @@ func CycleDeadline(kind string, p ProbeParams) time.Duration {
 // the agent envcfg default). The server uses it as the StaleAfter fallback when
 // an agent has not (yet) reported its own upload interval, so a freshly-connected
 // or pre-generation agent still gets link-latency slack in its freshness window.
-const DefaultUploadInterval = 5 * time.Second
+//
+// 30s rather than a few seconds because every upload is one server-side write
+// transaction, and in SQLite each commit rewrites every touched 4 KiB page into
+// the WAL (and again at checkpoint). At the design scale — 50 agents × 20
+// monitors — a 5s cadence puts the server past 100 GB/day of block writes for
+// megabytes of actual data; 30s cuts the commit count 6× and batches several
+// probe rounds per series into each page rewrite. Latency-sensitive paths do
+// not ride on this: game seconds drain on their own capped interval, and fault
+// confirmation only ever waits out at most one upload of backlogged rounds.
+const DefaultUploadInterval = 30 * time.Second
 
 // StaleAfter is the freshness window after which a sample is considered stale:
 // max(3×interval, interval + 2×cycle) + 2×upload.
