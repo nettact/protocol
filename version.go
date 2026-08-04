@@ -1,5 +1,5 @@
-// Package protocol defines the shared wire contract used by the agent,
-// server-lite, and (later) the cloud server. The type packages (telemetry,
+// Package protocol defines the shared wire contract used by the agent, the
+// server, and (later) the cloud server. The type packages (telemetry,
 // config, enroll, permission) deliberately have no external dependencies so
 // every consumer can import them without pulling in server or agent code
 // (architecture §15.2-3: one shared protocol, no forks).

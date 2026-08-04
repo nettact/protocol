@@ -4,7 +4,7 @@ English | [简体中文](./README-zh.md)
 
 NetTact Protocol defines the shared data model and wire contract between the Agent, Server, and Desktop. It gives collectors, servers, and embedded runtimes one set of Go types so the same field cannot acquire different meanings in different repositories.
 
-This is a Go library, not an executable service, and does not need to be deployed separately. Most NetTact users consume it indirectly through the Agent, NetTact Lite, or Desktop.
+This is a Go library, not an executable service, and does not need to be deployed separately. Most NetTact users consume it indirectly through the Agent, NetTact Server, or Desktop.
 
 ## What It Solves
 
@@ -94,7 +94,7 @@ WebSocket connections can negotiate the `nettact.v1.protobuf` or `nettact.v1.jso
 
 `protocol.SchemaVersion` is the wire-schema version. The Agent and Server validate it during connection setup and data ingestion. An incompatible peer is rejected explicitly instead of silently losing fields.
 
-Use mutually compatible official releases of the Agent, Server Lite, and Desktop. Custom integrations should set the current `SchemaVersion` on outgoing data and call `protocol.ValidateSchema` on incoming data.
+Use mutually compatible official releases of the Agent, Server, and Desktop. Custom integrations should set the current `SchemaVersion` on outgoing data and call `protocol.ValidateSchema` on incoming data.
 
 ## Regenerating Protobuf
 

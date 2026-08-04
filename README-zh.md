@@ -4,7 +4,7 @@
 
 NetTact Protocol 定义 Agent、Server 和 Desktop 之间共享的数据模型与线缆协议。它让采集端、服务端和嵌入式运行时使用同一套 Go 类型，避免同一个字段在不同仓库里出现含义不一致的问题。
 
-这是一个供 Go 程序引用的库，不是可执行服务，因此不需要单独部署。普通 NetTact 用户会通过 Agent、NetTact Lite 或 Desktop 间接使用它。
+这是一个供 Go 程序引用的库，不是可执行服务，因此不需要单独部署。普通 NetTact 用户会通过 Agent、NetTact Server 或 Desktop 间接使用它。
 
 ## 它解决什么问题
 
@@ -94,7 +94,7 @@ WebSocket 连接可协商 `nettact.v1.protobuf` 或 `nettact.v1.json` 子协议�
 
 `protocol.SchemaVersion` 是线缆结构版本。Agent 和 Server 会在连接及数据入口校验它；不兼容时会明确拒绝连接，而不是静默丢弃字段。
 
-升级 NetTact 时，应使用彼此匹配的 Agent、Server Lite 和 Desktop 正式版本。若自行集成此库，请在发送数据时填入当前 `SchemaVersion`，并在接收数据时调用 `protocol.ValidateSchema`。
+升级 NetTact 时，应使用彼此匹配的 Agent、Server 和 Desktop 正式版本。若自行集成此库，请在发送数据时填入当前 `SchemaVersion`，并在接收数据时调用 `protocol.ValidateSchema`。
 
 ## 重新生成 Protobuf
 

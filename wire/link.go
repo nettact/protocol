@@ -92,5 +92,5 @@ type Conn interface {
 
 // Dialer establishes one authenticated frame link for the given bearer token.
 // The default is a WebSocket dialer built from the agent's server URL; the
-// desktop injects the embedded Lite server's in-process pipe dialer instead.
+// desktop injects the embedded server's in-process pipe dialer instead.
 type Dialer func(ctx context.Context, token string) (Conn, error)
