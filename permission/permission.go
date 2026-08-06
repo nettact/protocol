@@ -381,9 +381,18 @@ const (
 	SourceDefault           Source = "default"
 	SourceEnvironment       Source = "environment"
 	SourceDesktopFullAccess Source = "desktop_full_access"
+
+	// SourceServerConfig marks a grant configured per server rather than per
+	// process: one agent may report a different granted set to each server it
+	// connects to (the machine owner deciding "this server may collect host
+	// metrics, that one only basic probes"). It says nothing about which server
+	// — the report reaching a server IS that server's grant.
+	SourceServerConfig Source = "server_config"
 )
 
-// Policy is one process's immutable local permission grant.
+// Policy is one connection's immutable local permission grant. It is per server,
+// not per process: an agent talking to N servers holds N policies and reports
+// each one only to its own server.
 type Policy struct {
 	Granted    Set
 	Source     Source

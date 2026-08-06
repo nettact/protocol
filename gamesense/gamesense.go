@@ -159,6 +159,14 @@ const (
 	// remedy is to install (or purchase) NetTact from the Microsoft Store rather
 	// than to fix anything about the capture stack.
 	ReasonNotLicensed = "not_licensed"
+	// ReasonOwnedByAnotherServer: this machine can capture frames, but a different
+	// server owns the sensor. An agent may report to several servers at once and
+	// the sensor is one child process configured by one pushed profile list, so
+	// exactly one server drives it and receives its data (the desktop's built-in
+	// server, where the user's own games belong). Every other server is told this
+	// rather than a bare "unsupported", which would send an operator looking for a
+	// sensor to install on a machine that already has a working one.
+	ReasonOwnedByAnotherServer = "owned_by_another_server"
 )
 
 // Capabilities a sensor declares on Hello, naming the optional fields this
