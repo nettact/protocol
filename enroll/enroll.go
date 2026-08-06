@@ -10,7 +10,12 @@ import (
 	"github.com/nettact/protocol/permission"
 )
 
-// EnrollRequest is posted by the agent to /api/v1/enroll on first run.
+// EnrollRequest is posted by the agent to /api/v1/enroll on first run, and again
+// after an OS or data-dir reinstall. EnrollmentToken carries either a one-time
+// site token or a console-issued reinstall token bound to a specific agent
+// (AGENT-006); the server tells them apart by its own record, so the field is
+// unchanged. The response's AgentID is either a freshly minted id or the
+// reinstall target's — the agent treats both identically.
 type EnrollRequest struct {
 	SchemaVersion   int                         `json:"schema_version"`
 	EnrollmentToken string                      `json:"enrollment_token"`
