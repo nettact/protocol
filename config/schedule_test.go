@@ -13,8 +13,12 @@ func TestProbeScheduleContract(t *testing.T) {
 		interval time.Duration
 		cycle    time.Duration
 	}{
-		{"icmp defaults", "icmp", ProbeParams{}, 10 * time.Second, 5800 * time.Millisecond},
-		{"gateway shape", "gateway", ProbeParams{PacketCount: 3, TimeoutMs: 2_000}, 10 * time.Second, 6400 * time.Millisecond},
+		// icmp/gateway: max(interval, count×perEcho). Defaults are interval-bound
+		// (5×1s = 5s < 10s); a high packet count flips it to count-bound.
+		{"icmp defaults", "icmp", ProbeParams{}, 10 * time.Second, 10 * time.Second},
+		{"gateway shape", "gateway", ProbeParams{PacketCount: 3, TimeoutMs: 2_000}, 10 * time.Second, 10 * time.Second},
+		{"icmp count-bound", "icmp", ProbeParams{PacketCount: 12}, 10 * time.Second, 12 * time.Second},
+		{"icmp long interval", "icmp", ProbeParams{IntervalSeconds: 300}, 300 * time.Second, 300 * time.Second},
 		{"dns defaults", "dns", ProbeParams{}, 30 * time.Second, 3 * time.Second},
 		{"http defaults", "http", ProbeParams{}, 30 * time.Second, 10 * time.Second},
 		{"tcp defaults", "tcp", ProbeParams{}, 30 * time.Second, 5 * time.Second},
@@ -41,16 +45,19 @@ func TestProbeScheduleContract(t *testing.T) {
 		want     time.Duration
 	}{
 		// upload ≤ 0 falls back to DefaultUploadInterval (30s → +2×30s = +60s).
-		{"interval-dominant, upload fallback", 10 * time.Second, 5800 * time.Millisecond, 0, 90 * time.Second},
+		// The icmp rows pass cycle = interval, which is what CycleDeadline returns
+		// for a spread cycle: the base stays 3×interval, so spreading a cycle from
+		// a ~1s burst out to the full interval moves no freshness window.
+		{"interval-dominant, upload fallback", 10 * time.Second, 10 * time.Second, 0, 90 * time.Second},
 		{"cycle-dominant, upload fallback", 10 * time.Second, 25 * time.Second, 0, 120 * time.Second},
 		// An explicit upload interval replaces the default in the +2×upload term.
-		{"explicit upload", 10 * time.Second, 5800 * time.Millisecond, 8 * time.Second, 46 * time.Second},
-		{"negative upload uses default", 10 * time.Second, 5800 * time.Millisecond, -1, 90 * time.Second},
+		{"explicit upload", 10 * time.Second, 10 * time.Second, 8 * time.Second, 46 * time.Second},
+		{"negative upload uses default", 10 * time.Second, 10 * time.Second, -1, 90 * time.Second},
 		// The three configured tiers at their default cycle, default 30s upload:
-		// icmp 10s  -> max(30s, 21.6s)=30s  + 60s = 90s
-		// http 30s  -> max(90s, 50s)=90s    + 60s = 150s
-		// nat 30min -> max(90m, 30m50s)=90m + 60s = 91m
-		{"icmp tier 10s", DefaultICMPInterval, 5800 * time.Millisecond, DefaultUploadInterval, 90 * time.Second},
+		// icmp 10s  -> max(30s, 30s)=30s      + 60s = 90s
+		// http 30s  -> max(90s, 50s)=90s      + 60s = 150s
+		// nat 30min -> max(90m, 30m50s)=90m   + 60s = 91m
+		{"icmp tier 10s", DefaultICMPInterval, CycleDeadline("icmp", ProbeParams{}), DefaultUploadInterval, 90 * time.Second},
 		{"regular tier 30s", DefaultHTTPInterval, DefaultHTTPTimeout, DefaultUploadInterval, 150 * time.Second},
 		{"nat tier 30min", DefaultNATInterval, DefaultNATCycleDeadline, DefaultUploadInterval, 91 * time.Minute},
 	}

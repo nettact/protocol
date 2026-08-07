@@ -23,11 +23,23 @@ const (
 	DefaultNATInterval     = 30 * time.Minute
 )
 
-// ICMP cycle shape. One cycle sends DefaultPingCount echoes by default, spaced
-// by PingSpacing, each bounded by DefaultPingEchoTimeout, so a fully-lost default
-// cycle (5×1s + 4×200ms ≈ 5.8s) stays under the 10s interval.
+// ICMP cycle shape. One cycle sends DefaultPingCount echoes by default, each
+// bounded by DefaultPingEchoTimeout.
+//
+// The echoes are NOT a burst: after every echo the collector recomputes the gap
+// to the next one as "time left until this target is due again, divided by the
+// echoes still to send", so a healthy cycle spreads its packets evenly across
+// the whole check interval (5 packets over a 10s interval → one roughly every
+// 2.25s) and the loss/jitter it reports describe the entire interval rather than
+// a ~1s window at the top of it.
+//
+// A lost or errored echo instead sends the next one immediately. That fail-fast
+// is what keeps spreading from costing alert latency: a target that is fully
+// down finishes its cycle — and therefore its 100%-loss round — in
+// count×perEcho (5×1s by default), no slower than the old fixed-spacing burst.
+// So the two bounds below are the two shapes a cycle can take, and
+// CycleDeadline is their max.
 const (
-	PingSpacing            = 200 * time.Millisecond
 	DefaultPingCount       = 5
 	DefaultPingEchoTimeout = time.Second
 )
@@ -89,17 +101,35 @@ func PingEchoTimeout(p ProbeParams) time.Duration {
 
 // CycleDeadline is the worst-case wall-clock a single probe cycle can take for a
 // target, matching each collector's own bounding:
-//   - icmp/gateway: GlobalTimeoutMs when set, else count×perEcho + (count−1)×spacing.
+//   - icmp/gateway: GlobalTimeoutMs when set, else max(interval, count×perEcho).
 //   - dns/tcp/http: TimeoutMs when set, else the per-kind default.
 //   - nat: GlobalTimeoutMs when set, else the default whole-cycle deadline.
+//
+// The icmp/gateway max is the two cycle shapes described above. A healthy cycle
+// spreads its echoes across the interval, and paces them so that every echo
+// still to come fits its full per-echo timeout before the interval ends — so it
+// completes by the next due instant, bounded by the interval. A failing cycle
+// fail-fasts to back-to-back echoes — bounded by count×perEcho. Neither bound
+// implies the other (a 1s interval with 5 packets is count-bound; a 5-minute
+// interval is interval-bound), so the deadline is whichever is larger. When the
+// count bound wins the echoes cannot fit the interval at all, and the pacing
+// degenerates to back-to-back, which is that same bound.
+//
+// Note for StaleAfter callers: whenever the interval branch wins, cycle ≤
+// interval, so StaleAfter's base collapses to 3×interval — the same window the
+// old fixed-spacing burst produced. Spreading a cycle out therefore does not
+// widen any freshness window on its own.
 func CycleDeadline(kind string, p ProbeParams) time.Duration {
 	switch kind {
 	case "icmp", "gateway":
 		if p.GlobalTimeoutMs > 0 {
 			return time.Duration(p.GlobalTimeoutMs) * time.Millisecond
 		}
-		count := PingCount(p)
-		return time.Duration(count)*PingEchoTimeout(p) + time.Duration(count-1)*PingSpacing
+		cycle := time.Duration(PingCount(p)) * PingEchoTimeout(p)
+		if iv := EffectiveInterval(kind, p); iv > cycle {
+			return iv
+		}
+		return cycle
 	case "dns":
 		if p.TimeoutMs > 0 {
 			return time.Duration(p.TimeoutMs) * time.Millisecond
@@ -150,9 +180,10 @@ const DefaultUploadInterval = 30 * time.Second
 // short-interval target (10s → a ~30s window) is marked stale on nothing more
 // than ordinary batching jitter. The base term is the probe cadence itself:
 // max(3×interval, interval + 2×cycle) tolerates a couple of missed cycles while
-// keeping a legitimately long cycle (multi-echo ICMP, the 25s NAT discovery)
-// from tripping stale mid-run. The +2×upload term adds the link slack: 2× (not
-// 1×) covers a sample that just missed one batch boundary plus one upload retry.
+// keeping a legitimately long cycle (the 25s NAT discovery, an ICMP target given
+// a GlobalTimeoutMs longer than its interval) from tripping stale mid-run. The
+// +2×upload term adds the link slack: 2× (not 1×) covers a sample that just
+// missed one batch boundary plus one upload retry.
 //
 // upload ≤ 0 falls back to DefaultUploadInterval (the server's value when the
 // agent has not reported its own).
