@@ -33,17 +33,32 @@ type Metric struct {
 type MetricKind string
 
 const (
-	// ICMP probe results. One ping cycle sends packet_count echoes (default 5)
-	// and emits the loss, the distribution over RECEIVED echoes (avg/min/max), and
-	// the count received — all sharing one TS+Target+MonitorID. Errors/timeouts are
-	// NEVER recorded as zero-latency: rtt/min/max/jitter are emitted only when the
-	// corresponding samples exist, so loss/sample-count carry the failures instead.
+	// ICMP probe results. One ping cycle attempts up to packet_count echoes
+	// (default 5) and emits the loss, the distribution over RECEIVED echoes
+	// (avg/min/max), the count received, and the count actually sent — all sharing
+	// one TS+Target+MonitorID. Errors/timeouts are NEVER recorded as zero-latency:
+	// rtt/min/max/jitter are emitted only when the corresponding samples exist, so
+	// loss/sample-count carry the failures instead.
 	ICMPRTTms   MetricKind = "probe.icmp.rtt_ms"     // mean RTT over received echoes
-	ICMPLoss    MetricKind = "probe.icmp.loss_pct"   // (sent-received)/sent*100
+	ICMPLoss    MetricKind = "probe.icmp.loss_pct"   // (sent-received)/sent*100, over echoes actually SENT
 	ICMPRTTMin  MetricKind = "probe.icmp.rtt_min_ms" // min RTT over received echoes
 	ICMPRTTMax  MetricKind = "probe.icmp.rtt_max_ms" // max RTT over received echoes
 	ICMPJitter  MetricKind = "probe.icmp.jitter_ms"  // IPDV: mean |Δ| of adjacent received RTTs (emitted only when received>=2)
-	ICMPSamples MetricKind = "probe.icmp.samples"    // count: echoes received this cycle (with loss ⇒ sent)
+	ICMPSamples MetricKind = "probe.icmp.samples"    // count: echoes received this cycle
+	// ICMPSent is how many echoes the cycle ACTUALLY sent, which is normally the
+	// target's configured packet_count. It is less when the agent's probe-concurrency
+	// budget could not admit every echo inside the cycle's own timing budget — an
+	// overloaded agent, not a network fault.
+	//
+	// It exists so loss stays honest under that overload. Loss is a ratio over what
+	// was sent, so a cycle that managed one echo reports either 0% or 100% — figures
+	// indistinguishable from a healthy or a dead target on their own. The server
+	// therefore compares this against the target's configured packet_count and
+	// refuses to move a monitor's availability state on any round where the two
+	// differ: an incomplete round is stored and graphed, but it can neither confirm
+	// nor clear an outage. Without it an overloaded agent would silently invent
+	// both false recoveries and false faults.
+	ICMPSent MetricKind = "probe.icmp.sent"
 	// ICMPErrorClass classifies a fully-failed ping cycle (received==0) into a
 	// ProbeReason* code (UnitCode); ProbeReasonNone when the target answered. Emitted
 	// by both the public-ping and gateway-ping collectors via appendICMPMetrics.

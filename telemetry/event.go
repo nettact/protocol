@@ -28,6 +28,23 @@ const (
 	EventDataGap            EventType = "data.gap" // WAL overflow dropped samples
 	EventAgentUpdated       EventType = "agent.updated"
 
+	// EventProbeOverload reports that the agent could not run probes it was due to
+	// run: its host-wide probe-concurrency budget (max_probe_concurrency) had no
+	// slot free inside the probe's own timing budget, so the probe was skipped
+	// rather than run late with a truncated measurement.
+	//
+	// It is a HOST-level event, not a per-monitor one, because the budget it
+	// exhausted is the machine's — the same pool every monitor and every server
+	// draws from — and it is rate-limited into one event per aggregation window
+	// carrying the counts (see ProbeOverload*Label).
+	//
+	// Its job is to explain, not to detect. A probe that never ran produces no
+	// sample, so the monitor goes stale on its own and the console shows it; what
+	// the console cannot say without this event is that the cause was the agent
+	// running out of probe budget rather than the network going away. Raising
+	// max_probe_concurrency (or probing fewer targets) is the fix it points at.
+	EventProbeOverload EventType = "probe.overload"
+
 	// Game sensor lifecycle. The permission report already says whether game
 	// metrics are possible at all; these events carry the part it cannot; why
 	// they are not. "Blocked" in particular is what separates "the component is
@@ -36,6 +53,22 @@ const (
 	EventGameSensorBlocked   EventType = "game.sensor.blocked"
 	EventGameSensorFailed    EventType = "game.sensor.failed"
 	EventGameSensorRecovered EventType = "game.sensor.recovered"
+)
+
+// Attrs keys on an EventProbeOverload. They are a wire contract: the console
+// renders the counts, so a producer that cannot fill one omits it rather than
+// guessing.
+const (
+	// ProbeOverloadAbandonedLabel is how many probe operations the budget refused
+	// during the window (decimal integer). An operation is one ICMP echo or one
+	// single-shot probe (DNS/HTTP/TCP/NAT) that was due but never ran.
+	ProbeOverloadAbandonedLabel = "abandoned"
+	// ProbeOverloadWindowLabel is the aggregation window in seconds (decimal
+	// integer) that the abandoned count covers.
+	ProbeOverloadWindowLabel = "window_s"
+	// ProbeOverloadLimitLabel is the configured max_probe_concurrency the rounds
+	// were competing for, so the console can name the knob to raise.
+	ProbeOverloadLimitLabel = "limit"
 )
 
 type Severity string

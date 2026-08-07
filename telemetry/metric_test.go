@@ -23,6 +23,8 @@ func TestMetricAllowedForProbeKind(t *testing.T) {
 
 		// Gateway pings ride the shared ICMP metric set.
 		{"gateway", string(ICMPLoss), true},
+		{"gateway", string(ICMPSent), true},
+		{"icmp", string(ICMPSent), true},
 		{"gateway", "probe.gateway.loss_pct", false},
 
 		// A host anchor carries the system series instead of a probe family.

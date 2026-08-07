@@ -21,7 +21,18 @@ import "fmt"
 // (agent, second), alongside a new collection for the stretches a game produced
 // no frames. Removals are what make it breaking: a peer still speaking 2 sends
 // readings this build has no field for, and expects none of what replaced them.
-const SchemaVersion = 3
+//
+// 4 redefined what probe.icmp.loss_pct is a ratio OF. It used to be the target's
+// configured packet count; it is now the echoes the agent actually sent, which
+// it reports alongside as probe.icmp.sent. The field did not move and no field
+// was removed, which is exactly why this needs the version: nothing about the
+// wire shape betrays the change, so a 3 server would read a 4 agent's rounds
+// happily and read them wrong. It would take a round truncated by the agent's
+// probe-concurrency budget — one echo of five, reporting 100% because the one
+// was lost — as a full round's 100% and confirm an outage, which is the precise
+// false fault the sent count was added to prevent. Bumping refuses that pairing
+// at the handshake instead.
+const SchemaVersion = 4
 
 // ValidateSchema reports whether v is a schema version this build understands.
 // The server calls this at ingress, and the agent on the reply, so a mismatched
