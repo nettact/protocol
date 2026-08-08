@@ -164,6 +164,9 @@ func TestRequiredForHostMetricGatesTemperature(t *testing.T) {
 		"host.uptime_s":      HostUptimeRead,
 		"host.net.rx_bps":    HostNetworkIORead,
 		"host.cpu.pct":       HostCPURead,
+		// Inventory that arrives under either the cpu or the load grant, but is
+		// covered by the cpu permission on the read side — see the doc comment.
+		"host.cpu.cores": HostCPURead,
 	} {
 		got := RequiredForHostMetric(kind)
 		if len(got) != 1 || got[0] != want {

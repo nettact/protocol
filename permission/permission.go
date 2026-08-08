@@ -507,6 +507,12 @@ func BasicHTTPHeaderAllowed(name string) bool {
 // permission that gates it (spec §3.2). wifi.* and iface.up map through the
 // interface/wifi families; Closure adds the interface-status dependency.
 // Returns nil for kinds not gated by a host permission (agent.*, probe.*).
+//
+// Prefix matching means host.cpu.cores maps to HostCPURead even though the agent
+// also emits it under a load-only grant (a load average cannot be judged without
+// the core count — see telemetry.HostCPUCores). That asymmetry is intended: this
+// function answers "which permission covers reading this", not "which grant
+// caused it to be sent".
 func RequiredForHostMetric(metricKind string) []ID {
 	switch {
 	case strings.HasPrefix(metricKind, "host.cpu."):

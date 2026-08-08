@@ -136,12 +136,32 @@ const (
 	HostNetRxBps   MetricKind = "host.net.rx_bps" // receive rate, bytes/s
 	HostNetTxBps   MetricKind = "host.net.tx_bps" // send rate, bytes/s
 
+	// Logical core count, Target="host". Inventory rather than a measurement: it
+	// exists so the server can judge load per core, because a raw load average is
+	// meaningless without it (2.0 idles a 16-core box and pins a 2-core one). The
+	// agent therefore emits it when EITHER cpu or load reporting is granted, so by
+	// RequiredForHostMetric's prefix rule it can arrive under a load-only grant.
+	// That is deliberate: a core count is not a CPU measurement, and refusing to
+	// send it would leave load alerting unable to say anything at all.
+	HostCPUCores MetricKind = "host.cpu.cores"
+
 	// Temperature follows the CPU aggregate/detail split: the "host" series is
 	// the hottest plausible sensor (what the console overview graphs), the
 	// per-sensor series keeps the detail. Sensors are wildly platform-dependent,
 	// so both are emitted only when a real reading succeeds.
 	HostTempC       MetricKind = "host.temp.c"        // hottest sensor, Target="host"
 	HostTempSensorC MetricKind = "host.temp.sensor.c" // per sensor, Target=sanitized sensor key
+
+	// DERIVED kinds. No agent ever emits these and no series carries them: they
+	// exist only as the frozen metric_kind on system-status fault evidence, where
+	// the raw series is in the wrong unit to be read back honestly. A load alert
+	// is authored per core, so freezing host.load.1m=12.4 against a threshold of
+	// 2.0 would render "12.4 (≥ 2)" and read like a six-fold breach on a box where
+	// it is a 1.55 one; a network alert is authored in Mbps while the series is
+	// bytes/s. Evidence has to speak the unit the operator set the threshold in.
+	HostLoadPerCore MetricKind = "host.load.per_core" // host.load.1m ÷ logical cores
+	HostNetRxMbps   MetricKind = "host.net.rx_mbps"   // host.net.rx_bps × 8 ÷ 1e6
+	HostNetTxMbps   MetricKind = "host.net.tx_mbps"   // host.net.tx_bps × 8 ÷ 1e6
 )
 
 // Game presentation data is deliberately absent from this list. It does not fit
