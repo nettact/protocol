@@ -32,7 +32,15 @@ import "fmt"
 // was lost — as a full round's 100% and confirm an outage, which is the precise
 // false fault the sent count was added to prevent. Bumping refuses that pairing
 // at the handshake instead.
-const SchemaVersion = 4
+//
+// 5 moved traceroute from a server-issued command to an agent-local trigger. Two
+// frame variants went away (trace_request, trace_result), the result now rides
+// Packet as a self-describing record, and DesiredState gained the policy block
+// that governs the agent's own trigger. A 4 server paired with a 5 agent would
+// push commands nothing listens for and would drop the results arriving inside
+// packets it otherwise parses perfectly — a mismatch whose only symptom is a
+// diagnostic feature that silently never produces anything.
+const SchemaVersion = 5
 
 // ValidateSchema reports whether v is a schema version this build understands.
 // The server calls this at ingress, and the agent on the reply, so a mismatched

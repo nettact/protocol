@@ -79,13 +79,11 @@ type Frame struct {
 	HostSnapshot     *telemetry.HostSnapshot     `json:"host_snapshot,omitempty"`
 	MonitorStatus    *MonitorStatus              `json:"monitor_status,omitempty"`
 	IncidentSnapshot *telemetry.IncidentSnapshot `json:"incident_snapshot,omitempty"`
-	TraceResult      *telemetry.TraceResult      `json:"trace_result,omitempty"`
 	// server -> agent
 	Ack                     *Ack                            `json:"ack,omitempty"`
 	DesiredState            *config.DesiredState            `json:"desired_state,omitempty"`
 	SnapshotRequest         *config.SnapshotRequest         `json:"snapshot_request,omitempty"`
 	IncidentSnapshotRequest *config.IncidentSnapshotRequest `json:"incident_snapshot_request,omitempty"`
-	TraceRequest            *config.TraceRequest            `json:"trace_request,omitempty"`
 }
 
 // ErrFrameVariant reports a frame with zero or more than one payload set.
@@ -96,9 +94,9 @@ func (f Frame) variants() int {
 	n := 0
 	for _, set := range []bool{
 		f.Hello != nil, f.Packet != nil, f.HostSnapshot != nil, f.MonitorStatus != nil,
-		f.IncidentSnapshot != nil, f.TraceResult != nil,
+		f.IncidentSnapshot != nil,
 		f.Ack != nil, f.DesiredState != nil, f.SnapshotRequest != nil,
-		f.IncidentSnapshotRequest != nil, f.TraceRequest != nil,
+		f.IncidentSnapshotRequest != nil,
 	} {
 		if set {
 			n++

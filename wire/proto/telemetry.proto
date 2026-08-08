@@ -83,7 +83,15 @@ message MonitorStatusEntry {
 
 // Frame is the envelope for every message on the agent <-> server WebSocket.
 // Exactly one field is set.
+// 9 (trace_request) and 11 (trace_result) held the server->agent traceroute
+// command and its direct answer. Traceroute is now triggered by the agent itself
+// and its result rides the WAL inside Packet, so both numbers are reserved: an
+// instant command frame and a durable payload are opposite delivery contracts,
+// and a number that once meant "run this trace now" must never come back meaning
+// anything else.
 message Frame {
+  reserved 9, 11;
+  reserved "trace_request", "trace_result";
   oneof msg {
     // agent -> server
     Hello hello = 1;
@@ -91,13 +99,11 @@ message Frame {
     HostSnapshot host_snapshot = 3;
     MonitorStatus monitor_status = 7;
     IncidentSnapshot incident_snapshot = 10;
-    TraceResult trace_result = 11;
     // server -> agent
     TelemetryAck ack = 4;
     DesiredState desired_state = 5;
     SnapshotRequest snapshot_request = 6;
     IncidentSnapshotRequest incident_snapshot_request = 8;
-    TraceRequest trace_request = 9;
   }
 }
 
@@ -121,6 +127,11 @@ message Packet {
   repeated GameBucket game_buckets = 13;
   repeated GameGap game_gaps = 14;
   repeated GameHostSecond game_host_seconds = 15;
+  // Traceroutes the agent decided to run on its own. They travel in the outbox
+  // beside the metrics precisely because the fault that triggered them is the
+  // most likely reason the link is down: a result answered on the socket would
+  // be lost exactly when it is worth having.
+  repeated TraceResult trace_results = 16;
 }
 
 // Metric mirrors telemetry.Metric.
@@ -535,6 +546,26 @@ message DesiredState {
   // to say about game capture; present-but-empty is a deliberate "record
   // everything, no profiles defined".
   GameConfig game = 6;
+  // The path-diagnostic policy the agent applies to its OWN traceroute trigger.
+  // The server stays the policy source even though it no longer commands the
+  // execution; absent means this server has nothing to say and the agent's
+  // built-in defaults stand.
+  DiagPolicy diag = 7;
+}
+
+// DiagPolicy mirrors config.DiagPolicy — when an agent may traceroute a target
+// it has decided is down, and how far. Global rather than per-target: it answers
+// "how eager is this install about path diagnostics", which is an install-level
+// question, and a per-target copy would have to be re-pushed on every monitor
+// edit to say the same thing.
+message DiagPolicy {
+  bool enabled = 1;
+  int32 consecutive_failures = 2;
+  int32 cooldown_seconds = 3;
+  int32 max_hops = 4;
+  int32 attempts = 5;
+  int32 per_hop_timeout_ms = 6;
+  int32 budget_ms = 7;
 }
 
 // GameConfig mirrors config.GameConfig — the site's game-capture configuration.
@@ -694,31 +725,6 @@ message SnapshotTargetRef {
   string iface = 5;
 }
 
-// TraceRequest mirrors config.TraceRequest — the one-shot server->agent ask to
-// run a single incident traceroute (DIAG-001).
-message TraceRequest {
-  string report_id = 1;
-  string mode = 2; // icmp | tcp
-  string destination_host = 3;
-  int32 tcp_port = 4;
-  int32 max_hops = 5;
-  int32 attempts_per_hop = 6;
-  int32 total_timeout_ms = 7;
-  bool resolve_hop_hostnames = 8;
-  // Replaced by budget_ms for the same clock-skew reason as
-  // IncidentSnapshotRequest, and reserved so the number/name can never be
-  // silently reused.
-  reserved 9;
-  reserved "deadline";
-  // Request validity window measured from arrival on the agent's own clock.
-  int32 budget_ms = 10;
-  // In-tunnel egress pin (DIAG-004): empty id = host-stack trace; a non-empty
-  // id must match a live proxy AND its config generation or the agent fails
-  // closed — never a direct fallback.
-  string egress_proxy_id = 11;
-  int32 egress_config_serial = 12;
-}
-
 // IncidentSnapshot mirrors telemetry.IncidentSnapshot — the agent's allowlisted
 // incident-scene evidence. Field groups carry only non-sensitive network/agent/
 // resource/target context; typed payloads are set only when their group
@@ -789,9 +795,14 @@ message SnapshotTargetResult {
   string error_class = 6;
 }
 
-// TraceResult mirrors telemetry.TraceResult — the agent's terminal traceroute
-// result. Intermediate `*` attempts never imply a broken path; only a
-// destination responder sets reached.
+// TraceResult mirrors telemetry.TraceResult — one traceroute the agent decided
+// to run, described in full. Intermediate `*` attempts never imply a broken
+// path; only a destination responder sets reached.
+//
+// It is SELF-DESCRIBING because nobody else can describe it. The server no
+// longer holds a plan to match the answer against — the agent derived the
+// subject, the destination and the path itself — so everything the report is
+// filed and rendered under travels with it.
 message TraceResult {
   string report_id = 1;
   string mode = 2;
@@ -803,12 +814,37 @@ message TraceResult {
   google.protobuf.Timestamp started_at = 8;
   google.protobuf.Timestamp completed_at = 9;
   repeated TraceHop hops = 10;
-  // Attestation of the path actually used: "direct" (or empty) | "wireguard_inner",
-  // plus the egress generation that carried in-tunnel probes. The server
-  // validates these against the plan it issued.
+  // The path actually used: "direct" (or empty) | "wireguard_inner", plus the
+  // egress generation that carried in-tunnel probes.
   string path_scope = 11;
   string egress_proxy_id = 12;
   int32 egress_config_serial = 13;
+
+  // What the destination IS. dest_key is the canonical single-flight key
+  // ("ip:1.2.3.4" | "host:example.com") the server files and claims the report
+  // by; subject_kind/subject_reason say who is being measured, which is not
+  // always the monitored target.
+  string dest_key = 14;
+  string dest_host = 15;
+  int32 port = 16;
+  string subject_kind = 17;   // target | resolver | proxy | wg_endpoint | stun_server
+  string subject_reason = 18; // '' | tunnel_unreachable | tunnel_target_unreachable | tunnel_not_attempted
+
+  // A TCP plan the agent's own permissions could not run, downgraded to ICMP.
+  string fallback_from = 19;
+  string fallback_reason = 20;
+
+  // WHY the agent ran it: the trigger rule, how many consecutive failing rounds
+  // it took, and when the streak began. Without these a report is an unexplained
+  // execution — the server never asked for it, so nothing else records the cause.
+  string trigger_reason = 21; // consecutive_failures
+  int32 trigger_streak = 22;
+  google.protobuf.Timestamp first_failed_at = 23;
+
+  // The bounds the sweep actually ran under, carried so the server can clamp the
+  // stored hops to what was really asked for rather than to a guess.
+  int32 max_hops = 24;
+  int32 attempts_per_hop = 25;
 }
 
 // TraceHop mirrors telemetry.TraceHop.

@@ -37,4 +37,11 @@ type Packet struct {
 	// schedule, not because they belong to the game data — the server stores them
 	// in their own table and a run reads whichever of them its window covers.
 	GameHostSeconds []gamesense.HostSecond `json:"game_host_seconds,omitempty"`
+	// TraceResults are the traceroutes the agent decided to run on its own after
+	// a target failed enough consecutive rounds. They ride the outbox rather than
+	// the socket because the fault that triggered them is the most likely reason
+	// the socket is unusable: a result answered live would be lost exactly in the
+	// outage it was collected to explain. Each carries an agent-minted report id,
+	// so the packet-level (agent, sequence) dedup already makes a replay a no-op.
+	TraceResults []TraceResult `json:"trace_results,omitempty"`
 }

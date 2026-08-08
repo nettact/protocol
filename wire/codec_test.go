@@ -56,6 +56,48 @@ func samplePacket() telemetry.Packet {
 		GameBuckets:     sampleGameBuckets(ts),
 		GameGaps:        sampleGameGaps(ts),
 		GameHostSeconds: sampleGameHostSeconds(ts),
+		TraceResults:    sampleTraceResults(ts),
+	}
+}
+
+// sampleTraceResults exercises every TraceResult field, because the record is
+// self-describing: the server keeps no plan to fill a gap from, so a field
+// dropped in one converter half becomes a report filed under the wrong subject
+// or with no stated cause at all. Two shapes — an in-tunnel trace that reached
+// its destination, and a host-stack one that was downgraded from TCP and never
+// got there.
+func sampleTraceResults(ts time.Time) []telemetry.TraceResult {
+	return []telemetry.TraceResult{
+		{
+			ReportID: "trace_1", Mode: config.TraceModeICMP,
+			DestKey: "ip:10.7.0.10", DestHost: "10.7.0.10", DestinationIP: "10.7.0.10",
+			SubjectKind: telemetry.TraceSubjectTarget, SubjectReason: telemetry.TraceSubjectTunnelTargetUnreachable,
+			PathScope: telemetry.TracePathWireGuardInner, EgressProxyID: "prx_wg", EgressConfigSerial: 4,
+			TriggerReason: telemetry.TraceTriggerConsecutiveFailures, TriggerStreak: 3,
+			FirstFailedAt: ts.Add(-30 * time.Second),
+			MaxHops:       30, AttemptsPerHop: 3,
+			Status: telemetry.TraceStatusSucceeded, Reached: true, ReachedTTL: 2,
+			StartedAt: ts.Add(-5 * time.Second), CompletedAt: ts,
+			Hops: []telemetry.TraceHop{
+				{TTL: 1, Attempts: []telemetry.TraceAttempt{
+					{ResponderAddr: "10.7.0.1", Hostname: "gw.internal", RTTMs: 1.25},
+					{Timeout: true},
+				}},
+				{TTL: 2, Attempts: []telemetry.TraceAttempt{{ResponderAddr: "10.7.0.10", RTTMs: 8.5}}},
+			},
+		},
+		{
+			ReportID: "trace_2", Mode: config.TraceModeICMP,
+			DestKey: "host:example.com", DestHost: "example.com", Port: 443,
+			SubjectKind:  telemetry.TraceSubjectTarget,
+			PathScope:    telemetry.TracePathDirect,
+			FallbackFrom: config.TraceModeTCP, FallbackReason: "raw_socket_unavailable",
+			TriggerReason: telemetry.TraceTriggerConsecutiveFailures, TriggerStreak: 5,
+			FirstFailedAt: ts.Add(-90 * time.Second),
+			MaxHops:       20, AttemptsPerHop: 2,
+			Status: telemetry.TraceStatusPartial, Reason: "deadline_exceeded",
+			StartedAt: ts.Add(-40 * time.Second), CompletedAt: ts.Add(-10 * time.Second),
+		},
 	}
 }
 
@@ -306,6 +348,10 @@ func sampleDesiredState() config.DesiredState {
 			},
 		},
 		Game: sampleGameConfig(),
+		Diag: &config.DiagPolicy{
+			Enabled: true, ConsecutiveFailures: 3, CooldownSeconds: 900,
+			MaxHops: 30, Attempts: 3, PerHopTimeoutMs: 1500, BudgetMs: 300000,
+		},
 	}
 }
 
@@ -645,26 +691,6 @@ func TestFrameRoundTrip(t *testing.T) {
 			{MonitorID: "probe_gw1", Kind: "gateway", Target: "gateway", Iface: "以太网"},
 		},
 	}
-	tr := config.TraceRequest{
-		ReportID: "trace-1", Mode: config.TraceModeTCP, DestinationHost: "example.com", TCPPort: 443,
-		MaxHops: 30, AttemptsPerHop: 3, TotalTimeoutMs: 30_000, ResolveHopHostnames: true, BudgetMs: 60_000,
-		EgressProxyID: "prx_wg", EgressConfigSerial: 4,
-	}
-	// Every TraceResult field populated, including the path attestation — a field
-	// dropped in one converter half only surfaces through this fixture.
-	tres := telemetry.TraceResult{
-		ReportID: "trace-1", Mode: config.TraceModeICMP, Status: telemetry.TraceStatusPartial, Reason: "deadline_exceeded",
-		DestinationIP: "10.7.0.10", Reached: true, ReachedTTL: 3,
-		StartedAt: time.Unix(1700000300, 0).UTC(), CompletedAt: time.Unix(1700000310, 0).UTC(),
-		Hops: []telemetry.TraceHop{
-			{TTL: 1, Attempts: []telemetry.TraceAttempt{
-				{ResponderAddr: "10.7.0.1", Hostname: "gw.internal", RTTMs: 1.25},
-				{Timeout: true},
-			}},
-			{TTL: 2, Attempts: []telemetry.TraceAttempt{{ResponderAddr: "10.7.0.10", RTTMs: 8.5}}},
-		},
-		PathScope: telemetry.TracePathWireGuardInner, EgressProxyID: "prx_wg", EgressConfigSerial: 4,
-	}
 	frames := map[string]Frame{
 		"hello":                     {Hello: &hello},
 		"packet":                    {Packet: &pkt},
@@ -674,8 +700,6 @@ func TestFrameRoundTrip(t *testing.T) {
 		"desired_state":             {DesiredState: &ds},
 		"snapshot_request":          {SnapshotRequest: &sr},
 		"incident_snapshot_request": {IncidentSnapshotRequest: &isr},
-		"trace_request":             {TraceRequest: &tr},
-		"trace_result":              {TraceResult: &tres},
 	}
 	for name, in := range frames {
 		for _, ct := range []string{ContentTypeJSON, ContentTypeProtobuf} {

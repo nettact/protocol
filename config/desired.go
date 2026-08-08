@@ -23,6 +23,48 @@ type DesiredState struct {
 	// has nothing to say about game capture; an empty-but-present block is a
 	// deliberate "record everything, no profiles defined".
 	Game *GameConfig `json:"game,omitempty"`
+	// Diag is the path-diagnostic policy the agent applies to its own traceroute
+	// trigger. Nil means this server has nothing to say and the agent's built-in
+	// defaults stand — which is also what an agent reporting to several servers
+	// needs, since each server states its policy independently.
+	Diag *DiagPolicy `json:"diag,omitempty"`
+}
+
+// DiagPolicy says when an agent may traceroute a target it has just decided is
+// down, and how far the sweep may go. The server no longer commands the
+// execution — the agent notices the failure and acts, because the moment worth
+// tracing is precisely the moment the link to the server is least trustworthy —
+// but it remains the policy source, so the numbers still come from here.
+//
+// # Why it is global and not per target
+//
+// It answers "how eager is this install about path diagnostics", which is an
+// install-level question. A per-target copy would have to be re-pushed on every
+// unrelated monitor edit to keep saying the same thing, and would invite a
+// configuration where two monitors on one destination disagree about whether it
+// may be traced.
+//
+// ConsecutiveFailures deliberately matches the server's own availability
+// confirmation threshold: the agent's streak is counting the same rounds the
+// server would count, so a trace fires as the fault is confirmed rather than
+// before it (noise) or long after (evidence collected past the interesting
+// moment). A zero field means "use the agent's built-in default", never zero.
+type DiagPolicy struct {
+	Enabled             bool `json:"enabled"`
+	ConsecutiveFailures int  `json:"consecutive_failures,omitempty"`
+	// CooldownSeconds is the minimum spacing between two traces of the SAME
+	// destination on this agent. Without it a target that stays down would be
+	// traced on every subsequent failing round, spending the machine's probe
+	// budget re-measuring a path whose answer has not changed.
+	CooldownSeconds int `json:"cooldown_seconds,omitempty"`
+	MaxHops         int `json:"max_hops,omitempty"`
+	Attempts        int `json:"attempts,omitempty"`
+	// PerHopTimeoutMs bounds one probe attempt. Zero lets the agent derive it
+	// from BudgetMs and MaxHops, which is the sane relationship; setting it is
+	// for installs whose links need a longer or shorter wait than that implies.
+	PerHopTimeoutMs int `json:"per_hop_timeout_ms,omitempty"`
+	// BudgetMs is the whole sweep's wall-clock ceiling.
+	BudgetMs int `json:"budget_ms,omitempty"`
 }
 
 // GameConfig is the site's game-capture configuration: which processes count as
@@ -101,42 +143,15 @@ type SnapshotTargetRef struct {
 	Iface     string `json:"iface,omitempty"` // kind=gateway only: the NIC to resolve the gateway from (ProbeParams.Interface); "" = default NIC
 }
 
-// Traceroute modes (TraceRequest.Mode / telemetry.TraceResult.Mode). ICMP and
-// TCP are executed independently; there is no automatic fallback between them.
+// Traceroute modes (telemetry.TraceResult.Mode). ICMP and TCP are executed
+// independently; there is no automatic fallback between them at execution time.
+// The mode is no longer part of a pushed request — the agent picks it from the
+// probe kind that failed — but the vocabulary stays here because it is shared
+// with the stored report and the console.
 const (
 	TraceModeICMP = "icmp"
 	TraceModeTCP  = "tcp"
 )
-
-// TraceRequest is a one-shot server->agent ask to run a single incident
-// traceroute (DIAG-001), pushed as a standalone frame. The detecting agent runs
-// exactly one trace per request and answers once with a telemetry.TraceResult
-// carrying the same ReportID. BudgetMs is the only validity window: exhausted,
-// the agent must not start, and a running trace is bounded by TotalTimeoutMs.
-// The mode is fixed by the request — the agent never falls back to the other mode.
-type TraceRequest struct {
-	ReportID            string `json:"report_id"`             // stable shared report/request id all referencing incidents read through
-	Mode                string `json:"mode"`                  // TraceModeICMP | TraceModeTCP
-	DestinationHost     string `json:"destination_host"`      // host or IP to trace toward
-	TCPPort             int    `json:"tcp_port,omitempty"`    // required for Mode == TraceModeTCP
-	MaxHops             int    `json:"max_hops"`              // TTL ceiling
-	AttemptsPerHop      int    `json:"attempts_per_hop"`      // probes sent per TTL
-	TotalTimeoutMs      int    `json:"total_timeout_ms"`      // overall wall-clock budget for the whole trace
-	ResolveHopHostnames bool   `json:"resolve_hop_hostnames"` // reverse-DNS each responder (default off)
-	BudgetMs            int    `json:"budget_ms"`             // request validity window measured from arrival on the agent's own clock (see BudgetWindow)
-
-	// EgressProxyID pins this trace INSIDE one WireGuard tunnel: probes are sent
-	// in-tunnel toward DestinationHost (DIAG-004). Empty means a host-stack
-	// trace. EgressConfigSerial pins the exact config generation the diagnosed
-	// fault was observed on; the agent must match BOTH against its live proxy
-	// entries and fail closed on any mismatch (egress_generation_mismatch /
-	// egress_not_available) — never trace over a newer generation or the direct
-	// path, which would describe a route the fault never took. TraceRequest is a
-	// standalone frame, so this reference is danglable by construction; that is
-	// why the failure is a reportable terminal result, not a fallback.
-	EgressProxyID      string `json:"egress_proxy_id,omitempty"`
-	EgressConfigSerial int    `json:"egress_config_serial,omitempty"`
-}
 
 // BudgetWindow converts a request's receipt-relative budget in milliseconds into
 // an absolute deadline on the receiving agent's own clock, anchored at the

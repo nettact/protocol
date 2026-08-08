@@ -127,6 +127,12 @@ func packetToProto(p telemetry.Packet) *pb.Packet {
 			out.GameHostSeconds[i] = gameHostSecondToProto(h)
 		}
 	}
+	if len(p.TraceResults) > 0 {
+		out.TraceResults = make([]*pb.TraceResult, len(p.TraceResults))
+		for i, t := range p.TraceResults {
+			out.TraceResults[i] = traceResultToProto(t)
+		}
+	}
 	return out
 }
 
@@ -188,6 +194,12 @@ func packetFromProto(p *pb.Packet) telemetry.Packet {
 		out.GameHostSeconds = make([]gamesense.HostSecond, len(p.GameHostSeconds))
 		for i, h := range p.GameHostSeconds {
 			out.GameHostSeconds[i] = gameHostSecondFromProto(h)
+		}
+	}
+	if len(p.TraceResults) > 0 {
+		out.TraceResults = make([]telemetry.TraceResult, len(p.TraceResults))
+		for i, t := range p.TraceResults {
+			out.TraceResults[i] = traceResultFromProto(t)
 		}
 	}
 	return out
@@ -911,7 +923,41 @@ func desiredStateToProto(d config.DesiredState) *pb.DesiredState {
 	if d.Game != nil {
 		out.Game = gameConfigToProto(*d.Game)
 	}
+	if d.Diag != nil {
+		out.Diag = diagPolicyToProto(*d.Diag)
+	}
 	return out
+}
+
+// diagPolicyToProto mirrors the path-diagnostic policy block. Presence carries
+// meaning here as it does for the game block: an absent block is a server with
+// nothing to say, which leaves the agent's built-in defaults standing, while a
+// present one with Enabled=false is an explicit "do not trace".
+func diagPolicyToProto(d config.DiagPolicy) *pb.DiagPolicy {
+	return &pb.DiagPolicy{
+		Enabled:             d.Enabled,
+		ConsecutiveFailures: int32(d.ConsecutiveFailures),
+		CooldownSeconds:     int32(d.CooldownSeconds),
+		MaxHops:             int32(d.MaxHops),
+		Attempts:            int32(d.Attempts),
+		PerHopTimeoutMs:     int32(d.PerHopTimeoutMs),
+		BudgetMs:            int32(d.BudgetMs),
+	}
+}
+
+func diagPolicyFromProto(d *pb.DiagPolicy) config.DiagPolicy {
+	if d == nil {
+		return config.DiagPolicy{}
+	}
+	return config.DiagPolicy{
+		Enabled:             d.Enabled,
+		ConsecutiveFailures: int(d.ConsecutiveFailures),
+		CooldownSeconds:     int(d.CooldownSeconds),
+		MaxHops:             int(d.MaxHops),
+		Attempts:            int(d.Attempts),
+		PerHopTimeoutMs:     int(d.PerHopTimeoutMs),
+		BudgetMs:            int(d.BudgetMs),
+	}
 }
 
 // gameConfigToProto mirrors the game block. Presence carries the meaning at this
@@ -1069,6 +1115,10 @@ func desiredStateFromProto(d *pb.DesiredState) config.DesiredState {
 		g := gameConfigFromProto(d.Game)
 		out.Game = &g
 	}
+	if d.Diag != nil {
+		dp := diagPolicyFromProto(d.Diag)
+		out.Diag = &dp
+	}
 	return out
 }
 
@@ -1091,7 +1141,7 @@ func snapshotRequestFromProto(r *pb.SnapshotRequest) config.SnapshotRequest {
 	}
 }
 
-// ---- IncidentSnapshotRequest / TraceRequest (server->agent push frames) ----
+// ---- IncidentSnapshotRequest (server->agent push frame) ----
 
 func incidentSnapshotRequestToProto(r config.IncidentSnapshotRequest) *pb.IncidentSnapshotRequest {
 	out := &pb.IncidentSnapshotRequest{
@@ -1136,41 +1186,6 @@ func incidentSnapshotRequestFromProto(r *pb.IncidentSnapshotRequest) config.Inci
 		}
 	}
 	return out
-}
-
-func traceRequestToProto(r config.TraceRequest) *pb.TraceRequest {
-	return &pb.TraceRequest{
-		ReportId:            r.ReportID,
-		Mode:                r.Mode,
-		DestinationHost:     r.DestinationHost,
-		TcpPort:             int32(r.TCPPort),
-		MaxHops:             int32(r.MaxHops),
-		AttemptsPerHop:      int32(r.AttemptsPerHop),
-		TotalTimeoutMs:      int32(r.TotalTimeoutMs),
-		ResolveHopHostnames: r.ResolveHopHostnames,
-		BudgetMs:            int32(r.BudgetMs),
-		EgressProxyId:       r.EgressProxyID,
-		EgressConfigSerial:  int32(r.EgressConfigSerial),
-	}
-}
-
-func traceRequestFromProto(r *pb.TraceRequest) config.TraceRequest {
-	if r == nil {
-		return config.TraceRequest{}
-	}
-	return config.TraceRequest{
-		ReportID:            r.ReportId,
-		Mode:                r.Mode,
-		DestinationHost:     r.DestinationHost,
-		TCPPort:             int(r.TcpPort),
-		MaxHops:             int(r.MaxHops),
-		AttemptsPerHop:      int(r.AttemptsPerHop),
-		TotalTimeoutMs:      int(r.TotalTimeoutMs),
-		ResolveHopHostnames: r.ResolveHopHostnames,
-		BudgetMs:            int(r.BudgetMs),
-		EgressProxyID:       r.EgressProxyId,
-		EgressConfigSerial:  int(r.EgressConfigSerial),
-	}
 }
 
 // ---- IncidentSnapshot (agent->server result) ----
@@ -1348,7 +1363,7 @@ func snapshotResourcesFromProto(r *pb.SnapshotResources) *telemetry.SnapshotReso
 	}
 }
 
-// ---- TraceResult (agent->server result) ----
+// ---- TraceResult (agent->server, carried inside Packet) ----
 
 func traceResultToProto(r telemetry.TraceResult) *pb.TraceResult {
 	out := &pb.TraceResult{
@@ -1365,6 +1380,22 @@ func traceResultToProto(r telemetry.TraceResult) *pb.TraceResult {
 		PathScope:          r.PathScope,
 		EgressProxyId:      r.EgressProxyID,
 		EgressConfigSerial: int32(r.EgressConfigSerial),
+
+		DestKey:       r.DestKey,
+		DestHost:      r.DestHost,
+		Port:          int32(r.Port),
+		SubjectKind:   r.SubjectKind,
+		SubjectReason: r.SubjectReason,
+
+		FallbackFrom:   r.FallbackFrom,
+		FallbackReason: r.FallbackReason,
+
+		TriggerReason: r.TriggerReason,
+		TriggerStreak: int32(r.TriggerStreak),
+		FirstFailedAt: tsToProto(r.FirstFailedAt),
+
+		MaxHops:        int32(r.MaxHops),
+		AttemptsPerHop: int32(r.AttemptsPerHop),
 	}
 	if len(r.Hops) > 0 {
 		out.Hops = make([]*pb.TraceHop, len(r.Hops))
@@ -1405,6 +1436,22 @@ func traceResultFromProto(r *pb.TraceResult) telemetry.TraceResult {
 		PathScope:          r.PathScope,
 		EgressProxyID:      r.EgressProxyId,
 		EgressConfigSerial: int(r.EgressConfigSerial),
+
+		DestKey:       r.DestKey,
+		DestHost:      r.DestHost,
+		Port:          int(r.Port),
+		SubjectKind:   r.SubjectKind,
+		SubjectReason: r.SubjectReason,
+
+		FallbackFrom:   r.FallbackFrom,
+		FallbackReason: r.FallbackReason,
+
+		TriggerReason: r.TriggerReason,
+		TriggerStreak: int(r.TriggerStreak),
+		FirstFailedAt: tsFromProto(r.FirstFailedAt),
+
+		MaxHops:        int(r.MaxHops),
+		AttemptsPerHop: int(r.AttemptsPerHop),
 	}
 	if len(r.Hops) > 0 {
 		out.Hops = make([]telemetry.TraceHop, len(r.Hops))
@@ -1469,8 +1516,6 @@ func frameToProto(f Frame) *pb.Frame {
 		out.Msg = &pb.Frame_MonitorStatus{MonitorStatus: monitorStatusToProto(*f.MonitorStatus)}
 	case f.IncidentSnapshot != nil:
 		out.Msg = &pb.Frame_IncidentSnapshot{IncidentSnapshot: incidentSnapshotToProto(*f.IncidentSnapshot)}
-	case f.TraceResult != nil:
-		out.Msg = &pb.Frame_TraceResult{TraceResult: traceResultToProto(*f.TraceResult)}
 	case f.Ack != nil:
 		out.Msg = &pb.Frame_Ack{Ack: ackToProto(*f.Ack)}
 	case f.DesiredState != nil:
@@ -1479,8 +1524,6 @@ func frameToProto(f Frame) *pb.Frame {
 		out.Msg = &pb.Frame_SnapshotRequest{SnapshotRequest: snapshotRequestToProto(*f.SnapshotRequest)}
 	case f.IncidentSnapshotRequest != nil:
 		out.Msg = &pb.Frame_IncidentSnapshotRequest{IncidentSnapshotRequest: incidentSnapshotRequestToProto(*f.IncidentSnapshotRequest)}
-	case f.TraceRequest != nil:
-		out.Msg = &pb.Frame_TraceRequest{TraceRequest: traceRequestToProto(*f.TraceRequest)}
 	}
 	return out
 }
@@ -1506,9 +1549,6 @@ func frameFromProto(f *pb.Frame) Frame {
 	case *pb.Frame_IncidentSnapshot:
 		is := incidentSnapshotFromProto(m.IncidentSnapshot)
 		out.IncidentSnapshot = &is
-	case *pb.Frame_TraceResult:
-		tr := traceResultFromProto(m.TraceResult)
-		out.TraceResult = &tr
 	case *pb.Frame_Ack:
 		a := ackFromProto(m.Ack)
 		out.Ack = &a
@@ -1521,9 +1561,6 @@ func frameFromProto(f *pb.Frame) Frame {
 	case *pb.Frame_IncidentSnapshotRequest:
 		isr := incidentSnapshotRequestFromProto(m.IncidentSnapshotRequest)
 		out.IncidentSnapshotRequest = &isr
-	case *pb.Frame_TraceRequest:
-		trq := traceRequestFromProto(m.TraceRequest)
-		out.TraceRequest = &trq
 	}
 	return out
 }
