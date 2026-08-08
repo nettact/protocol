@@ -942,6 +942,7 @@ func diagPolicyToProto(d config.DiagPolicy) *pb.DiagPolicy {
 		Attempts:            int32(d.Attempts),
 		PerHopTimeoutMs:     int32(d.PerHopTimeoutMs),
 		BudgetMs:            int32(d.BudgetMs),
+		Serial:              d.Serial,
 	}
 }
 
@@ -957,6 +958,7 @@ func diagPolicyFromProto(d *pb.DiagPolicy) config.DiagPolicy {
 		Attempts:            int(d.Attempts),
 		PerHopTimeoutMs:     int(d.PerHopTimeoutMs),
 		BudgetMs:            int(d.BudgetMs),
+		Serial:              d.Serial,
 	}
 }
 

@@ -351,6 +351,7 @@ func sampleDesiredState() config.DesiredState {
 		Diag: &config.DiagPolicy{
 			Enabled: true, ConsecutiveFailures: 3, CooldownSeconds: 900,
 			MaxHops: 30, Attempts: 3, PerHopTimeoutMs: 1500, BudgetMs: 300000,
+			Serial: 7,
 		},
 	}
 }

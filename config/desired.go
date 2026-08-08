@@ -52,6 +52,15 @@ type DesiredState struct {
 type DiagPolicy struct {
 	Enabled             bool `json:"enabled"`
 	ConsecutiveFailures int  `json:"consecutive_failures,omitempty"`
+	// Serial orders policy updates, mirroring what ConfigVersion does for the
+	// probe half and GameConfig.Version for the game half. The server bumps it
+	// on every diag_* settings change; the agent applies a policy only when the
+	// serial is newer than what it holds. It is its own axis because the other
+	// two serials do not move when only the diagnostic numbers change, and
+	// DesiredState builds can be delivered out of build order — unversioned,
+	// a stale enabled=true arriving last would keep tracing after the operator
+	// turned diagnostics off.
+	Serial uint64 `json:"serial,omitempty"`
 	// CooldownSeconds is the minimum spacing between two traces of the SAME
 	// destination on this agent. Without it a target that stays down would be
 	// traced on every subsequent failing round, spending the machine's probe

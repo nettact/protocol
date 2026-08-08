@@ -566,6 +566,12 @@ message DiagPolicy {
   int32 attempts = 5;
   int32 per_hop_timeout_ms = 6;
   int32 budget_ms = 7;
+  // serial orders policy updates on their own axis, like ConfigVersion for the
+  // probe half and GameConfig.version for the game half. DesiredState builds
+  // and deliveries can cross, and this block has no natural serial of its own —
+  // without one, an older enabled=true can land last and keep tracing after the
+  // operator switched diagnostics off.
+  uint64 serial = 8;
 }
 
 // GameConfig mirrors config.GameConfig — the site's game-capture configuration.

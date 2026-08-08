@@ -3322,8 +3322,14 @@ type DiagPolicy struct {
 	Attempts            int32                  `protobuf:"varint,5,opt,name=attempts,proto3" json:"attempts,omitempty"`
 	PerHopTimeoutMs     int32                  `protobuf:"varint,6,opt,name=per_hop_timeout_ms,json=perHopTimeoutMs,proto3" json:"per_hop_timeout_ms,omitempty"`
 	BudgetMs            int32                  `protobuf:"varint,7,opt,name=budget_ms,json=budgetMs,proto3" json:"budget_ms,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// serial orders policy updates on their own axis, like ConfigVersion for the
+	// probe half and GameConfig.version for the game half. DesiredState builds
+	// and deliveries can cross, and this block has no natural serial of its own —
+	// without one, an older enabled=true can land last and keep tracing after the
+	// operator switched diagnostics off.
+	Serial        uint64 `protobuf:"varint,8,opt,name=serial,proto3" json:"serial,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DiagPolicy) Reset() {
@@ -3401,6 +3407,13 @@ func (x *DiagPolicy) GetPerHopTimeoutMs() int32 {
 func (x *DiagPolicy) GetBudgetMs() int32 {
 	if x != nil {
 		return x.BudgetMs
+	}
+	return 0
+}
+
+func (x *DiagPolicy) GetSerial() uint64 {
+	if x != nil {
+		return x.Serial
 	}
 	return 0
 }
@@ -5617,7 +5630,7 @@ const file_telemetry_proto_rawDesc = "" +
 	"\tintervals\x18\x03 \x01(\v2\x1a.nettact.wire.v1.IntervalsR\tintervals\x124\n" +
 	"\aproxies\x18\x05 \x03(\v2\x1a.nettact.wire.v1.ProxySpecR\aproxies\x12/\n" +
 	"\x04game\x18\x06 \x01(\v2\x1b.nettact.wire.v1.GameConfigR\x04game\x12/\n" +
-	"\x04diag\x18\a \x01(\v2\x1b.nettact.wire.v1.DiagPolicyR\x04diagJ\x04\b\x04\x10\x05R\x10snapshot_request\"\x85\x02\n" +
+	"\x04diag\x18\a \x01(\v2\x1b.nettact.wire.v1.DiagPolicyR\x04diagJ\x04\b\x04\x10\x05R\x10snapshot_request\"\x9d\x02\n" +
 	"\n" +
 	"DiagPolicy\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x121\n" +
@@ -5626,7 +5639,8 @@ const file_telemetry_proto_rawDesc = "" +
 	"\bmax_hops\x18\x04 \x01(\x05R\amaxHops\x12\x1a\n" +
 	"\battempts\x18\x05 \x01(\x05R\battempts\x12+\n" +
 	"\x12per_hop_timeout_ms\x18\x06 \x01(\x05R\x0fperHopTimeoutMs\x12\x1b\n" +
-	"\tbudget_ms\x18\a \x01(\x05R\bbudgetMs\"\x8b\x01\n" +
+	"\tbudget_ms\x18\a \x01(\x05R\bbudgetMs\x12\x16\n" +
+	"\x06serial\x18\b \x01(\x04R\x06serial\"\x8b\x01\n" +
 	"\n" +
 	"GameConfig\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\x05R\aversion\x12)\n" +
