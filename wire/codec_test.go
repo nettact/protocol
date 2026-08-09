@@ -17,12 +17,11 @@ import (
 func samplePacket() telemetry.Packet {
 	ts := time.Date(2026, 7, 11, 12, 30, 45, 0, time.UTC)
 	return telemetry.Packet{
-		SchemaVersion:         1,
-		AgentID:               "agent-abc",
-		SiteID:                "site-1",
-		Sequence:              9001,
-		SentAt:                ts,
-		ReportedConfigVersion: 7,
+		SchemaVersion: 1,
+		AgentID:       "agent-abc",
+		SiteID:        "site-1",
+		Sequence:      9001,
+		SentAt:        ts,
 		Metrics: []telemetry.Metric{
 			// One monitor-stamped probe metric and one id-less system metric, so the
 			// round-trip covers both monitor_id shapes.
@@ -670,7 +669,6 @@ func TestFrameRoundTrip(t *testing.T) {
 			Source:     "environment",
 			PolicyHash: "abc123",
 		},
-		ReportedConfigVersion: 7,
 	}
 	ms := MonitorStatus{
 		ConfigVersion: 8, PolicyHash: "abc123", UploadIntervalSeconds: 5,
@@ -763,7 +761,6 @@ func TestHelloUnsupportedReasons(t *testing.T) {
 				PolicyHash:         "abc123",
 				UnsupportedReasons: tc.in,
 			},
-			ReportedConfigVersion: 7,
 		}
 		for _, ct := range []string{ContentTypeJSON, ContentTypeProtobuf} {
 			data, err := MarshalFrame(Frame{Hello: &hello}, ct)

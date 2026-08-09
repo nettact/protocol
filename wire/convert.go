@@ -72,12 +72,11 @@ func intPtrFromProto(v *int32) *int {
 
 func packetToProto(p telemetry.Packet) *pb.Packet {
 	out := &pb.Packet{
-		SchemaVersion:         int32(p.SchemaVersion),
-		AgentId:               p.AgentID,
-		SiteId:                p.SiteID,
-		Sequence:              p.Sequence,
-		SentAt:                tsToProto(p.SentAt),
-		ReportedConfigVersion: int32(p.ReportedConfigVersion),
+		SchemaVersion: int32(p.SchemaVersion),
+		AgentId:       p.AgentID,
+		SiteId:        p.SiteID,
+		Sequence:      p.Sequence,
+		SentAt:        tsToProto(p.SentAt),
 	}
 	if len(p.Metrics) > 0 {
 		out.Metrics = make([]*pb.Metric, len(p.Metrics))
@@ -141,12 +140,11 @@ func packetFromProto(p *pb.Packet) telemetry.Packet {
 		return telemetry.Packet{}
 	}
 	out := telemetry.Packet{
-		SchemaVersion:         int(p.SchemaVersion),
-		AgentID:               p.AgentId,
-		SiteID:                p.SiteId,
-		Sequence:              p.Sequence,
-		SentAt:                tsFromProto(p.SentAt),
-		ReportedConfigVersion: int(p.ReportedConfigVersion),
+		SchemaVersion: int(p.SchemaVersion),
+		AgentID:       p.AgentId,
+		SiteID:        p.SiteId,
+		Sequence:      p.Sequence,
+		SentAt:        tsFromProto(p.SentAt),
 	}
 	if len(p.Metrics) > 0 {
 		out.Metrics = make([]telemetry.Metric, len(p.Metrics))
@@ -1480,12 +1478,11 @@ func traceResultFromProto(r *pb.TraceResult) telemetry.TraceResult {
 
 func helloToProto(h Hello) *pb.Hello {
 	return &pb.Hello{
-		SchemaVersion:         int32(h.SchemaVersion),
-		Hostname:              h.Hostname,
-		Platform:              h.Platform,
-		AgentVersion:          h.AgentVersion,
-		ReportedConfigVersion: int32(h.ReportedConfigVersion),
-		Permissions:           permissionReportToProto(h.Permissions),
+		SchemaVersion: int32(h.SchemaVersion),
+		Hostname:      h.Hostname,
+		Platform:      h.Platform,
+		AgentVersion:  h.AgentVersion,
+		Permissions:   permissionReportToProto(h.Permissions),
 	}
 }
 
@@ -1494,12 +1491,11 @@ func helloFromProto(h *pb.Hello) Hello {
 		return Hello{}
 	}
 	return Hello{
-		SchemaVersion:         int(h.SchemaVersion),
-		Hostname:              h.Hostname,
-		Platform:              h.Platform,
-		AgentVersion:          h.AgentVersion,
-		ReportedConfigVersion: int(h.ReportedConfigVersion),
-		Permissions:           permissionReportFromProto(h.Permissions),
+		SchemaVersion: int(h.SchemaVersion),
+		Hostname:      h.Hostname,
+		Platform:      h.Platform,
+		AgentVersion:  h.AgentVersion,
+		Permissions:   permissionReportFromProto(h.Permissions),
 	}
 }
 

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func helloFrame(v int) Frame    { return Frame{Hello: &Hello{ReportedConfigVersion: v}} }
+func helloFrame(v int) Frame    { return Frame{Hello: &Hello{SchemaVersion: v}} }
 func ackFrame(seq uint64) Frame { return Frame{Ack: &Ack{HighestSequence: seq}} }
 
 // TestPipeFIFOBothDirections verifies frames flow both ways in order.
@@ -26,7 +26,7 @@ func TestPipeFIFOBothDirections(t *testing.T) {
 		if err != nil {
 			t.Fatalf("b read %d: %v", i, err)
 		}
-		if f.Hello == nil || f.Hello.ReportedConfigVersion != i {
+		if f.Hello == nil || f.Hello.SchemaVersion != i {
 			t.Fatalf("b read %d: got %+v", i, f)
 		}
 	}

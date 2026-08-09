@@ -7,8 +7,8 @@ package config
 import "time"
 
 // DesiredState is the monitoring configuration for one agent. The agent applies
-// it and echoes ConfigVersion back in reported_config_version so the server can
-// tell when it is up to date.
+// it and echoes ConfigVersion back in every MonitorStatus frame, which is how
+// the server tells when the agent is up to date.
 type DesiredState struct {
 	ConfigVersion int           `json:"config_version"`
 	ProbeTargets  []ProbeTarget `json:"probe_targets"`

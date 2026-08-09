@@ -40,7 +40,16 @@ import "fmt"
 // push commands nothing listens for and would drop the results arriving inside
 // packets it otherwise parses perfectly — a mismatch whose only symptom is a
 // diagnostic feature that silently never produces anything.
-const SchemaVersion = 5
+//
+// 6 removed reported_config_version from Hello and Packet (Hello field 6,
+// Packet field 9 — both reserved, never to be reused). The server stored it and
+// nothing ever read it back; the live "what config has the agent applied"
+// signal is the MonitorStatus frame's config-version echo. The removal is what
+// makes it breaking: a 5 agent still stamps the field on every packet and a 6
+// server has no slot for it — protobuf would skip it silently, but the JSON
+// codec's strict decode would not, and a silent skip is exactly the ambiguity
+// an exact-match handshake exists to refuse.
+const SchemaVersion = 6
 
 // ValidateSchema reports whether v is a schema version this build understands.
 // The server calls this at ingress, and the agent on the reply, so a mismatched

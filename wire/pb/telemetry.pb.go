@@ -40,15 +40,14 @@ const (
 // Field 5 (capabilities) was removed when the flat capability list became the
 // three-view PermissionReport and is reserved.
 type Hello struct {
-	state                 protoimpl.MessageState `protogen:"open.v1"`
-	SchemaVersion         int32                  `protobuf:"varint,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
-	Hostname              string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	Platform              string                 `protobuf:"bytes,3,opt,name=platform,proto3" json:"platform,omitempty"`
-	AgentVersion          string                 `protobuf:"bytes,4,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
-	ReportedConfigVersion int32                  `protobuf:"varint,6,opt,name=reported_config_version,json=reportedConfigVersion,proto3" json:"reported_config_version,omitempty"`
-	Permissions           *PermissionReport      `protobuf:"bytes,7,opt,name=permissions,proto3" json:"permissions,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SchemaVersion int32                  `protobuf:"varint,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
+	Hostname      string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	Platform      string                 `protobuf:"bytes,3,opt,name=platform,proto3" json:"platform,omitempty"`
+	AgentVersion  string                 `protobuf:"bytes,4,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
+	Permissions   *PermissionReport      `protobuf:"bytes,7,opt,name=permissions,proto3" json:"permissions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Hello) Reset() {
@@ -107,13 +106,6 @@ func (x *Hello) GetAgentVersion() string {
 		return x.AgentVersion
 	}
 	return ""
-}
-
-func (x *Hello) GetReportedConfigVersion() int32 {
-	if x != nil {
-		return x.ReportedConfigVersion
-	}
-	return 0
 }
 
 func (x *Hello) GetPermissions() *PermissionReport {
@@ -604,21 +596,20 @@ func (*Frame_IncidentSnapshotRequest) isFrame_Msg() {}
 // (host_snapshot) was removed when HostSnapshot became its own Frame variant
 // and is reserved so the number/name can never be silently reused.
 type Packet struct {
-	state                 protoimpl.MessageState `protogen:"open.v1"`
-	SchemaVersion         int32                  `protobuf:"varint,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
-	AgentId               string                 `protobuf:"bytes,2,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
-	SiteId                string                 `protobuf:"bytes,3,opt,name=site_id,json=siteId,proto3" json:"site_id,omitempty"`
-	Sequence              uint64                 `protobuf:"varint,4,opt,name=sequence,proto3" json:"sequence,omitempty"`
-	SentAt                *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=sent_at,json=sentAt,proto3" json:"sent_at,omitempty"`
-	Metrics               []*Metric              `protobuf:"bytes,6,rep,name=metrics,proto3" json:"metrics,omitempty"`
-	Events                []*Event               `protobuf:"bytes,7,rep,name=events,proto3" json:"events,omitempty"`
-	InventoryDelta        []*InventoryItem       `protobuf:"bytes,8,rep,name=inventory_delta,json=inventoryDelta,proto3" json:"inventory_delta,omitempty"`
-	ReportedConfigVersion int32                  `protobuf:"varint,9,opt,name=reported_config_version,json=reportedConfigVersion,proto3" json:"reported_config_version,omitempty"`
-	InterfaceSnapshots    []*InterfaceSnapshot   `protobuf:"bytes,11,rep,name=interface_snapshots,json=interfaceSnapshots,proto3" json:"interface_snapshots,omitempty"`
-	GameRuns              []*GameRun             `protobuf:"bytes,12,rep,name=game_runs,json=gameRuns,proto3" json:"game_runs,omitempty"`
-	GameBuckets           []*GameBucket          `protobuf:"bytes,13,rep,name=game_buckets,json=gameBuckets,proto3" json:"game_buckets,omitempty"`
-	GameGaps              []*GameGap             `protobuf:"bytes,14,rep,name=game_gaps,json=gameGaps,proto3" json:"game_gaps,omitempty"`
-	GameHostSeconds       []*GameHostSecond      `protobuf:"bytes,15,rep,name=game_host_seconds,json=gameHostSeconds,proto3" json:"game_host_seconds,omitempty"`
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	SchemaVersion      int32                  `protobuf:"varint,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
+	AgentId            string                 `protobuf:"bytes,2,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	SiteId             string                 `protobuf:"bytes,3,opt,name=site_id,json=siteId,proto3" json:"site_id,omitempty"`
+	Sequence           uint64                 `protobuf:"varint,4,opt,name=sequence,proto3" json:"sequence,omitempty"`
+	SentAt             *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=sent_at,json=sentAt,proto3" json:"sent_at,omitempty"`
+	Metrics            []*Metric              `protobuf:"bytes,6,rep,name=metrics,proto3" json:"metrics,omitempty"`
+	Events             []*Event               `protobuf:"bytes,7,rep,name=events,proto3" json:"events,omitempty"`
+	InventoryDelta     []*InventoryItem       `protobuf:"bytes,8,rep,name=inventory_delta,json=inventoryDelta,proto3" json:"inventory_delta,omitempty"`
+	InterfaceSnapshots []*InterfaceSnapshot   `protobuf:"bytes,11,rep,name=interface_snapshots,json=interfaceSnapshots,proto3" json:"interface_snapshots,omitempty"`
+	GameRuns           []*GameRun             `protobuf:"bytes,12,rep,name=game_runs,json=gameRuns,proto3" json:"game_runs,omitempty"`
+	GameBuckets        []*GameBucket          `protobuf:"bytes,13,rep,name=game_buckets,json=gameBuckets,proto3" json:"game_buckets,omitempty"`
+	GameGaps           []*GameGap             `protobuf:"bytes,14,rep,name=game_gaps,json=gameGaps,proto3" json:"game_gaps,omitempty"`
+	GameHostSeconds    []*GameHostSecond      `protobuf:"bytes,15,rep,name=game_host_seconds,json=gameHostSeconds,proto3" json:"game_host_seconds,omitempty"`
 	// Traceroutes the agent decided to run on its own. They travel in the outbox
 	// beside the metrics precisely because the fault that triggered them is the
 	// most likely reason the link is down: a result answered on the socket would
@@ -712,13 +703,6 @@ func (x *Packet) GetInventoryDelta() []*InventoryItem {
 		return x.InventoryDelta
 	}
 	return nil
-}
-
-func (x *Packet) GetReportedConfigVersion() int32 {
-	if x != nil {
-		return x.ReportedConfigVersion
-	}
-	return 0
 }
 
 func (x *Packet) GetInterfaceSnapshots() []*InterfaceSnapshot {
@@ -5303,14 +5287,13 @@ var File_telemetry_proto protoreflect.FileDescriptor
 
 const file_telemetry_proto_rawDesc = "" +
 	"\n" +
-	"\x0ftelemetry.proto\x12\x0fnettact.wire.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9c\x02\n" +
+	"\x0ftelemetry.proto\x12\x0fnettact.wire.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x83\x02\n" +
 	"\x05Hello\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\x05R\rschemaVersion\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x1a\n" +
 	"\bplatform\x18\x03 \x01(\tR\bplatform\x12#\n" +
-	"\ragent_version\x18\x04 \x01(\tR\fagentVersion\x126\n" +
-	"\x17reported_config_version\x18\x06 \x01(\x05R\x15reportedConfigVersion\x12C\n" +
-	"\vpermissions\x18\a \x01(\v2!.nettact.wire.v1.PermissionReportR\vpermissionsJ\x04\b\x05\x10\x06R\fcapabilities\"\xd4\x02\n" +
+	"\ragent_version\x18\x04 \x01(\tR\fagentVersion\x12C\n" +
+	"\vpermissions\x18\a \x01(\v2!.nettact.wire.v1.PermissionReportR\vpermissionsJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aR\fcapabilitiesR\x17reported_config_version\"\xd4\x02\n" +
 	"\x10PermissionReport\x12\x1c\n" +
 	"\tsupported\x18\x01 \x03(\tR\tsupported\x12\x18\n" +
 	"\agranted\x18\x02 \x03(\tR\agranted\x12\x1c\n" +
@@ -5350,7 +5333,7 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x10snapshot_request\x18\x06 \x01(\v2 .nettact.wire.v1.SnapshotRequestH\x00R\x0fsnapshotRequest\x12f\n" +
 	"\x19incident_snapshot_request\x18\b \x01(\v2(.nettact.wire.v1.IncidentSnapshotRequestH\x00R\x17incidentSnapshotRequestB\x05\n" +
 	"\x03msgJ\x04\b\t\x10\n" +
-	"J\x04\b\v\x10\fR\rtrace_requestR\ftrace_result\"\xc0\x06\n" +
+	"J\x04\b\v\x10\fR\rtrace_requestR\ftrace_result\"\xa7\x06\n" +
 	"\x06Packet\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\x05R\rschemaVersion\x12\x19\n" +
 	"\bagent_id\x18\x02 \x01(\tR\aagentId\x12\x17\n" +
@@ -5359,15 +5342,15 @@ const file_telemetry_proto_rawDesc = "" +
 	"\asent_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x06sentAt\x121\n" +
 	"\ametrics\x18\x06 \x03(\v2\x17.nettact.wire.v1.MetricR\ametrics\x12.\n" +
 	"\x06events\x18\a \x03(\v2\x16.nettact.wire.v1.EventR\x06events\x12G\n" +
-	"\x0finventory_delta\x18\b \x03(\v2\x1e.nettact.wire.v1.InventoryItemR\x0einventoryDelta\x126\n" +
-	"\x17reported_config_version\x18\t \x01(\x05R\x15reportedConfigVersion\x12S\n" +
+	"\x0finventory_delta\x18\b \x03(\v2\x1e.nettact.wire.v1.InventoryItemR\x0einventoryDelta\x12S\n" +
 	"\x13interface_snapshots\x18\v \x03(\v2\".nettact.wire.v1.InterfaceSnapshotR\x12interfaceSnapshots\x125\n" +
 	"\tgame_runs\x18\f \x03(\v2\x18.nettact.wire.v1.GameRunR\bgameRuns\x12>\n" +
 	"\fgame_buckets\x18\r \x03(\v2\x1b.nettact.wire.v1.GameBucketR\vgameBuckets\x125\n" +
 	"\tgame_gaps\x18\x0e \x03(\v2\x18.nettact.wire.v1.GameGapR\bgameGaps\x12K\n" +
 	"\x11game_host_seconds\x18\x0f \x03(\v2\x1f.nettact.wire.v1.GameHostSecondR\x0fgameHostSeconds\x12A\n" +
 	"\rtrace_results\x18\x10 \x03(\v2\x1c.nettact.wire.v1.TraceResultR\ftraceResultsJ\x04\b\n" +
-	"\x10\vR\rhost_snapshot\"\xdc\x02\n" +
+	"\x10\vJ\x04\b\t\x10\n" +
+	"R\rhost_snapshotR\x17reported_config_version\"\xdc\x02\n" +
 	"\x06Metric\x12*\n" +
 	"\x02ts\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x16\n" +

@@ -12,17 +12,17 @@ import (
 )
 
 // Hello is the first frame an agent sends after the WebSocket upgrade. It
-// replaces the per-request X-Agent-* headers of the old POST transport and
-// carries the config watermark so the server knows what to push on connect.
+// replaces the per-request X-Agent-* headers of the old POST transport.
 // Permissions is the agent's authoritative supported/granted/effective view,
-// refreshed on every (re)connect.
+// refreshed on every (re)connect. (It used to carry a reported config
+// watermark too; the server pushes DesiredState unconditionally on connect, so
+// the watermark informed nothing and was removed in schema 6.)
 type Hello struct {
-	SchemaVersion         int                         `json:"schema_version"`
-	Hostname              string                      `json:"hostname"`
-	Platform              string                      `json:"platform"`
-	AgentVersion          string                      `json:"agent_version"`
-	Permissions           permission.PermissionReport `json:"permissions"`
-	ReportedConfigVersion int                         `json:"reported_config_version"`
+	SchemaVersion int                         `json:"schema_version"`
+	Hostname      string                      `json:"hostname"`
+	Platform      string                      `json:"platform"`
+	AgentVersion  string                      `json:"agent_version"`
+	Permissions   permission.PermissionReport `json:"permissions"`
 }
 
 // MonitorStatus is the agent's full-state report of how it evaluated every

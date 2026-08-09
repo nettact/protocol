@@ -25,11 +25,15 @@ option go_package = "github.com/nettact/protocol/wire/pb;pb";
 message Hello {
   reserved 5;
   reserved "capabilities";
+  // Field 6 (reported_config_version) was removed in schema 6: the server
+  // stored it and nothing read it back — MonitorStatus carries the live
+  // config-version echo. Reserved so the number/name can never be reused.
+  reserved 6;
+  reserved "reported_config_version";
   int32 schema_version = 1;
   string hostname = 2;
   string platform = 3;
   string agent_version = 4;
-  int32 reported_config_version = 6;
   PermissionReport permissions = 7;
 }
 
@@ -113,6 +117,10 @@ message Frame {
 message Packet {
   reserved 10;
   reserved "host_snapshot";
+  // Field 9 (reported_config_version) was removed in schema 6 — see Hello
+  // field 6 for the rationale. Reserved, never to be reused.
+  reserved 9;
+  reserved "reported_config_version";
   int32 schema_version = 1;
   string agent_id = 2;
   string site_id = 3;
@@ -121,7 +129,6 @@ message Packet {
   repeated Metric metrics = 6;
   repeated Event events = 7;
   repeated InventoryItem inventory_delta = 8;
-  int32 reported_config_version = 9;
   repeated InterfaceSnapshot interface_snapshots = 11;
   repeated GameRun game_runs = 12;
   repeated GameBucket game_buckets = 13;
