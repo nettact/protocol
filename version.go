@@ -49,7 +49,17 @@ import "fmt"
 // server has no slot for it — protobuf would skip it silently, but the JSON
 // codec's strict decode would not, and a silent skip is exactly the ambiguity
 // an exact-match handshake exists to refuse.
-const SchemaVersion = 6
+//
+// 7 did to the incident scene what 5 did to traceroute. Two more frame variants
+// went away (incident_snapshot_request, incident_snapshot — Frame fields 8 and
+// 10, reserved), and the scene now rides Packet as a self-describing
+// SceneReport the agent collects on its own fault edges. The pairing has to be
+// refused rather than tolerated in either direction: a 6 server would push
+// scene requests nothing answers and would drop the reports arriving inside
+// packets it otherwise parses, while a 6 agent would answer on a frame the 7
+// server no longer accepts. Either way the symptom is an evidence feature that
+// silently produces nothing, in exactly the outages it exists for.
+const SchemaVersion = 7
 
 // ValidateSchema reports whether v is a schema version this build understands.
 // The server calls this at ingress, and the agent on the reply, so a mismatched

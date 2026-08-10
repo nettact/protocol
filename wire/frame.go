@@ -74,16 +74,14 @@ const (
 // Exactly one field is non-nil; MarshalFrame/UnmarshalFrame enforce this.
 type Frame struct {
 	// agent -> server
-	Hello            *Hello                      `json:"hello,omitempty"`
-	Packet           *telemetry.Packet           `json:"packet,omitempty"`
-	HostSnapshot     *telemetry.HostSnapshot     `json:"host_snapshot,omitempty"`
-	MonitorStatus    *MonitorStatus              `json:"monitor_status,omitempty"`
-	IncidentSnapshot *telemetry.IncidentSnapshot `json:"incident_snapshot,omitempty"`
+	Hello         *Hello                  `json:"hello,omitempty"`
+	Packet        *telemetry.Packet       `json:"packet,omitempty"`
+	HostSnapshot  *telemetry.HostSnapshot `json:"host_snapshot,omitempty"`
+	MonitorStatus *MonitorStatus          `json:"monitor_status,omitempty"`
 	// server -> agent
-	Ack                     *Ack                            `json:"ack,omitempty"`
-	DesiredState            *config.DesiredState            `json:"desired_state,omitempty"`
-	SnapshotRequest         *config.SnapshotRequest         `json:"snapshot_request,omitempty"`
-	IncidentSnapshotRequest *config.IncidentSnapshotRequest `json:"incident_snapshot_request,omitempty"`
+	Ack             *Ack                    `json:"ack,omitempty"`
+	DesiredState    *config.DesiredState    `json:"desired_state,omitempty"`
+	SnapshotRequest *config.SnapshotRequest `json:"snapshot_request,omitempty"`
 }
 
 // ErrFrameVariant reports a frame with zero or more than one payload set.
@@ -94,9 +92,7 @@ func (f Frame) variants() int {
 	n := 0
 	for _, set := range []bool{
 		f.Hello != nil, f.Packet != nil, f.HostSnapshot != nil, f.MonitorStatus != nil,
-		f.IncidentSnapshot != nil,
 		f.Ack != nil, f.DesiredState != nil, f.SnapshotRequest != nil,
-		f.IncidentSnapshotRequest != nil,
 	} {
 		if set {
 			n++

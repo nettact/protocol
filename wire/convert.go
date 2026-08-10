@@ -132,6 +132,12 @@ func packetToProto(p telemetry.Packet) *pb.Packet {
 			out.TraceResults[i] = traceResultToProto(t)
 		}
 	}
+	if len(p.SceneReports) > 0 {
+		out.SceneReports = make([]*pb.SceneReport, len(p.SceneReports))
+		for i, s := range p.SceneReports {
+			out.SceneReports[i] = sceneReportToProto(s)
+		}
+	}
 	return out
 }
 
@@ -198,6 +204,12 @@ func packetFromProto(p *pb.Packet) telemetry.Packet {
 		out.TraceResults = make([]telemetry.TraceResult, len(p.TraceResults))
 		for i, t := range p.TraceResults {
 			out.TraceResults[i] = traceResultFromProto(t)
+		}
+	}
+	if len(p.SceneReports) > 0 {
+		out.SceneReports = make([]telemetry.SceneReport, len(p.SceneReports))
+		for i, s := range p.SceneReports {
+			out.SceneReports[i] = sceneReportFromProto(s)
 		}
 	}
 	return out
@@ -1141,63 +1153,30 @@ func snapshotRequestFromProto(r *pb.SnapshotRequest) config.SnapshotRequest {
 	}
 }
 
-// ---- IncidentSnapshotRequest (server->agent push frame) ----
+// ---- SceneReport (agent-triggered incident scene, rides Packet) ----
 
-func incidentSnapshotRequestToProto(r config.IncidentSnapshotRequest) *pb.IncidentSnapshotRequest {
-	out := &pb.IncidentSnapshotRequest{
-		RequestId:  r.RequestID,
-		IncidentId: r.IncidentID,
-		BudgetMs:   int32(r.BudgetMs),
-	}
-	if len(r.Targets) > 0 {
-		out.Targets = make([]*pb.SnapshotTargetRef, len(r.Targets))
-		for i, t := range r.Targets {
-			out.Targets[i] = &pb.SnapshotTargetRef{
-				MonitorId: t.MonitorID,
-				Kind:      t.Kind,
-				Target:    t.Target,
-				Port:      int32(t.Port),
-				Iface:     t.Iface,
-			}
-		}
-	}
-	return out
-}
-
-func incidentSnapshotRequestFromProto(r *pb.IncidentSnapshotRequest) config.IncidentSnapshotRequest {
-	if r == nil {
-		return config.IncidentSnapshotRequest{}
-	}
-	out := config.IncidentSnapshotRequest{
-		RequestID:  r.RequestId,
-		IncidentID: r.IncidentId,
-		BudgetMs:   int(r.BudgetMs),
-	}
-	if len(r.Targets) > 0 {
-		out.Targets = make([]config.SnapshotTargetRef, len(r.Targets))
-		for i, t := range r.Targets {
-			out.Targets[i] = config.SnapshotTargetRef{
-				MonitorID: t.MonitorId,
-				Kind:      t.Kind,
-				Target:    t.Target,
-				Port:      int(t.Port),
-				Iface:     t.Iface,
-			}
-		}
-	}
-	return out
-}
-
-// ---- IncidentSnapshot (agent->server result) ----
-
-func incidentSnapshotToProto(s telemetry.IncidentSnapshot) *pb.IncidentSnapshot {
-	out := &pb.IncidentSnapshot{
-		RequestId:   s.RequestID,
-		IncidentId:  s.IncidentID,
+func sceneReportToProto(s telemetry.SceneReport) *pb.SceneReport {
+	out := &pb.SceneReport{
+		ReportId:    s.ReportID,
 		CollectedAt: tsToProto(s.CollectedAt),
 		Network:     snapshotNetworkToProto(s.Network),
 		Agent:       snapshotAgentInfoToProto(s.Agent),
 		Resources:   snapshotResourcesToProto(s.Resources),
+	}
+	if len(s.Triggers) > 0 {
+		out.Triggers = make([]*pb.SceneTrigger, len(s.Triggers))
+		for i, t := range s.Triggers {
+			out.Triggers[i] = &pb.SceneTrigger{
+				Kind:           t.Kind,
+				MonitorId:      t.MonitorID,
+				ConfigSerial:   int32(t.ConfigSerial),
+				TriggerStreak:  int32(t.TriggerStreak),
+				FirstFailedAt:  tsToProto(t.FirstFailedAt),
+				DisconnectedAt: tsToProto(t.DisconnectedAt),
+				Reason:         t.Reason,
+				EdgeCount:      int32(t.EdgeCount),
+			}
+		}
 	}
 	if len(s.Groups) > 0 {
 		out.Groups = make([]*pb.SnapshotGroupResult, len(s.Groups))
@@ -1226,17 +1205,31 @@ func incidentSnapshotToProto(s telemetry.IncidentSnapshot) *pb.IncidentSnapshot 
 	return out
 }
 
-func incidentSnapshotFromProto(s *pb.IncidentSnapshot) telemetry.IncidentSnapshot {
+func sceneReportFromProto(s *pb.SceneReport) telemetry.SceneReport {
 	if s == nil {
-		return telemetry.IncidentSnapshot{}
+		return telemetry.SceneReport{}
 	}
-	out := telemetry.IncidentSnapshot{
-		RequestID:   s.RequestId,
-		IncidentID:  s.IncidentId,
+	out := telemetry.SceneReport{
+		ReportID:    s.ReportId,
 		CollectedAt: tsFromProto(s.CollectedAt),
 		Network:     snapshotNetworkFromProto(s.Network),
 		Agent:       snapshotAgentInfoFromProto(s.Agent),
 		Resources:   snapshotResourcesFromProto(s.Resources),
+	}
+	if len(s.Triggers) > 0 {
+		out.Triggers = make([]telemetry.SceneTrigger, len(s.Triggers))
+		for i, t := range s.Triggers {
+			out.Triggers[i] = telemetry.SceneTrigger{
+				Kind:           t.Kind,
+				MonitorID:      t.MonitorId,
+				ConfigSerial:   int(t.ConfigSerial),
+				TriggerStreak:  int(t.TriggerStreak),
+				FirstFailedAt:  tsFromProto(t.FirstFailedAt),
+				DisconnectedAt: tsFromProto(t.DisconnectedAt),
+				Reason:         t.Reason,
+				EdgeCount:      int(t.EdgeCount),
+			}
+		}
 	}
 	if len(s.Groups) > 0 {
 		out.Groups = make([]telemetry.SnapshotGroupResult, len(s.Groups))
@@ -1512,16 +1505,12 @@ func frameToProto(f Frame) *pb.Frame {
 		out.Msg = &pb.Frame_HostSnapshot{HostSnapshot: hostSnapshotToProto(*f.HostSnapshot)}
 	case f.MonitorStatus != nil:
 		out.Msg = &pb.Frame_MonitorStatus{MonitorStatus: monitorStatusToProto(*f.MonitorStatus)}
-	case f.IncidentSnapshot != nil:
-		out.Msg = &pb.Frame_IncidentSnapshot{IncidentSnapshot: incidentSnapshotToProto(*f.IncidentSnapshot)}
 	case f.Ack != nil:
 		out.Msg = &pb.Frame_Ack{Ack: ackToProto(*f.Ack)}
 	case f.DesiredState != nil:
 		out.Msg = &pb.Frame_DesiredState{DesiredState: desiredStateToProto(*f.DesiredState)}
 	case f.SnapshotRequest != nil:
 		out.Msg = &pb.Frame_SnapshotRequest{SnapshotRequest: snapshotRequestToProto(*f.SnapshotRequest)}
-	case f.IncidentSnapshotRequest != nil:
-		out.Msg = &pb.Frame_IncidentSnapshotRequest{IncidentSnapshotRequest: incidentSnapshotRequestToProto(*f.IncidentSnapshotRequest)}
 	}
 	return out
 }
@@ -1544,9 +1533,6 @@ func frameFromProto(f *pb.Frame) Frame {
 	case *pb.Frame_MonitorStatus:
 		ms := monitorStatusFromProto(m.MonitorStatus)
 		out.MonitorStatus = &ms
-	case *pb.Frame_IncidentSnapshot:
-		is := incidentSnapshotFromProto(m.IncidentSnapshot)
-		out.IncidentSnapshot = &is
 	case *pb.Frame_Ack:
 		a := ackFromProto(m.Ack)
 		out.Ack = &a
@@ -1556,9 +1542,6 @@ func frameFromProto(f *pb.Frame) Frame {
 	case *pb.Frame_SnapshotRequest:
 		sr := snapshotRequestFromProto(m.SnapshotRequest)
 		out.SnapshotRequest = &sr
-	case *pb.Frame_IncidentSnapshotRequest:
-		isr := incidentSnapshotRequestFromProto(m.IncidentSnapshotRequest)
-		out.IncidentSnapshotRequest = &isr
 	}
 	return out
 }

@@ -2,22 +2,47 @@ package telemetry
 
 import "time"
 
-// IncidentSnapshot is the agent's allowlisted incident-scene evidence for one
-// config.IncidentSnapshotRequest (INCIDENT-002). It is collected once, on
-// demand, and answered back over the WebSocket channel; the server keys it by
-// (RequestID + IncidentID + agent) and treats it as immutable once terminal.
+// SceneReport is the agent's allowlisted evidence about its own surroundings at
+// the moment it decided something was broken (INCIDENT-005). The agent collects
+// it on a fault edge it detected itself and ships it in the WAL; the server
+// claims it afterwards as evidence for whichever incident the trigger identifies.
+//
+// # Why the agent decides, and why that changes what a scene means
+//
+// The server used to command this: an incident opened, the opening transaction
+// froze a target list, and a request went down the socket. That contract cannot
+// survive the fault it exists to explain — the agent most worth asking is the
+// one that just went unreachable, and a command to an offline agent is a no-op.
+// A scene now describes what the AGENT saw when IT detected the fault, which is
+// a different (and earlier) statement than what the server would have asked for
+// when it opened the incident. Nothing server-side can reconstruct it, so the
+// report carries its own reason for existing in Triggers.
 //
 // Collection is allowlisted by construction: the typed field groups below carry
 // only network context, agent identity, a basic resource summary, and target
 // resolution — never process lists, user names, file paths, credentials,
-// request/response headers, or bodies. Each requested group reports its own
-// collected/denied/unsupported/failed outcome in Groups so a partial snapshot
-// completes immediately instead of timing out; a group's typed payload is set
-// only when that group's Status is collected.
-type IncidentSnapshot struct {
-	RequestID   string    `json:"request_id"`   // echoes config.IncidentSnapshotRequest.RequestID
-	IncidentID  string    `json:"incident_id"`  // echoes config.IncidentSnapshotRequest.IncidentID
-	CollectedAt time.Time `json:"collected_at"` // agent clock when collection finished (server compares against its receipt time for clock-skew)
+// request/response headers, or bodies. Each attempted group reports its own
+// collected/denied/unsupported/failed outcome in Groups so a partial scene is
+// still a complete answer; a group's typed payload is set only when that group's
+// Status is collected.
+type SceneReport struct {
+	// ReportID is minted by the agent (a UUID) and is the server's idempotency
+	// key together with the authenticated agent id, exactly as for TraceResult:
+	// a replayed packet carries the same id and is a no-op.
+	ReportID string `json:"report_id"`
+
+	// CollectedAt is the agent clock when collection finished. The server keeps
+	// its own receipt time and reports the difference as clock skew rather than
+	// trusting either one.
+	CollectedAt time.Time `json:"collected_at"`
+
+	// Triggers are the fault edges this scene answers for, at least one. It is a
+	// list and not a single value because collection takes real time and faults
+	// arrive in clusters: an edge crossed while a scene is already being gathered
+	// joins that scene instead of queueing a second copy of the same machine. Each
+	// entry carries enough identity to be claimed on its own, so one scene can be
+	// filed as evidence under several incidents.
+	Triggers []SceneTrigger `json:"triggers"`
 
 	Groups []SnapshotGroupResult `json:"groups"` // one result per attempted field group, always present
 
@@ -27,8 +52,69 @@ type IncidentSnapshot struct {
 	Targets   []SnapshotTargetResult `json:"targets,omitempty"`   // set iff the target-resolution group collected
 }
 
-// Incident snapshot field-group ids (SnapshotGroupResult.Group). Each group is
-// gathered and reported independently.
+// What made an agent collect a scene (SceneTrigger.Kind).
+const (
+	// SceneTriggerProbeFault: a monitored target failed enough consecutive
+	// rounds to cross the agent's local confirmation threshold — the same edge
+	// that fires a traceroute.
+	SceneTriggerProbeFault = "probe_fault"
+	// SceneTriggerServerDisconnect: the agent's session to THIS server ended and
+	// it is about to retry. No probe streak accompanies it — an agent-connectivity
+	// fault is detected server-side, by a sweeper noticing the agent is gone, and
+	// crosses no local probe edge at all. Without this trigger a connectivity
+	// incident would have no scene to claim, which is the case that most needs one.
+	SceneTriggerServerDisconnect = "server_disconnect"
+)
+
+// SceneTrigger is one fault edge that caused (or joined) a scene collection. It
+// is the claim key: the server matches it against its own confirmed fault
+// signals to decide which incident the scene is evidence for.
+//
+// # Why the identity is (MonitorID, ConfigSerial) and not a time window
+//
+// A window alone cannot say which of two targets failing in the same minute a
+// scene belongs to, and it cannot tell a scene collected under the target's old
+// definition from one collected after an edit. The monitor id answers the first
+// and the material generation answers the second — the same serial that already
+// participates in metric series identity, so stale-generation evidence cannot
+// surface under a target it never described.
+type SceneTrigger struct {
+	Kind string `json:"kind"` // SceneTrigger* — which of the two edges below is filled in
+
+	// ---- probe_fault ----
+
+	// MonitorID is the failing monitor (probe_tasks.id) and ConfigSerial the
+	// material generation of the target as the agent had it when the streak
+	// confirmed. Together they are the claim key.
+	MonitorID    string `json:"monitor_id,omitempty"`
+	ConfigSerial int    `json:"config_serial,omitempty"`
+
+	// TriggerStreak is how many consecutive failing rounds it took and
+	// FirstFailedAt when that streak began. FirstFailedAt is also the ordering
+	// gate on the claim: a scene from a streak that started before the incident's
+	// own observation window describes an earlier fault, not this one.
+	TriggerStreak int       `json:"trigger_streak,omitempty"`
+	FirstFailedAt time.Time `json:"first_failed_at,omitempty"`
+
+	// ---- server_disconnect ----
+
+	// DisconnectedAt is the agent clock when the session ended and Reason the
+	// agent's stable classification of what ended it (dns/refused/timeout/tls/
+	// network/ack_timeout). The pair is the connectivity claim key together with
+	// the agent id: the server's agent-connectivity signal is per-agent and
+	// carries no target, so no further discriminator is needed.
+	DisconnectedAt time.Time `json:"disconnected_at,omitempty"`
+	Reason         string    `json:"reason,omitempty"`
+
+	// EdgeCount is how many disconnect edges this one entry stands for, always at
+	// least 1. A flapping link produces edges faster than a scene is worth
+	// collecting, so they merge into one trigger rather than one scene each — and
+	// the count is what keeps the merge from reading as a single clean drop.
+	EdgeCount int `json:"edge_count,omitempty"`
+}
+
+// Scene field-group ids (SnapshotGroupResult.Group). Each group is gathered and
+// reported independently.
 const (
 	SnapshotGroupNetwork   = "network"   // interfaces/addresses, default route, DNS servers
 	SnapshotGroupAgent     = "agent"     // agent identity/version

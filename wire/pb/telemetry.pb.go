@@ -390,12 +390,19 @@ func (x *MonitorStatusEntry) GetTargetConfigSerial() int32 {
 
 // Frame is the envelope for every message on the agent <-> server WebSocket.
 // Exactly one field is set.
+//
 // 9 (trace_request) and 11 (trace_result) held the server->agent traceroute
 // command and its direct answer. Traceroute is now triggered by the agent itself
 // and its result rides the WAL inside Packet, so both numbers are reserved: an
 // instant command frame and a durable payload are opposite delivery contracts,
 // and a number that once meant "run this trace now" must never come back meaning
 // anything else.
+//
+// 8 (incident_snapshot_request) and 10 (incident_snapshot) went the same way for
+// the same reason, one release later: the agent that most needs to describe a
+// fault is the one that just became unreachable, so commanding a scene down the
+// socket only worked for the faults it was least needed for. Scenes are now
+// triggered by the agent and ride Packet as SceneReport.
 type Frame struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Msg:
@@ -404,11 +411,9 @@ type Frame struct {
 	//	*Frame_Packet
 	//	*Frame_HostSnapshot
 	//	*Frame_MonitorStatus
-	//	*Frame_IncidentSnapshot
 	//	*Frame_Ack
 	//	*Frame_DesiredState
 	//	*Frame_SnapshotRequest
-	//	*Frame_IncidentSnapshotRequest
 	Msg           isFrame_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -487,15 +492,6 @@ func (x *Frame) GetMonitorStatus() *MonitorStatus {
 	return nil
 }
 
-func (x *Frame) GetIncidentSnapshot() *IncidentSnapshot {
-	if x != nil {
-		if x, ok := x.Msg.(*Frame_IncidentSnapshot); ok {
-			return x.IncidentSnapshot
-		}
-	}
-	return nil
-}
-
 func (x *Frame) GetAck() *TelemetryAck {
 	if x != nil {
 		if x, ok := x.Msg.(*Frame_Ack); ok {
@@ -523,15 +519,6 @@ func (x *Frame) GetSnapshotRequest() *SnapshotRequest {
 	return nil
 }
 
-func (x *Frame) GetIncidentSnapshotRequest() *IncidentSnapshotRequest {
-	if x != nil {
-		if x, ok := x.Msg.(*Frame_IncidentSnapshotRequest); ok {
-			return x.IncidentSnapshotRequest
-		}
-	}
-	return nil
-}
-
 type isFrame_Msg interface {
 	isFrame_Msg()
 }
@@ -553,10 +540,6 @@ type Frame_MonitorStatus struct {
 	MonitorStatus *MonitorStatus `protobuf:"bytes,7,opt,name=monitor_status,json=monitorStatus,proto3,oneof"`
 }
 
-type Frame_IncidentSnapshot struct {
-	IncidentSnapshot *IncidentSnapshot `protobuf:"bytes,10,opt,name=incident_snapshot,json=incidentSnapshot,proto3,oneof"`
-}
-
 type Frame_Ack struct {
 	// server -> agent
 	Ack *TelemetryAck `protobuf:"bytes,4,opt,name=ack,proto3,oneof"`
@@ -570,10 +553,6 @@ type Frame_SnapshotRequest struct {
 	SnapshotRequest *SnapshotRequest `protobuf:"bytes,6,opt,name=snapshot_request,json=snapshotRequest,proto3,oneof"`
 }
 
-type Frame_IncidentSnapshotRequest struct {
-	IncidentSnapshotRequest *IncidentSnapshotRequest `protobuf:"bytes,8,opt,name=incident_snapshot_request,json=incidentSnapshotRequest,proto3,oneof"`
-}
-
 func (*Frame_Hello) isFrame_Msg() {}
 
 func (*Frame_Packet) isFrame_Msg() {}
@@ -582,15 +561,11 @@ func (*Frame_HostSnapshot) isFrame_Msg() {}
 
 func (*Frame_MonitorStatus) isFrame_Msg() {}
 
-func (*Frame_IncidentSnapshot) isFrame_Msg() {}
-
 func (*Frame_Ack) isFrame_Msg() {}
 
 func (*Frame_DesiredState) isFrame_Msg() {}
 
 func (*Frame_SnapshotRequest) isFrame_Msg() {}
-
-func (*Frame_IncidentSnapshotRequest) isFrame_Msg() {}
 
 // Packet mirrors telemetry.Packet — one batched, idempotent upload. Field 10
 // (host_snapshot) was removed when HostSnapshot became its own Frame variant
@@ -614,7 +589,12 @@ type Packet struct {
 	// beside the metrics precisely because the fault that triggered them is the
 	// most likely reason the link is down: a result answered on the socket would
 	// be lost exactly when it is worth having.
-	TraceResults  []*TraceResult `protobuf:"bytes,16,rep,name=trace_results,json=traceResults,proto3" json:"trace_results,omitempty"`
+	TraceResults []*TraceResult `protobuf:"bytes,16,rep,name=trace_results,json=traceResults,proto3" json:"trace_results,omitempty"`
+	// Incident scenes the agent collected on a fault edge it detected itself.
+	// Same delivery argument as the traces above, taken further: one of the two
+	// triggers IS the socket going down, so a scene answered on the socket is a
+	// scene that could never have been sent.
+	SceneReports  []*SceneReport `protobuf:"bytes,17,rep,name=scene_reports,json=sceneReports,proto3" json:"scene_reports,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -743,6 +723,13 @@ func (x *Packet) GetGameHostSeconds() []*GameHostSecond {
 func (x *Packet) GetTraceResults() []*TraceResult {
 	if x != nil {
 		return x.TraceResults
+	}
+	return nil
+}
+
+func (x *Packet) GetSceneReports() []*SceneReport {
+	if x != nil {
+		return x.SceneReports
 	}
 	return nil
 }
@@ -4178,169 +4165,19 @@ func (x *Intervals) GetRegularSeconds() int32 {
 	return 0
 }
 
-// IncidentSnapshotRequest mirrors config.IncidentSnapshotRequest — the one-shot
-// server->agent ask for an immutable incident scene snapshot (INCIDENT-002).
-type IncidentSnapshotRequest struct {
-	state      protoimpl.MessageState `protogen:"open.v1"`
-	RequestId  string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	IncidentId string                 `protobuf:"bytes,2,opt,name=incident_id,json=incidentId,proto3" json:"incident_id,omitempty"`
-	Targets    []*SnapshotTargetRef   `protobuf:"bytes,4,rep,name=targets,proto3" json:"targets,omitempty"`
-	// Collection budget measured from arrival on the agent's own clock, never an
-	// absolute timestamp — agent/server clock skew must not shrink the window.
-	BudgetMs      int32 `protobuf:"varint,5,opt,name=budget_ms,json=budgetMs,proto3" json:"budget_ms,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *IncidentSnapshotRequest) Reset() {
-	*x = IncidentSnapshotRequest{}
-	mi := &file_telemetry_proto_msgTypes[45]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *IncidentSnapshotRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*IncidentSnapshotRequest) ProtoMessage() {}
-
-func (x *IncidentSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[45]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use IncidentSnapshotRequest.ProtoReflect.Descriptor instead.
-func (*IncidentSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{45}
-}
-
-func (x *IncidentSnapshotRequest) GetRequestId() string {
-	if x != nil {
-		return x.RequestId
-	}
-	return ""
-}
-
-func (x *IncidentSnapshotRequest) GetIncidentId() string {
-	if x != nil {
-		return x.IncidentId
-	}
-	return ""
-}
-
-func (x *IncidentSnapshotRequest) GetTargets() []*SnapshotTargetRef {
-	if x != nil {
-		return x.Targets
-	}
-	return nil
-}
-
-func (x *IncidentSnapshotRequest) GetBudgetMs() int32 {
-	if x != nil {
-		return x.BudgetMs
-	}
-	return 0
-}
-
-// SnapshotTargetRef mirrors config.SnapshotTargetRef.
-type SnapshotTargetRef struct {
-	state     protoimpl.MessageState `protogen:"open.v1"`
-	MonitorId string                 `protobuf:"bytes,1,opt,name=monitor_id,json=monitorId,proto3" json:"monitor_id,omitempty"`
-	Kind      string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
-	// Literal/host/URL as configured. For kind=gateway this is the
-	// server-normalized sentinel "gateway", not a hostname — the agent resolves
-	// it from its own routing table (see iface), never through DNS.
-	Target string `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	Port   int32  `protobuf:"varint,4,opt,name=port,proto3" json:"port,omitempty"`
-	// kind=gateway only: the NIC to resolve the gateway from (ProbeParams.
-	// interface); empty means the default NIC.
-	Iface         string `protobuf:"bytes,5,opt,name=iface,proto3" json:"iface,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SnapshotTargetRef) Reset() {
-	*x = SnapshotTargetRef{}
-	mi := &file_telemetry_proto_msgTypes[46]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SnapshotTargetRef) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SnapshotTargetRef) ProtoMessage() {}
-
-func (x *SnapshotTargetRef) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[46]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SnapshotTargetRef.ProtoReflect.Descriptor instead.
-func (*SnapshotTargetRef) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{46}
-}
-
-func (x *SnapshotTargetRef) GetMonitorId() string {
-	if x != nil {
-		return x.MonitorId
-	}
-	return ""
-}
-
-func (x *SnapshotTargetRef) GetKind() string {
-	if x != nil {
-		return x.Kind
-	}
-	return ""
-}
-
-func (x *SnapshotTargetRef) GetTarget() string {
-	if x != nil {
-		return x.Target
-	}
-	return ""
-}
-
-func (x *SnapshotTargetRef) GetPort() int32 {
-	if x != nil {
-		return x.Port
-	}
-	return 0
-}
-
-func (x *SnapshotTargetRef) GetIface() string {
-	if x != nil {
-		return x.Iface
-	}
-	return ""
-}
-
-// IncidentSnapshot mirrors telemetry.IncidentSnapshot — the agent's allowlisted
-// incident-scene evidence. Field groups carry only non-sensitive network/agent/
-// resource/target context; typed payloads are set only when their group
-// collected.
-type IncidentSnapshot struct {
+// SceneReport mirrors telemetry.SceneReport — the agent's allowlisted evidence
+// about its own surroundings at the moment it detected a fault. Field groups
+// carry only non-sensitive network/agent/resource/target context; typed payloads
+// are set only when their group collected.
+//
+// It is SELF-DESCRIBING for the same reason TraceResult is: the server issued no
+// request, so it holds no plan to match this answer against. triggers is what
+// makes the report claimable — see SceneTrigger.
+type SceneReport struct {
 	state         protoimpl.MessageState  `protogen:"open.v1"`
-	RequestId     string                  `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	IncidentId    string                  `protobuf:"bytes,2,opt,name=incident_id,json=incidentId,proto3" json:"incident_id,omitempty"`
-	CollectedAt   *timestamppb.Timestamp  `protobuf:"bytes,3,opt,name=collected_at,json=collectedAt,proto3" json:"collected_at,omitempty"`
+	ReportId      string                  `protobuf:"bytes,1,opt,name=report_id,json=reportId,proto3" json:"report_id,omitempty"`
+	CollectedAt   *timestamppb.Timestamp  `protobuf:"bytes,2,opt,name=collected_at,json=collectedAt,proto3" json:"collected_at,omitempty"`
+	Triggers      []*SceneTrigger         `protobuf:"bytes,3,rep,name=triggers,proto3" json:"triggers,omitempty"`
 	Groups        []*SnapshotGroupResult  `protobuf:"bytes,4,rep,name=groups,proto3" json:"groups,omitempty"`
 	Network       *SnapshotNetwork        `protobuf:"bytes,5,opt,name=network,proto3" json:"network,omitempty"`
 	Agent         *SnapshotAgentInfo      `protobuf:"bytes,6,opt,name=agent,proto3" json:"agent,omitempty"`
@@ -4350,21 +4187,21 @@ type IncidentSnapshot struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *IncidentSnapshot) Reset() {
-	*x = IncidentSnapshot{}
-	mi := &file_telemetry_proto_msgTypes[47]
+func (x *SceneReport) Reset() {
+	*x = SceneReport{}
+	mi := &file_telemetry_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *IncidentSnapshot) String() string {
+func (x *SceneReport) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*IncidentSnapshot) ProtoMessage() {}
+func (*SceneReport) ProtoMessage() {}
 
-func (x *IncidentSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[47]
+func (x *SceneReport) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4375,65 +4212,174 @@ func (x *IncidentSnapshot) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use IncidentSnapshot.ProtoReflect.Descriptor instead.
-func (*IncidentSnapshot) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{47}
+// Deprecated: Use SceneReport.ProtoReflect.Descriptor instead.
+func (*SceneReport) Descriptor() ([]byte, []int) {
+	return file_telemetry_proto_rawDescGZIP(), []int{45}
 }
 
-func (x *IncidentSnapshot) GetRequestId() string {
+func (x *SceneReport) GetReportId() string {
 	if x != nil {
-		return x.RequestId
+		return x.ReportId
 	}
 	return ""
 }
 
-func (x *IncidentSnapshot) GetIncidentId() string {
-	if x != nil {
-		return x.IncidentId
-	}
-	return ""
-}
-
-func (x *IncidentSnapshot) GetCollectedAt() *timestamppb.Timestamp {
+func (x *SceneReport) GetCollectedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CollectedAt
 	}
 	return nil
 }
 
-func (x *IncidentSnapshot) GetGroups() []*SnapshotGroupResult {
+func (x *SceneReport) GetTriggers() []*SceneTrigger {
+	if x != nil {
+		return x.Triggers
+	}
+	return nil
+}
+
+func (x *SceneReport) GetGroups() []*SnapshotGroupResult {
 	if x != nil {
 		return x.Groups
 	}
 	return nil
 }
 
-func (x *IncidentSnapshot) GetNetwork() *SnapshotNetwork {
+func (x *SceneReport) GetNetwork() *SnapshotNetwork {
 	if x != nil {
 		return x.Network
 	}
 	return nil
 }
 
-func (x *IncidentSnapshot) GetAgent() *SnapshotAgentInfo {
+func (x *SceneReport) GetAgent() *SnapshotAgentInfo {
 	if x != nil {
 		return x.Agent
 	}
 	return nil
 }
 
-func (x *IncidentSnapshot) GetResources() *SnapshotResources {
+func (x *SceneReport) GetResources() *SnapshotResources {
 	if x != nil {
 		return x.Resources
 	}
 	return nil
 }
 
-func (x *IncidentSnapshot) GetTargets() []*SnapshotTargetResult {
+func (x *SceneReport) GetTargets() []*SnapshotTargetResult {
 	if x != nil {
 		return x.Targets
 	}
 	return nil
+}
+
+// SceneTrigger mirrors telemetry.SceneTrigger — one fault edge a scene answers
+// for, and the key the server claims it by. A probe fault is identified by
+// (monitor_id, config_serial) rather than by a time window, so two targets
+// failing in the same minute stay apart and an edit to a target cannot let
+// evidence from its previous generation surface under it.
+type SceneTrigger struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Kind  string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"` // open enum (telemetry.SceneTrigger*)
+	// probe_fault
+	MonitorId     string                 `protobuf:"bytes,2,opt,name=monitor_id,json=monitorId,proto3" json:"monitor_id,omitempty"`
+	ConfigSerial  int32                  `protobuf:"varint,3,opt,name=config_serial,json=configSerial,proto3" json:"config_serial,omitempty"`
+	TriggerStreak int32                  `protobuf:"varint,4,opt,name=trigger_streak,json=triggerStreak,proto3" json:"trigger_streak,omitempty"`
+	FirstFailedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=first_failed_at,json=firstFailedAt,proto3" json:"first_failed_at,omitempty"`
+	// server_disconnect
+	DisconnectedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=disconnected_at,json=disconnectedAt,proto3" json:"disconnected_at,omitempty"`
+	Reason         string                 `protobuf:"bytes,7,opt,name=reason,proto3" json:"reason,omitempty"`
+	// How many disconnect edges this entry stands for, at least 1: a flapping link
+	// merges into one trigger, and the count keeps that from reading as one drop.
+	EdgeCount     int32 `protobuf:"varint,8,opt,name=edge_count,json=edgeCount,proto3" json:"edge_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SceneTrigger) Reset() {
+	*x = SceneTrigger{}
+	mi := &file_telemetry_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SceneTrigger) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SceneTrigger) ProtoMessage() {}
+
+func (x *SceneTrigger) ProtoReflect() protoreflect.Message {
+	mi := &file_telemetry_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SceneTrigger.ProtoReflect.Descriptor instead.
+func (*SceneTrigger) Descriptor() ([]byte, []int) {
+	return file_telemetry_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *SceneTrigger) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *SceneTrigger) GetMonitorId() string {
+	if x != nil {
+		return x.MonitorId
+	}
+	return ""
+}
+
+func (x *SceneTrigger) GetConfigSerial() int32 {
+	if x != nil {
+		return x.ConfigSerial
+	}
+	return 0
+}
+
+func (x *SceneTrigger) GetTriggerStreak() int32 {
+	if x != nil {
+		return x.TriggerStreak
+	}
+	return 0
+}
+
+func (x *SceneTrigger) GetFirstFailedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.FirstFailedAt
+	}
+	return nil
+}
+
+func (x *SceneTrigger) GetDisconnectedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.DisconnectedAt
+	}
+	return nil
+}
+
+func (x *SceneTrigger) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *SceneTrigger) GetEdgeCount() int32 {
+	if x != nil {
+		return x.EdgeCount
+	}
+	return 0
 }
 
 // SnapshotGroupResult mirrors telemetry.SnapshotGroupResult.
@@ -4449,7 +4395,7 @@ type SnapshotGroupResult struct {
 
 func (x *SnapshotGroupResult) Reset() {
 	*x = SnapshotGroupResult{}
-	mi := &file_telemetry_proto_msgTypes[48]
+	mi := &file_telemetry_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4461,7 +4407,7 @@ func (x *SnapshotGroupResult) String() string {
 func (*SnapshotGroupResult) ProtoMessage() {}
 
 func (x *SnapshotGroupResult) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[48]
+	mi := &file_telemetry_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4474,7 +4420,7 @@ func (x *SnapshotGroupResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotGroupResult.ProtoReflect.Descriptor instead.
 func (*SnapshotGroupResult) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{48}
+	return file_telemetry_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *SnapshotGroupResult) GetGroup() string {
@@ -4517,7 +4463,7 @@ type SnapshotNetwork struct {
 
 func (x *SnapshotNetwork) Reset() {
 	*x = SnapshotNetwork{}
-	mi := &file_telemetry_proto_msgTypes[49]
+	mi := &file_telemetry_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4529,7 +4475,7 @@ func (x *SnapshotNetwork) String() string {
 func (*SnapshotNetwork) ProtoMessage() {}
 
 func (x *SnapshotNetwork) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[49]
+	mi := &file_telemetry_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4542,7 +4488,7 @@ func (x *SnapshotNetwork) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotNetwork.ProtoReflect.Descriptor instead.
 func (*SnapshotNetwork) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{49}
+	return file_telemetry_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *SnapshotNetwork) GetInterfaces() []*SnapshotInterface {
@@ -4579,7 +4525,7 @@ type SnapshotInterface struct {
 
 func (x *SnapshotInterface) Reset() {
 	*x = SnapshotInterface{}
-	mi := &file_telemetry_proto_msgTypes[50]
+	mi := &file_telemetry_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4591,7 +4537,7 @@ func (x *SnapshotInterface) String() string {
 func (*SnapshotInterface) ProtoMessage() {}
 
 func (x *SnapshotInterface) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[50]
+	mi := &file_telemetry_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4604,7 +4550,7 @@ func (x *SnapshotInterface) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotInterface.ProtoReflect.Descriptor instead.
 func (*SnapshotInterface) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{50}
+	return file_telemetry_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *SnapshotInterface) GetName() string {
@@ -4646,7 +4592,7 @@ type SnapshotRoute struct {
 
 func (x *SnapshotRoute) Reset() {
 	*x = SnapshotRoute{}
-	mi := &file_telemetry_proto_msgTypes[51]
+	mi := &file_telemetry_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4658,7 +4604,7 @@ func (x *SnapshotRoute) String() string {
 func (*SnapshotRoute) ProtoMessage() {}
 
 func (x *SnapshotRoute) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[51]
+	mi := &file_telemetry_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4671,7 +4617,7 @@ func (x *SnapshotRoute) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotRoute.ProtoReflect.Descriptor instead.
 func (*SnapshotRoute) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{51}
+	return file_telemetry_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *SnapshotRoute) GetGateway() string {
@@ -4701,7 +4647,7 @@ type SnapshotAgentInfo struct {
 
 func (x *SnapshotAgentInfo) Reset() {
 	*x = SnapshotAgentInfo{}
-	mi := &file_telemetry_proto_msgTypes[52]
+	mi := &file_telemetry_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4713,7 +4659,7 @@ func (x *SnapshotAgentInfo) String() string {
 func (*SnapshotAgentInfo) ProtoMessage() {}
 
 func (x *SnapshotAgentInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[52]
+	mi := &file_telemetry_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4726,7 +4672,7 @@ func (x *SnapshotAgentInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotAgentInfo.ProtoReflect.Descriptor instead.
 func (*SnapshotAgentInfo) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{52}
+	return file_telemetry_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *SnapshotAgentInfo) GetAgentId() string {
@@ -4770,7 +4716,7 @@ type SnapshotResources struct {
 
 func (x *SnapshotResources) Reset() {
 	*x = SnapshotResources{}
-	mi := &file_telemetry_proto_msgTypes[53]
+	mi := &file_telemetry_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4782,7 +4728,7 @@ func (x *SnapshotResources) String() string {
 func (*SnapshotResources) ProtoMessage() {}
 
 func (x *SnapshotResources) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[53]
+	mi := &file_telemetry_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4795,7 +4741,7 @@ func (x *SnapshotResources) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotResources.ProtoReflect.Descriptor instead.
 func (*SnapshotResources) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{53}
+	return file_telemetry_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *SnapshotResources) GetCpuPercent() float64 {
@@ -4834,7 +4780,7 @@ type SnapshotTargetResult struct {
 
 func (x *SnapshotTargetResult) Reset() {
 	*x = SnapshotTargetResult{}
-	mi := &file_telemetry_proto_msgTypes[54]
+	mi := &file_telemetry_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4846,7 +4792,7 @@ func (x *SnapshotTargetResult) String() string {
 func (*SnapshotTargetResult) ProtoMessage() {}
 
 func (x *SnapshotTargetResult) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[54]
+	mi := &file_telemetry_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4859,7 +4805,7 @@ func (x *SnapshotTargetResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotTargetResult.ProtoReflect.Descriptor instead.
 func (*SnapshotTargetResult) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{54}
+	return file_telemetry_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *SnapshotTargetResult) GetMonitorId() string {
@@ -4957,7 +4903,7 @@ type TraceResult struct {
 
 func (x *TraceResult) Reset() {
 	*x = TraceResult{}
-	mi := &file_telemetry_proto_msgTypes[55]
+	mi := &file_telemetry_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4969,7 +4915,7 @@ func (x *TraceResult) String() string {
 func (*TraceResult) ProtoMessage() {}
 
 func (x *TraceResult) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[55]
+	mi := &file_telemetry_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4982,7 +4928,7 @@ func (x *TraceResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TraceResult.ProtoReflect.Descriptor instead.
 func (*TraceResult) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{55}
+	return file_telemetry_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *TraceResult) GetReportId() string {
@@ -5171,7 +5117,7 @@ type TraceHop struct {
 
 func (x *TraceHop) Reset() {
 	*x = TraceHop{}
-	mi := &file_telemetry_proto_msgTypes[56]
+	mi := &file_telemetry_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5183,7 +5129,7 @@ func (x *TraceHop) String() string {
 func (*TraceHop) ProtoMessage() {}
 
 func (x *TraceHop) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[56]
+	mi := &file_telemetry_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5196,7 +5142,7 @@ func (x *TraceHop) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TraceHop.ProtoReflect.Descriptor instead.
 func (*TraceHop) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{56}
+	return file_telemetry_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *TraceHop) GetTtl() int32 {
@@ -5227,7 +5173,7 @@ type TraceAttempt struct {
 
 func (x *TraceAttempt) Reset() {
 	*x = TraceAttempt{}
-	mi := &file_telemetry_proto_msgTypes[57]
+	mi := &file_telemetry_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5239,7 +5185,7 @@ func (x *TraceAttempt) String() string {
 func (*TraceAttempt) ProtoMessage() {}
 
 func (x *TraceAttempt) ProtoReflect() protoreflect.Message {
-	mi := &file_telemetry_proto_msgTypes[57]
+	mi := &file_telemetry_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5252,7 +5198,7 @@ func (x *TraceAttempt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TraceAttempt.ProtoReflect.Descriptor instead.
 func (*TraceAttempt) Descriptor() ([]byte, []int) {
-	return file_telemetry_proto_rawDescGZIP(), []int{57}
+	return file_telemetry_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *TraceAttempt) GetResponderAddr() string {
@@ -5320,20 +5266,18 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x06reason\x18\x05 \x01(\tR\x06reason\x12<\n" +
 	"\x1aeffective_interval_seconds\x18\x06 \x01(\x05R\x18effectiveIntervalSeconds\x12*\n" +
 	"\x11cycle_deadline_ms\x18\a \x01(\x05R\x0fcycleDeadlineMs\x120\n" +
-	"\x14target_config_serial\x18\b \x01(\x05R\x12targetConfigSerial\"\xab\x05\n" +
+	"\x14target_config_serial\x18\b \x01(\x05R\x12targetConfigSerial\"\xab\x04\n" +
 	"\x05Frame\x12.\n" +
 	"\x05hello\x18\x01 \x01(\v2\x16.nettact.wire.v1.HelloH\x00R\x05hello\x121\n" +
 	"\x06packet\x18\x02 \x01(\v2\x17.nettact.wire.v1.PacketH\x00R\x06packet\x12D\n" +
 	"\rhost_snapshot\x18\x03 \x01(\v2\x1d.nettact.wire.v1.HostSnapshotH\x00R\fhostSnapshot\x12G\n" +
-	"\x0emonitor_status\x18\a \x01(\v2\x1e.nettact.wire.v1.MonitorStatusH\x00R\rmonitorStatus\x12P\n" +
-	"\x11incident_snapshot\x18\n" +
-	" \x01(\v2!.nettact.wire.v1.IncidentSnapshotH\x00R\x10incidentSnapshot\x121\n" +
+	"\x0emonitor_status\x18\a \x01(\v2\x1e.nettact.wire.v1.MonitorStatusH\x00R\rmonitorStatus\x121\n" +
 	"\x03ack\x18\x04 \x01(\v2\x1d.nettact.wire.v1.TelemetryAckH\x00R\x03ack\x12D\n" +
 	"\rdesired_state\x18\x05 \x01(\v2\x1d.nettact.wire.v1.DesiredStateH\x00R\fdesiredState\x12M\n" +
-	"\x10snapshot_request\x18\x06 \x01(\v2 .nettact.wire.v1.SnapshotRequestH\x00R\x0fsnapshotRequest\x12f\n" +
-	"\x19incident_snapshot_request\x18\b \x01(\v2(.nettact.wire.v1.IncidentSnapshotRequestH\x00R\x17incidentSnapshotRequestB\x05\n" +
-	"\x03msgJ\x04\b\t\x10\n" +
-	"J\x04\b\v\x10\fR\rtrace_requestR\ftrace_result\"\xa7\x06\n" +
+	"\x10snapshot_request\x18\x06 \x01(\v2 .nettact.wire.v1.SnapshotRequestH\x00R\x0fsnapshotRequestB\x05\n" +
+	"\x03msgJ\x04\b\b\x10\tJ\x04\b\t\x10\n" +
+	"J\x04\b\n" +
+	"\x10\vJ\x04\b\v\x10\fR\x19incident_snapshot_requestR\rtrace_requestR\x11incident_snapshotR\ftrace_result\"\xea\x06\n" +
 	"\x06Packet\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\x05R\rschemaVersion\x12\x19\n" +
 	"\bagent_id\x18\x02 \x01(\tR\aagentId\x12\x17\n" +
@@ -5348,7 +5292,8 @@ const file_telemetry_proto_rawDesc = "" +
 	"\fgame_buckets\x18\r \x03(\v2\x1b.nettact.wire.v1.GameBucketR\vgameBuckets\x125\n" +
 	"\tgame_gaps\x18\x0e \x03(\v2\x18.nettact.wire.v1.GameGapR\bgameGaps\x12K\n" +
 	"\x11game_host_seconds\x18\x0f \x03(\v2\x1f.nettact.wire.v1.GameHostSecondR\x0fgameHostSeconds\x12A\n" +
-	"\rtrace_results\x18\x10 \x03(\v2\x1c.nettact.wire.v1.TraceResultR\ftraceResultsJ\x04\b\n" +
+	"\rtrace_results\x18\x10 \x03(\v2\x1c.nettact.wire.v1.TraceResultR\ftraceResults\x12A\n" +
+	"\rscene_reports\x18\x11 \x03(\v2\x1c.nettact.wire.v1.SceneReportR\fsceneReportsJ\x04\b\n" +
 	"\x10\vJ\x04\b\t\x10\n" +
 	"R\rhost_snapshotR\x17reported_config_version\"\xdc\x02\n" +
 	"\x06Metric\x12*\n" +
@@ -5705,32 +5650,27 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x04\x10\x05J\x04\b\a\x10\bR\aretriesR\x0fexpected_status\"W\n" +
 	"\tIntervals\x12!\n" +
 	"\fbase_seconds\x18\x01 \x01(\x05R\vbaseSeconds\x12'\n" +
-	"\x0fregular_seconds\x18\x02 \x01(\x05R\x0eregularSeconds\"\xc4\x01\n" +
-	"\x17IncidentSnapshotRequest\x12\x1d\n" +
-	"\n" +
-	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1f\n" +
-	"\vincident_id\x18\x02 \x01(\tR\n" +
-	"incidentId\x12<\n" +
-	"\atargets\x18\x04 \x03(\v2\".nettact.wire.v1.SnapshotTargetRefR\atargets\x12\x1b\n" +
-	"\tbudget_ms\x18\x05 \x01(\x05R\bbudgetMsJ\x04\b\x03\x10\x04R\bdeadline\"\x88\x01\n" +
-	"\x11SnapshotTargetRef\x12\x1d\n" +
-	"\n" +
-	"monitor_id\x18\x01 \x01(\tR\tmonitorId\x12\x12\n" +
-	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x16\n" +
-	"\x06target\x18\x03 \x01(\tR\x06target\x12\x12\n" +
-	"\x04port\x18\x04 \x01(\x05R\x04port\x12\x14\n" +
-	"\x05iface\x18\x05 \x01(\tR\x05iface\"\xc8\x03\n" +
-	"\x10IncidentSnapshot\x12\x1d\n" +
-	"\n" +
-	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1f\n" +
-	"\vincident_id\x18\x02 \x01(\tR\n" +
-	"incidentId\x12=\n" +
-	"\fcollected_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\vcollectedAt\x12<\n" +
+	"\x0fregular_seconds\x18\x02 \x01(\x05R\x0eregularSeconds\"\xdb\x03\n" +
+	"\vSceneReport\x12\x1b\n" +
+	"\treport_id\x18\x01 \x01(\tR\breportId\x12=\n" +
+	"\fcollected_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\vcollectedAt\x129\n" +
+	"\btriggers\x18\x03 \x03(\v2\x1d.nettact.wire.v1.SceneTriggerR\btriggers\x12<\n" +
 	"\x06groups\x18\x04 \x03(\v2$.nettact.wire.v1.SnapshotGroupResultR\x06groups\x12:\n" +
 	"\anetwork\x18\x05 \x01(\v2 .nettact.wire.v1.SnapshotNetworkR\anetwork\x128\n" +
 	"\x05agent\x18\x06 \x01(\v2\".nettact.wire.v1.SnapshotAgentInfoR\x05agent\x12@\n" +
 	"\tresources\x18\a \x01(\v2\".nettact.wire.v1.SnapshotResourcesR\tresources\x12?\n" +
-	"\atargets\x18\b \x03(\v2%.nettact.wire.v1.SnapshotTargetResultR\atargets\"\x9a\x01\n" +
+	"\atargets\x18\b \x03(\v2%.nettact.wire.v1.SnapshotTargetResultR\atargets\"\xcd\x02\n" +
+	"\fSceneTrigger\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x1d\n" +
+	"\n" +
+	"monitor_id\x18\x02 \x01(\tR\tmonitorId\x12#\n" +
+	"\rconfig_serial\x18\x03 \x01(\x05R\fconfigSerial\x12%\n" +
+	"\x0etrigger_streak\x18\x04 \x01(\x05R\rtriggerStreak\x12B\n" +
+	"\x0ffirst_failed_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\rfirstFailedAt\x12C\n" +
+	"\x0fdisconnected_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x0edisconnectedAt\x12\x16\n" +
+	"\x06reason\x18\a \x01(\tR\x06reason\x12\x1d\n" +
+	"\n" +
+	"edge_count\x18\b \x01(\x05R\tedgeCount\"\x9a\x01\n" +
 	"\x13SnapshotGroupResult\x12\x14\n" +
 	"\x05group\x18\x01 \x01(\tR\x05group\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x16\n" +
@@ -5825,159 +5765,159 @@ func file_telemetry_proto_rawDescGZIP() []byte {
 	return file_telemetry_proto_rawDescData
 }
 
-var file_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 62)
+var file_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 61)
 var file_telemetry_proto_goTypes = []any{
-	(*Hello)(nil),                   // 0: nettact.wire.v1.Hello
-	(*PermissionReport)(nil),        // 1: nettact.wire.v1.PermissionReport
-	(*MonitorStatus)(nil),           // 2: nettact.wire.v1.MonitorStatus
-	(*MonitorStatusEntry)(nil),      // 3: nettact.wire.v1.MonitorStatusEntry
-	(*Frame)(nil),                   // 4: nettact.wire.v1.Frame
-	(*Packet)(nil),                  // 5: nettact.wire.v1.Packet
-	(*Metric)(nil),                  // 6: nettact.wire.v1.Metric
-	(*GameRun)(nil),                 // 7: nettact.wire.v1.GameRun
-	(*GameBucket)(nil),              // 8: nettact.wire.v1.GameBucket
-	(*GameGap)(nil),                 // 9: nettact.wire.v1.GameGap
-	(*GameHostSecond)(nil),          // 10: nettact.wire.v1.GameHostSecond
-	(*GameHostCPU)(nil),             // 11: nettact.wire.v1.GameHostCPU
-	(*GameHostMem)(nil),             // 12: nettact.wire.v1.GameHostMem
-	(*GameFrames)(nil),              // 13: nettact.wire.v1.GameFrames
-	(*GameFrameTimes)(nil),          // 14: nettact.wire.v1.GameFrameTimes
-	(*GameHistogram)(nil),           // 15: nettact.wire.v1.GameHistogram
-	(*GameDispFT)(nil),              // 16: nettact.wire.v1.GameDispFT
-	(*GamePresent)(nil),             // 17: nettact.wire.v1.GamePresent
-	(*GameStutter)(nil),             // 18: nettact.wire.v1.GameStutter
-	(*GameProcRes)(nil),             // 19: nettact.wire.v1.GameProcRes
-	(*GameCPUSplit)(nil),            // 20: nettact.wire.v1.GameCPUSplit
-	(*GameGPUSplit)(nil),            // 21: nettact.wire.v1.GameGPUSplit
-	(*GameLatency)(nil),             // 22: nettact.wire.v1.GameLatency
-	(*GameGPUTel)(nil),              // 23: nettact.wire.v1.GameGPUTel
-	(*GameHostCPUClock)(nil),        // 24: nettact.wire.v1.GameHostCPUClock
-	(*GameProcVRAM)(nil),            // 25: nettact.wire.v1.GameProcVRAM
-	(*Event)(nil),                   // 26: nettact.wire.v1.Event
-	(*InventoryItem)(nil),           // 27: nettact.wire.v1.InventoryItem
-	(*InterfaceSnapshot)(nil),       // 28: nettact.wire.v1.InterfaceSnapshot
-	(*InterfaceState)(nil),          // 29: nettact.wire.v1.InterfaceState
-	(*WiFiInfo)(nil),                // 30: nettact.wire.v1.WiFiInfo
-	(*HostSnapshot)(nil),            // 31: nettact.wire.v1.HostSnapshot
-	(*SnapshotScopeResult)(nil),     // 32: nettact.wire.v1.SnapshotScopeResult
-	(*ProcessInfo)(nil),             // 33: nettact.wire.v1.ProcessInfo
-	(*ConnectionInfo)(nil),          // 34: nettact.wire.v1.ConnectionInfo
-	(*TelemetryAck)(nil),            // 35: nettact.wire.v1.TelemetryAck
-	(*DesiredState)(nil),            // 36: nettact.wire.v1.DesiredState
-	(*DiagPolicy)(nil),              // 37: nettact.wire.v1.DiagPolicy
-	(*GameConfig)(nil),              // 38: nettact.wire.v1.GameConfig
-	(*GameProfile)(nil),             // 39: nettact.wire.v1.GameProfile
-	(*SnapshotRequest)(nil),         // 40: nettact.wire.v1.SnapshotRequest
-	(*ProbeTarget)(nil),             // 41: nettact.wire.v1.ProbeTarget
-	(*ProxySpec)(nil),               // 42: nettact.wire.v1.ProxySpec
-	(*ProbeParams)(nil),             // 43: nettact.wire.v1.ProbeParams
-	(*Intervals)(nil),               // 44: nettact.wire.v1.Intervals
-	(*IncidentSnapshotRequest)(nil), // 45: nettact.wire.v1.IncidentSnapshotRequest
-	(*SnapshotTargetRef)(nil),       // 46: nettact.wire.v1.SnapshotTargetRef
-	(*IncidentSnapshot)(nil),        // 47: nettact.wire.v1.IncidentSnapshot
-	(*SnapshotGroupResult)(nil),     // 48: nettact.wire.v1.SnapshotGroupResult
-	(*SnapshotNetwork)(nil),         // 49: nettact.wire.v1.SnapshotNetwork
-	(*SnapshotInterface)(nil),       // 50: nettact.wire.v1.SnapshotInterface
-	(*SnapshotRoute)(nil),           // 51: nettact.wire.v1.SnapshotRoute
-	(*SnapshotAgentInfo)(nil),       // 52: nettact.wire.v1.SnapshotAgentInfo
-	(*SnapshotResources)(nil),       // 53: nettact.wire.v1.SnapshotResources
-	(*SnapshotTargetResult)(nil),    // 54: nettact.wire.v1.SnapshotTargetResult
-	(*TraceResult)(nil),             // 55: nettact.wire.v1.TraceResult
-	(*TraceHop)(nil),                // 56: nettact.wire.v1.TraceHop
-	(*TraceAttempt)(nil),            // 57: nettact.wire.v1.TraceAttempt
-	nil,                             // 58: nettact.wire.v1.PermissionReport.UnsupportedReasonsEntry
-	nil,                             // 59: nettact.wire.v1.Metric.LabelsEntry
-	nil,                             // 60: nettact.wire.v1.Event.AttrsEntry
-	nil,                             // 61: nettact.wire.v1.ProbeParams.HeadersEntry
-	(*timestamppb.Timestamp)(nil),   // 62: google.protobuf.Timestamp
+	(*Hello)(nil),                 // 0: nettact.wire.v1.Hello
+	(*PermissionReport)(nil),      // 1: nettact.wire.v1.PermissionReport
+	(*MonitorStatus)(nil),         // 2: nettact.wire.v1.MonitorStatus
+	(*MonitorStatusEntry)(nil),    // 3: nettact.wire.v1.MonitorStatusEntry
+	(*Frame)(nil),                 // 4: nettact.wire.v1.Frame
+	(*Packet)(nil),                // 5: nettact.wire.v1.Packet
+	(*Metric)(nil),                // 6: nettact.wire.v1.Metric
+	(*GameRun)(nil),               // 7: nettact.wire.v1.GameRun
+	(*GameBucket)(nil),            // 8: nettact.wire.v1.GameBucket
+	(*GameGap)(nil),               // 9: nettact.wire.v1.GameGap
+	(*GameHostSecond)(nil),        // 10: nettact.wire.v1.GameHostSecond
+	(*GameHostCPU)(nil),           // 11: nettact.wire.v1.GameHostCPU
+	(*GameHostMem)(nil),           // 12: nettact.wire.v1.GameHostMem
+	(*GameFrames)(nil),            // 13: nettact.wire.v1.GameFrames
+	(*GameFrameTimes)(nil),        // 14: nettact.wire.v1.GameFrameTimes
+	(*GameHistogram)(nil),         // 15: nettact.wire.v1.GameHistogram
+	(*GameDispFT)(nil),            // 16: nettact.wire.v1.GameDispFT
+	(*GamePresent)(nil),           // 17: nettact.wire.v1.GamePresent
+	(*GameStutter)(nil),           // 18: nettact.wire.v1.GameStutter
+	(*GameProcRes)(nil),           // 19: nettact.wire.v1.GameProcRes
+	(*GameCPUSplit)(nil),          // 20: nettact.wire.v1.GameCPUSplit
+	(*GameGPUSplit)(nil),          // 21: nettact.wire.v1.GameGPUSplit
+	(*GameLatency)(nil),           // 22: nettact.wire.v1.GameLatency
+	(*GameGPUTel)(nil),            // 23: nettact.wire.v1.GameGPUTel
+	(*GameHostCPUClock)(nil),      // 24: nettact.wire.v1.GameHostCPUClock
+	(*GameProcVRAM)(nil),          // 25: nettact.wire.v1.GameProcVRAM
+	(*Event)(nil),                 // 26: nettact.wire.v1.Event
+	(*InventoryItem)(nil),         // 27: nettact.wire.v1.InventoryItem
+	(*InterfaceSnapshot)(nil),     // 28: nettact.wire.v1.InterfaceSnapshot
+	(*InterfaceState)(nil),        // 29: nettact.wire.v1.InterfaceState
+	(*WiFiInfo)(nil),              // 30: nettact.wire.v1.WiFiInfo
+	(*HostSnapshot)(nil),          // 31: nettact.wire.v1.HostSnapshot
+	(*SnapshotScopeResult)(nil),   // 32: nettact.wire.v1.SnapshotScopeResult
+	(*ProcessInfo)(nil),           // 33: nettact.wire.v1.ProcessInfo
+	(*ConnectionInfo)(nil),        // 34: nettact.wire.v1.ConnectionInfo
+	(*TelemetryAck)(nil),          // 35: nettact.wire.v1.TelemetryAck
+	(*DesiredState)(nil),          // 36: nettact.wire.v1.DesiredState
+	(*DiagPolicy)(nil),            // 37: nettact.wire.v1.DiagPolicy
+	(*GameConfig)(nil),            // 38: nettact.wire.v1.GameConfig
+	(*GameProfile)(nil),           // 39: nettact.wire.v1.GameProfile
+	(*SnapshotRequest)(nil),       // 40: nettact.wire.v1.SnapshotRequest
+	(*ProbeTarget)(nil),           // 41: nettact.wire.v1.ProbeTarget
+	(*ProxySpec)(nil),             // 42: nettact.wire.v1.ProxySpec
+	(*ProbeParams)(nil),           // 43: nettact.wire.v1.ProbeParams
+	(*Intervals)(nil),             // 44: nettact.wire.v1.Intervals
+	(*SceneReport)(nil),           // 45: nettact.wire.v1.SceneReport
+	(*SceneTrigger)(nil),          // 46: nettact.wire.v1.SceneTrigger
+	(*SnapshotGroupResult)(nil),   // 47: nettact.wire.v1.SnapshotGroupResult
+	(*SnapshotNetwork)(nil),       // 48: nettact.wire.v1.SnapshotNetwork
+	(*SnapshotInterface)(nil),     // 49: nettact.wire.v1.SnapshotInterface
+	(*SnapshotRoute)(nil),         // 50: nettact.wire.v1.SnapshotRoute
+	(*SnapshotAgentInfo)(nil),     // 51: nettact.wire.v1.SnapshotAgentInfo
+	(*SnapshotResources)(nil),     // 52: nettact.wire.v1.SnapshotResources
+	(*SnapshotTargetResult)(nil),  // 53: nettact.wire.v1.SnapshotTargetResult
+	(*TraceResult)(nil),           // 54: nettact.wire.v1.TraceResult
+	(*TraceHop)(nil),              // 55: nettact.wire.v1.TraceHop
+	(*TraceAttempt)(nil),          // 56: nettact.wire.v1.TraceAttempt
+	nil,                           // 57: nettact.wire.v1.PermissionReport.UnsupportedReasonsEntry
+	nil,                           // 58: nettact.wire.v1.Metric.LabelsEntry
+	nil,                           // 59: nettact.wire.v1.Event.AttrsEntry
+	nil,                           // 60: nettact.wire.v1.ProbeParams.HeadersEntry
+	(*timestamppb.Timestamp)(nil), // 61: google.protobuf.Timestamp
 }
 var file_telemetry_proto_depIdxs = []int32{
 	1,  // 0: nettact.wire.v1.Hello.permissions:type_name -> nettact.wire.v1.PermissionReport
-	58, // 1: nettact.wire.v1.PermissionReport.unsupported_reasons:type_name -> nettact.wire.v1.PermissionReport.UnsupportedReasonsEntry
+	57, // 1: nettact.wire.v1.PermissionReport.unsupported_reasons:type_name -> nettact.wire.v1.PermissionReport.UnsupportedReasonsEntry
 	3,  // 2: nettact.wire.v1.MonitorStatus.statuses:type_name -> nettact.wire.v1.MonitorStatusEntry
 	0,  // 3: nettact.wire.v1.Frame.hello:type_name -> nettact.wire.v1.Hello
 	5,  // 4: nettact.wire.v1.Frame.packet:type_name -> nettact.wire.v1.Packet
 	31, // 5: nettact.wire.v1.Frame.host_snapshot:type_name -> nettact.wire.v1.HostSnapshot
 	2,  // 6: nettact.wire.v1.Frame.monitor_status:type_name -> nettact.wire.v1.MonitorStatus
-	47, // 7: nettact.wire.v1.Frame.incident_snapshot:type_name -> nettact.wire.v1.IncidentSnapshot
-	35, // 8: nettact.wire.v1.Frame.ack:type_name -> nettact.wire.v1.TelemetryAck
-	36, // 9: nettact.wire.v1.Frame.desired_state:type_name -> nettact.wire.v1.DesiredState
-	40, // 10: nettact.wire.v1.Frame.snapshot_request:type_name -> nettact.wire.v1.SnapshotRequest
-	45, // 11: nettact.wire.v1.Frame.incident_snapshot_request:type_name -> nettact.wire.v1.IncidentSnapshotRequest
-	62, // 12: nettact.wire.v1.Packet.sent_at:type_name -> google.protobuf.Timestamp
-	6,  // 13: nettact.wire.v1.Packet.metrics:type_name -> nettact.wire.v1.Metric
-	26, // 14: nettact.wire.v1.Packet.events:type_name -> nettact.wire.v1.Event
-	27, // 15: nettact.wire.v1.Packet.inventory_delta:type_name -> nettact.wire.v1.InventoryItem
-	28, // 16: nettact.wire.v1.Packet.interface_snapshots:type_name -> nettact.wire.v1.InterfaceSnapshot
-	7,  // 17: nettact.wire.v1.Packet.game_runs:type_name -> nettact.wire.v1.GameRun
-	8,  // 18: nettact.wire.v1.Packet.game_buckets:type_name -> nettact.wire.v1.GameBucket
-	9,  // 19: nettact.wire.v1.Packet.game_gaps:type_name -> nettact.wire.v1.GameGap
-	10, // 20: nettact.wire.v1.Packet.game_host_seconds:type_name -> nettact.wire.v1.GameHostSecond
-	55, // 21: nettact.wire.v1.Packet.trace_results:type_name -> nettact.wire.v1.TraceResult
-	62, // 22: nettact.wire.v1.Metric.ts:type_name -> google.protobuf.Timestamp
-	59, // 23: nettact.wire.v1.Metric.labels:type_name -> nettact.wire.v1.Metric.LabelsEntry
-	62, // 24: nettact.wire.v1.GameRun.started_at:type_name -> google.protobuf.Timestamp
-	62, // 25: nettact.wire.v1.GameRun.last_seen_at:type_name -> google.protobuf.Timestamp
-	62, // 26: nettact.wire.v1.GameRun.ended_at:type_name -> google.protobuf.Timestamp
-	62, // 27: nettact.wire.v1.GameBucket.ts:type_name -> google.protobuf.Timestamp
-	13, // 28: nettact.wire.v1.GameBucket.frames:type_name -> nettact.wire.v1.GameFrames
-	14, // 29: nettact.wire.v1.GameBucket.ft:type_name -> nettact.wire.v1.GameFrameTimes
-	15, // 30: nettact.wire.v1.GameBucket.hist:type_name -> nettact.wire.v1.GameHistogram
-	16, // 31: nettact.wire.v1.GameBucket.disp_ft:type_name -> nettact.wire.v1.GameDispFT
-	17, // 32: nettact.wire.v1.GameBucket.present:type_name -> nettact.wire.v1.GamePresent
-	18, // 33: nettact.wire.v1.GameBucket.stutter:type_name -> nettact.wire.v1.GameStutter
-	19, // 34: nettact.wire.v1.GameBucket.proc_res:type_name -> nettact.wire.v1.GameProcRes
-	20, // 35: nettact.wire.v1.GameBucket.cpu_split:type_name -> nettact.wire.v1.GameCPUSplit
-	21, // 36: nettact.wire.v1.GameBucket.gpu_split:type_name -> nettact.wire.v1.GameGPUSplit
-	22, // 37: nettact.wire.v1.GameBucket.lat:type_name -> nettact.wire.v1.GameLatency
-	25, // 38: nettact.wire.v1.GameBucket.proc_vram:type_name -> nettact.wire.v1.GameProcVRAM
-	62, // 39: nettact.wire.v1.GameGap.started_at:type_name -> google.protobuf.Timestamp
-	62, // 40: nettact.wire.v1.GameGap.ended_at:type_name -> google.protobuf.Timestamp
-	62, // 41: nettact.wire.v1.GameHostSecond.ts:type_name -> google.protobuf.Timestamp
-	11, // 42: nettact.wire.v1.GameHostSecond.cpu:type_name -> nettact.wire.v1.GameHostCPU
-	12, // 43: nettact.wire.v1.GameHostSecond.mem:type_name -> nettact.wire.v1.GameHostMem
-	23, // 44: nettact.wire.v1.GameHostSecond.gpu:type_name -> nettact.wire.v1.GameGPUTel
-	24, // 45: nettact.wire.v1.GameHostSecond.cpu_clock:type_name -> nettact.wire.v1.GameHostCPUClock
-	62, // 46: nettact.wire.v1.Event.ts:type_name -> google.protobuf.Timestamp
-	60, // 47: nettact.wire.v1.Event.attrs:type_name -> nettact.wire.v1.Event.AttrsEntry
-	62, // 48: nettact.wire.v1.InventoryItem.last_seen:type_name -> google.protobuf.Timestamp
-	62, // 49: nettact.wire.v1.InterfaceSnapshot.sampled_at:type_name -> google.protobuf.Timestamp
-	29, // 50: nettact.wire.v1.InterfaceSnapshot.interfaces:type_name -> nettact.wire.v1.InterfaceState
-	51, // 51: nettact.wire.v1.InterfaceSnapshot.default_route:type_name -> nettact.wire.v1.SnapshotRoute
-	30, // 52: nettact.wire.v1.InterfaceState.wifi:type_name -> nettact.wire.v1.WiFiInfo
-	62, // 53: nettact.wire.v1.HostSnapshot.ts:type_name -> google.protobuf.Timestamp
-	33, // 54: nettact.wire.v1.HostSnapshot.processes:type_name -> nettact.wire.v1.ProcessInfo
-	34, // 55: nettact.wire.v1.HostSnapshot.connections:type_name -> nettact.wire.v1.ConnectionInfo
-	32, // 56: nettact.wire.v1.HostSnapshot.scopes:type_name -> nettact.wire.v1.SnapshotScopeResult
-	62, // 57: nettact.wire.v1.TelemetryAck.server_time:type_name -> google.protobuf.Timestamp
-	41, // 58: nettact.wire.v1.DesiredState.probe_targets:type_name -> nettact.wire.v1.ProbeTarget
-	44, // 59: nettact.wire.v1.DesiredState.intervals:type_name -> nettact.wire.v1.Intervals
-	42, // 60: nettact.wire.v1.DesiredState.proxies:type_name -> nettact.wire.v1.ProxySpec
-	38, // 61: nettact.wire.v1.DesiredState.game:type_name -> nettact.wire.v1.GameConfig
-	37, // 62: nettact.wire.v1.DesiredState.diag:type_name -> nettact.wire.v1.DiagPolicy
-	39, // 63: nettact.wire.v1.GameConfig.profiles:type_name -> nettact.wire.v1.GameProfile
-	43, // 64: nettact.wire.v1.ProbeTarget.params:type_name -> nettact.wire.v1.ProbeParams
-	61, // 65: nettact.wire.v1.ProbeParams.headers:type_name -> nettact.wire.v1.ProbeParams.HeadersEntry
-	46, // 66: nettact.wire.v1.IncidentSnapshotRequest.targets:type_name -> nettact.wire.v1.SnapshotTargetRef
-	62, // 67: nettact.wire.v1.IncidentSnapshot.collected_at:type_name -> google.protobuf.Timestamp
-	48, // 68: nettact.wire.v1.IncidentSnapshot.groups:type_name -> nettact.wire.v1.SnapshotGroupResult
-	49, // 69: nettact.wire.v1.IncidentSnapshot.network:type_name -> nettact.wire.v1.SnapshotNetwork
-	52, // 70: nettact.wire.v1.IncidentSnapshot.agent:type_name -> nettact.wire.v1.SnapshotAgentInfo
-	53, // 71: nettact.wire.v1.IncidentSnapshot.resources:type_name -> nettact.wire.v1.SnapshotResources
-	54, // 72: nettact.wire.v1.IncidentSnapshot.targets:type_name -> nettact.wire.v1.SnapshotTargetResult
-	62, // 73: nettact.wire.v1.SnapshotGroupResult.collected_at:type_name -> google.protobuf.Timestamp
-	50, // 74: nettact.wire.v1.SnapshotNetwork.interfaces:type_name -> nettact.wire.v1.SnapshotInterface
-	51, // 75: nettact.wire.v1.SnapshotNetwork.default_route:type_name -> nettact.wire.v1.SnapshotRoute
-	62, // 76: nettact.wire.v1.TraceResult.started_at:type_name -> google.protobuf.Timestamp
-	62, // 77: nettact.wire.v1.TraceResult.completed_at:type_name -> google.protobuf.Timestamp
-	56, // 78: nettact.wire.v1.TraceResult.hops:type_name -> nettact.wire.v1.TraceHop
-	62, // 79: nettact.wire.v1.TraceResult.first_failed_at:type_name -> google.protobuf.Timestamp
-	57, // 80: nettact.wire.v1.TraceHop.attempts:type_name -> nettact.wire.v1.TraceAttempt
-	81, // [81:81] is the sub-list for method output_type
-	81, // [81:81] is the sub-list for method input_type
-	81, // [81:81] is the sub-list for extension type_name
-	81, // [81:81] is the sub-list for extension extendee
-	0,  // [0:81] is the sub-list for field type_name
+	35, // 7: nettact.wire.v1.Frame.ack:type_name -> nettact.wire.v1.TelemetryAck
+	36, // 8: nettact.wire.v1.Frame.desired_state:type_name -> nettact.wire.v1.DesiredState
+	40, // 9: nettact.wire.v1.Frame.snapshot_request:type_name -> nettact.wire.v1.SnapshotRequest
+	61, // 10: nettact.wire.v1.Packet.sent_at:type_name -> google.protobuf.Timestamp
+	6,  // 11: nettact.wire.v1.Packet.metrics:type_name -> nettact.wire.v1.Metric
+	26, // 12: nettact.wire.v1.Packet.events:type_name -> nettact.wire.v1.Event
+	27, // 13: nettact.wire.v1.Packet.inventory_delta:type_name -> nettact.wire.v1.InventoryItem
+	28, // 14: nettact.wire.v1.Packet.interface_snapshots:type_name -> nettact.wire.v1.InterfaceSnapshot
+	7,  // 15: nettact.wire.v1.Packet.game_runs:type_name -> nettact.wire.v1.GameRun
+	8,  // 16: nettact.wire.v1.Packet.game_buckets:type_name -> nettact.wire.v1.GameBucket
+	9,  // 17: nettact.wire.v1.Packet.game_gaps:type_name -> nettact.wire.v1.GameGap
+	10, // 18: nettact.wire.v1.Packet.game_host_seconds:type_name -> nettact.wire.v1.GameHostSecond
+	54, // 19: nettact.wire.v1.Packet.trace_results:type_name -> nettact.wire.v1.TraceResult
+	45, // 20: nettact.wire.v1.Packet.scene_reports:type_name -> nettact.wire.v1.SceneReport
+	61, // 21: nettact.wire.v1.Metric.ts:type_name -> google.protobuf.Timestamp
+	58, // 22: nettact.wire.v1.Metric.labels:type_name -> nettact.wire.v1.Metric.LabelsEntry
+	61, // 23: nettact.wire.v1.GameRun.started_at:type_name -> google.protobuf.Timestamp
+	61, // 24: nettact.wire.v1.GameRun.last_seen_at:type_name -> google.protobuf.Timestamp
+	61, // 25: nettact.wire.v1.GameRun.ended_at:type_name -> google.protobuf.Timestamp
+	61, // 26: nettact.wire.v1.GameBucket.ts:type_name -> google.protobuf.Timestamp
+	13, // 27: nettact.wire.v1.GameBucket.frames:type_name -> nettact.wire.v1.GameFrames
+	14, // 28: nettact.wire.v1.GameBucket.ft:type_name -> nettact.wire.v1.GameFrameTimes
+	15, // 29: nettact.wire.v1.GameBucket.hist:type_name -> nettact.wire.v1.GameHistogram
+	16, // 30: nettact.wire.v1.GameBucket.disp_ft:type_name -> nettact.wire.v1.GameDispFT
+	17, // 31: nettact.wire.v1.GameBucket.present:type_name -> nettact.wire.v1.GamePresent
+	18, // 32: nettact.wire.v1.GameBucket.stutter:type_name -> nettact.wire.v1.GameStutter
+	19, // 33: nettact.wire.v1.GameBucket.proc_res:type_name -> nettact.wire.v1.GameProcRes
+	20, // 34: nettact.wire.v1.GameBucket.cpu_split:type_name -> nettact.wire.v1.GameCPUSplit
+	21, // 35: nettact.wire.v1.GameBucket.gpu_split:type_name -> nettact.wire.v1.GameGPUSplit
+	22, // 36: nettact.wire.v1.GameBucket.lat:type_name -> nettact.wire.v1.GameLatency
+	25, // 37: nettact.wire.v1.GameBucket.proc_vram:type_name -> nettact.wire.v1.GameProcVRAM
+	61, // 38: nettact.wire.v1.GameGap.started_at:type_name -> google.protobuf.Timestamp
+	61, // 39: nettact.wire.v1.GameGap.ended_at:type_name -> google.protobuf.Timestamp
+	61, // 40: nettact.wire.v1.GameHostSecond.ts:type_name -> google.protobuf.Timestamp
+	11, // 41: nettact.wire.v1.GameHostSecond.cpu:type_name -> nettact.wire.v1.GameHostCPU
+	12, // 42: nettact.wire.v1.GameHostSecond.mem:type_name -> nettact.wire.v1.GameHostMem
+	23, // 43: nettact.wire.v1.GameHostSecond.gpu:type_name -> nettact.wire.v1.GameGPUTel
+	24, // 44: nettact.wire.v1.GameHostSecond.cpu_clock:type_name -> nettact.wire.v1.GameHostCPUClock
+	61, // 45: nettact.wire.v1.Event.ts:type_name -> google.protobuf.Timestamp
+	59, // 46: nettact.wire.v1.Event.attrs:type_name -> nettact.wire.v1.Event.AttrsEntry
+	61, // 47: nettact.wire.v1.InventoryItem.last_seen:type_name -> google.protobuf.Timestamp
+	61, // 48: nettact.wire.v1.InterfaceSnapshot.sampled_at:type_name -> google.protobuf.Timestamp
+	29, // 49: nettact.wire.v1.InterfaceSnapshot.interfaces:type_name -> nettact.wire.v1.InterfaceState
+	50, // 50: nettact.wire.v1.InterfaceSnapshot.default_route:type_name -> nettact.wire.v1.SnapshotRoute
+	30, // 51: nettact.wire.v1.InterfaceState.wifi:type_name -> nettact.wire.v1.WiFiInfo
+	61, // 52: nettact.wire.v1.HostSnapshot.ts:type_name -> google.protobuf.Timestamp
+	33, // 53: nettact.wire.v1.HostSnapshot.processes:type_name -> nettact.wire.v1.ProcessInfo
+	34, // 54: nettact.wire.v1.HostSnapshot.connections:type_name -> nettact.wire.v1.ConnectionInfo
+	32, // 55: nettact.wire.v1.HostSnapshot.scopes:type_name -> nettact.wire.v1.SnapshotScopeResult
+	61, // 56: nettact.wire.v1.TelemetryAck.server_time:type_name -> google.protobuf.Timestamp
+	41, // 57: nettact.wire.v1.DesiredState.probe_targets:type_name -> nettact.wire.v1.ProbeTarget
+	44, // 58: nettact.wire.v1.DesiredState.intervals:type_name -> nettact.wire.v1.Intervals
+	42, // 59: nettact.wire.v1.DesiredState.proxies:type_name -> nettact.wire.v1.ProxySpec
+	38, // 60: nettact.wire.v1.DesiredState.game:type_name -> nettact.wire.v1.GameConfig
+	37, // 61: nettact.wire.v1.DesiredState.diag:type_name -> nettact.wire.v1.DiagPolicy
+	39, // 62: nettact.wire.v1.GameConfig.profiles:type_name -> nettact.wire.v1.GameProfile
+	43, // 63: nettact.wire.v1.ProbeTarget.params:type_name -> nettact.wire.v1.ProbeParams
+	60, // 64: nettact.wire.v1.ProbeParams.headers:type_name -> nettact.wire.v1.ProbeParams.HeadersEntry
+	61, // 65: nettact.wire.v1.SceneReport.collected_at:type_name -> google.protobuf.Timestamp
+	46, // 66: nettact.wire.v1.SceneReport.triggers:type_name -> nettact.wire.v1.SceneTrigger
+	47, // 67: nettact.wire.v1.SceneReport.groups:type_name -> nettact.wire.v1.SnapshotGroupResult
+	48, // 68: nettact.wire.v1.SceneReport.network:type_name -> nettact.wire.v1.SnapshotNetwork
+	51, // 69: nettact.wire.v1.SceneReport.agent:type_name -> nettact.wire.v1.SnapshotAgentInfo
+	52, // 70: nettact.wire.v1.SceneReport.resources:type_name -> nettact.wire.v1.SnapshotResources
+	53, // 71: nettact.wire.v1.SceneReport.targets:type_name -> nettact.wire.v1.SnapshotTargetResult
+	61, // 72: nettact.wire.v1.SceneTrigger.first_failed_at:type_name -> google.protobuf.Timestamp
+	61, // 73: nettact.wire.v1.SceneTrigger.disconnected_at:type_name -> google.protobuf.Timestamp
+	61, // 74: nettact.wire.v1.SnapshotGroupResult.collected_at:type_name -> google.protobuf.Timestamp
+	49, // 75: nettact.wire.v1.SnapshotNetwork.interfaces:type_name -> nettact.wire.v1.SnapshotInterface
+	50, // 76: nettact.wire.v1.SnapshotNetwork.default_route:type_name -> nettact.wire.v1.SnapshotRoute
+	61, // 77: nettact.wire.v1.TraceResult.started_at:type_name -> google.protobuf.Timestamp
+	61, // 78: nettact.wire.v1.TraceResult.completed_at:type_name -> google.protobuf.Timestamp
+	55, // 79: nettact.wire.v1.TraceResult.hops:type_name -> nettact.wire.v1.TraceHop
+	61, // 80: nettact.wire.v1.TraceResult.first_failed_at:type_name -> google.protobuf.Timestamp
+	56, // 81: nettact.wire.v1.TraceHop.attempts:type_name -> nettact.wire.v1.TraceAttempt
+	82, // [82:82] is the sub-list for method output_type
+	82, // [82:82] is the sub-list for method input_type
+	82, // [82:82] is the sub-list for extension type_name
+	82, // [82:82] is the sub-list for extension extendee
+	0,  // [0:82] is the sub-list for field type_name
 }
 
 func init() { file_telemetry_proto_init() }
@@ -5990,11 +5930,9 @@ func file_telemetry_proto_init() {
 		(*Frame_Packet)(nil),
 		(*Frame_HostSnapshot)(nil),
 		(*Frame_MonitorStatus)(nil),
-		(*Frame_IncidentSnapshot)(nil),
 		(*Frame_Ack)(nil),
 		(*Frame_DesiredState)(nil),
 		(*Frame_SnapshotRequest)(nil),
-		(*Frame_IncidentSnapshotRequest)(nil),
 	}
 	file_telemetry_proto_msgTypes[13].OneofWrappers = []any{}
 	file_telemetry_proto_msgTypes[17].OneofWrappers = []any{}
@@ -6004,14 +5942,14 @@ func file_telemetry_proto_init() {
 	file_telemetry_proto_msgTypes[31].OneofWrappers = []any{}
 	file_telemetry_proto_msgTypes[33].OneofWrappers = []any{}
 	file_telemetry_proto_msgTypes[34].OneofWrappers = []any{}
-	file_telemetry_proto_msgTypes[53].OneofWrappers = []any{}
+	file_telemetry_proto_msgTypes[52].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_telemetry_proto_rawDesc), len(file_telemetry_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   62,
+			NumMessages:   61,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

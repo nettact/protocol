@@ -87,27 +87,32 @@ message MonitorStatusEntry {
 
 // Frame is the envelope for every message on the agent <-> server WebSocket.
 // Exactly one field is set.
+//
 // 9 (trace_request) and 11 (trace_result) held the server->agent traceroute
 // command and its direct answer. Traceroute is now triggered by the agent itself
 // and its result rides the WAL inside Packet, so both numbers are reserved: an
 // instant command frame and a durable payload are opposite delivery contracts,
 // and a number that once meant "run this trace now" must never come back meaning
 // anything else.
+//
+// 8 (incident_snapshot_request) and 10 (incident_snapshot) went the same way for
+// the same reason, one release later: the agent that most needs to describe a
+// fault is the one that just became unreachable, so commanding a scene down the
+// socket only worked for the faults it was least needed for. Scenes are now
+// triggered by the agent and ride Packet as SceneReport.
 message Frame {
-  reserved 9, 11;
-  reserved "trace_request", "trace_result";
+  reserved 8, 9, 10, 11;
+  reserved "incident_snapshot_request", "trace_request", "incident_snapshot", "trace_result";
   oneof msg {
     // agent -> server
     Hello hello = 1;
     Packet packet = 2;
     HostSnapshot host_snapshot = 3;
     MonitorStatus monitor_status = 7;
-    IncidentSnapshot incident_snapshot = 10;
     // server -> agent
     TelemetryAck ack = 4;
     DesiredState desired_state = 5;
     SnapshotRequest snapshot_request = 6;
-    IncidentSnapshotRequest incident_snapshot_request = 8;
   }
 }
 
@@ -139,6 +144,11 @@ message Packet {
   // most likely reason the link is down: a result answered on the socket would
   // be lost exactly when it is worth having.
   repeated TraceResult trace_results = 16;
+  // Incident scenes the agent collected on a fault edge it detected itself.
+  // Same delivery argument as the traces above, taken further: one of the two
+  // triggers IS the socket going down, so a scene answered on the socket is a
+  // scene that could never have been sent.
+  repeated SceneReport scene_reports = 17;
 }
 
 // Metric mirrors telemetry.Metric.
@@ -707,50 +717,43 @@ message Intervals {
   int32 regular_seconds = 2;
 }
 
-// IncidentSnapshotRequest mirrors config.IncidentSnapshotRequest — the one-shot
-// server->agent ask for an immutable incident scene snapshot (INCIDENT-002).
-message IncidentSnapshotRequest {
-  string request_id = 1;
-  string incident_id = 2;
-  // The absolute deadline this carried was minted on the server clock and read on
-  // the agent's, so clock skew came straight out of the collection window; it was
-  // replaced by budget_ms and is reserved so the number/name can never be
-  // silently reused.
-  reserved 3;
-  reserved "deadline";
-  repeated SnapshotTargetRef targets = 4;
-  // Collection budget measured from arrival on the agent's own clock, never an
-  // absolute timestamp — agent/server clock skew must not shrink the window.
-  int32 budget_ms = 5;
-}
-
-// SnapshotTargetRef mirrors config.SnapshotTargetRef.
-message SnapshotTargetRef {
-  string monitor_id = 1;
-  string kind = 2;
-  // Literal/host/URL as configured. For kind=gateway this is the
-  // server-normalized sentinel "gateway", not a hostname — the agent resolves
-  // it from its own routing table (see iface), never through DNS.
-  string target = 3;
-  int32 port = 4;
-  // kind=gateway only: the NIC to resolve the gateway from (ProbeParams.
-  // interface); empty means the default NIC.
-  string iface = 5;
-}
-
-// IncidentSnapshot mirrors telemetry.IncidentSnapshot — the agent's allowlisted
-// incident-scene evidence. Field groups carry only non-sensitive network/agent/
-// resource/target context; typed payloads are set only when their group
-// collected.
-message IncidentSnapshot {
-  string request_id = 1;
-  string incident_id = 2;
-  google.protobuf.Timestamp collected_at = 3;
+// SceneReport mirrors telemetry.SceneReport — the agent's allowlisted evidence
+// about its own surroundings at the moment it detected a fault. Field groups
+// carry only non-sensitive network/agent/resource/target context; typed payloads
+// are set only when their group collected.
+//
+// It is SELF-DESCRIBING for the same reason TraceResult is: the server issued no
+// request, so it holds no plan to match this answer against. triggers is what
+// makes the report claimable — see SceneTrigger.
+message SceneReport {
+  string report_id = 1;
+  google.protobuf.Timestamp collected_at = 2;
+  repeated SceneTrigger triggers = 3;
   repeated SnapshotGroupResult groups = 4;
   SnapshotNetwork network = 5;
   SnapshotAgentInfo agent = 6;
   SnapshotResources resources = 7;
   repeated SnapshotTargetResult targets = 8;
+}
+
+// SceneTrigger mirrors telemetry.SceneTrigger — one fault edge a scene answers
+// for, and the key the server claims it by. A probe fault is identified by
+// (monitor_id, config_serial) rather than by a time window, so two targets
+// failing in the same minute stay apart and an edit to a target cannot let
+// evidence from its previous generation surface under it.
+message SceneTrigger {
+  string kind = 1; // open enum (telemetry.SceneTrigger*)
+  // probe_fault
+  string monitor_id = 2;
+  int32 config_serial = 3;
+  int32 trigger_streak = 4;
+  google.protobuf.Timestamp first_failed_at = 5;
+  // server_disconnect
+  google.protobuf.Timestamp disconnected_at = 6;
+  string reason = 7;
+  // How many disconnect edges this entry stands for, at least 1: a flapping link
+  // merges into one trigger, and the count keeps that from reading as one drop.
+  int32 edge_count = 8;
 }
 
 // SnapshotGroupResult mirrors telemetry.SnapshotGroupResult.

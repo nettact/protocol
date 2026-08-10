@@ -56,6 +56,65 @@ func samplePacket() telemetry.Packet {
 		GameGaps:        sampleGameGaps(ts),
 		GameHostSeconds: sampleGameHostSeconds(ts),
 		TraceResults:    sampleTraceResults(ts),
+		SceneReports:    sampleSceneReports(ts),
+	}
+}
+
+// sampleSceneReports exercises every SceneReport field for the same reason the
+// trace sample does: nobody else can fill a gap in a self-describing record. The
+// two shapes are the two triggers — a probe fault, which carries the monitor
+// identity the server claims it by and resolves the failing target, and a server
+// disconnect, which carries no monitor and no targets at all because the probes
+// were fine and only the uplink was not.
+func sampleSceneReports(ts time.Time) []telemetry.SceneReport {
+	cpu := 62.5
+	var memTotal, memUsed uint64 = 32 << 30, 21 << 30
+	return []telemetry.SceneReport{
+		{
+			ReportID: "scene_1", CollectedAt: ts,
+			Triggers: []telemetry.SceneTrigger{{
+				Kind:      telemetry.SceneTriggerProbeFault,
+				MonitorID: "probe_mon1", ConfigSerial: 41,
+				TriggerStreak: 3, FirstFailedAt: ts.Add(-30 * time.Second),
+			}},
+			Groups: []telemetry.SnapshotGroupResult{
+				{Group: telemetry.SnapshotGroupNetwork, Status: telemetry.ScopeCollected, CollectedAt: ts},
+				{Group: telemetry.SnapshotGroupResources, Status: telemetry.ScopeDenied, Reason: "permission_denied"},
+				{Group: telemetry.SnapshotGroupTargets, Status: telemetry.ScopeCollected, CollectedAt: ts},
+			},
+			Network: &telemetry.SnapshotNetwork{
+				Interfaces: []telemetry.SnapshotInterface{
+					{Name: "eth0", Addrs: []string{"10.0.0.2/24"}, Up: true},
+					{Name: "wlan0", Addrs: []string{"192.168.1.2/24"}, Up: true, IsWireless: true},
+				},
+				DefaultRoute: &telemetry.SnapshotRoute{Gateway: "10.0.0.1", Interface: "eth0"},
+				DNSServers:   []string{"1.1.1.1", "8.8.8.8"},
+			},
+			Agent: &telemetry.SnapshotAgentInfo{
+				AgentID: "agent-abc", Hostname: "host-1", Platform: "windows", AgentVersion: "0.3.0",
+			},
+			Targets: []telemetry.SnapshotTargetResult{
+				{MonitorID: "probe_mon1", Kind: "icmp", Target: "1.1.1.1", ResolvedIPs: []string{"1.1.1.1"}, Endpoints: []string{"1.1.1.1"}},
+				{MonitorID: "probe_mon2", Kind: "http", Target: "http://example.com", ErrorClass: "dns_error"},
+			},
+		},
+		{
+			ReportID: "scene_2", CollectedAt: ts.Add(time.Minute),
+			// A merged flapping edge: one trigger standing for four disconnects,
+			// which is a different fact from one clean drop and has to survive.
+			Triggers: []telemetry.SceneTrigger{{
+				Kind:           telemetry.SceneTriggerServerDisconnect,
+				DisconnectedAt: ts.Add(50 * time.Second),
+				Reason:         "network", EdgeCount: 4,
+			}},
+			Groups: []telemetry.SnapshotGroupResult{
+				{Group: telemetry.SnapshotGroupNetwork, Status: telemetry.ScopeFailed, Reason: "collect_failed"},
+				{Group: telemetry.SnapshotGroupResources, Status: telemetry.ScopeCollected, CollectedAt: ts.Add(time.Minute)},
+			},
+			Resources: &telemetry.SnapshotResources{
+				CPUPercent: &cpu, MemoryTotalBytes: &memTotal, MemoryUsedBytes: &memUsed,
+			},
+		},
 	}
 }
 
@@ -678,27 +737,14 @@ func TestFrameRoundTrip(t *testing.T) {
 			{MonitorID: "probe_mon3", Status: MonitorStatusTargetBlocked, MatchedSelector: "scope:loopback", Reason: "literal_denied"},
 		},
 	}
-	isr := config.IncidentSnapshotRequest{
-		RequestID: "isnapreq-1", IncidentID: "inc-1", BudgetMs: 10_000,
-		Targets: []config.SnapshotTargetRef{
-			{MonitorID: "probe_mon1", Kind: "http", Target: "http://example.com/generate_204", Port: 80},
-			{MonitorID: "probe_mon2", Kind: "icmp", Target: "1.1.1.1"},
-			// Gateway ref: the sentinel target plus the NIC selection, which is the
-			// only thing that tells the agent WHICH gateway to resolve from its
-			// routing table. Dropping Iface in either converter half silently
-			// retargets the snapshot at the default NIC's gateway.
-			{MonitorID: "probe_gw1", Kind: "gateway", Target: "gateway", Iface: "以太网"},
-		},
-	}
 	frames := map[string]Frame{
-		"hello":                     {Hello: &hello},
-		"packet":                    {Packet: &pkt},
-		"host_snapshot":             {HostSnapshot: &snap},
-		"monitor_status":            {MonitorStatus: &ms},
-		"ack":                       {Ack: &ack},
-		"desired_state":             {DesiredState: &ds},
-		"snapshot_request":          {SnapshotRequest: &sr},
-		"incident_snapshot_request": {IncidentSnapshotRequest: &isr},
+		"hello":            {Hello: &hello},
+		"packet":           {Packet: &pkt},
+		"host_snapshot":    {HostSnapshot: &snap},
+		"monitor_status":   {MonitorStatus: &ms},
+		"ack":              {Ack: &ack},
+		"desired_state":    {DesiredState: &ds},
+		"snapshot_request": {SnapshotRequest: &sr},
 	}
 	for name, in := range frames {
 		for _, ct := range []string{ContentTypeJSON, ContentTypeProtobuf} {

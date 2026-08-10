@@ -43,4 +43,12 @@ type Packet struct {
 	// outage it was collected to explain. Each carries an agent-minted report id,
 	// so the packet-level (agent, sequence) dedup already makes a replay a no-op.
 	TraceResults []TraceResult `json:"trace_results,omitempty"`
+	// SceneReports are the incident scenes the agent collected on fault edges it
+	// detected itself — a probe streak crossing its confirmation threshold, or
+	// its own session to this server dropping. They ride the outbox for the same
+	// reason the traces do, only more so: the disconnect trigger exists precisely
+	// for the window in which no socket is available, so a scene answered live is
+	// a scene that never exists. Each carries an agent-minted report id, so the
+	// packet-level (agent, sequence) dedup already makes a replay a no-op.
+	SceneReports []SceneReport `json:"scene_reports,omitempty"`
 }

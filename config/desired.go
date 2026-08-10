@@ -4,8 +4,6 @@
 // agent never listens, and users don't edit agent config files (low friction).
 package config
 
-import "time"
-
 // DesiredState is the monitoring configuration for one agent. The agent applies
 // it and echoes ConfigVersion back in every MonitorStatus frame, which is how
 // the server tells when the agent is up to date.
@@ -122,36 +120,6 @@ type SnapshotRequest struct {
 	Scopes    []string `json:"scopes,omitempty"`
 }
 
-// IncidentSnapshotRequest is a one-shot server->agent ask for an immutable
-// incident scene snapshot (INCIDENT-002), pushed as a standalone frame. It is
-// transient — not versioned into ConfigVersion — and answered once with a
-// telemetry.IncidentSnapshot carrying the same RequestID and IncidentID. The
-// agent collects only the allowlisted evidence groups and stops when BudgetMs
-// runs out, reporting per-group collected/denied/unsupported/failed either way.
-type IncidentSnapshotRequest struct {
-	RequestID  string              `json:"request_id"`        // stable snapshot request id (idempotency key with IncidentID + agent)
-	IncidentID string              `json:"incident_id"`       // the incident this snapshot belongs to
-	BudgetMs   int                 `json:"budget_ms"`         // collection budget measured from arrival on the agent's own clock (see BudgetWindow)
-	Targets    []SnapshotTargetRef `json:"targets,omitempty"` // monitor targets to resolve endpoints/error class for
-}
-
-// SnapshotTargetRef identifies one monitor target the incident snapshot should
-// resolve. It carries enough to key the result by monitor id, choose the probe
-// semantics (Kind), and reconstruct the endpoint (Target + Port).
-//
-// Kind decides how Target is interpreted, and NOT every kind carries a
-// resolvable host: gateway monitors carry the server-normalized sentinel
-// "gateway" and are resolved from the agent's routing table (via Iface), never
-// through DNS. The server does not send host-anchor monitors here at all — they
-// name a metric series ("host", "*", "C:"), not a network destination.
-type SnapshotTargetRef struct {
-	MonitorID string `json:"monitor_id"`      // stable server-side monitor id (probe_tasks.id)
-	Kind      string `json:"kind"`            // "icmp" | "dns" | "http" | "tcp" | "nat" | "gateway"
-	Target    string `json:"target"`          // literal/host/URL as configured; the sentinel "gateway" for kind=gateway
-	Port      int    `json:"port,omitempty"`  // TCP/UDP port when the kind carries one
-	Iface     string `json:"iface,omitempty"` // kind=gateway only: the NIC to resolve the gateway from (ProbeParams.Interface); "" = default NIC
-}
-
 // Traceroute modes (telemetry.TraceResult.Mode). ICMP and TCP are executed
 // independently; there is no automatic fallback between them at execution time.
 // The mode is no longer part of a pushed request — the agent picks it from the
@@ -161,34 +129,6 @@ const (
 	TraceModeICMP = "icmp"
 	TraceModeTCP  = "tcp"
 )
-
-// BudgetWindow converts a request's receipt-relative budget in milliseconds into
-// an absolute deadline on the receiving agent's own clock, anchored at the
-// request's arrival instant receivedAt and evaluated as of now.
-//
-// One-shot server->agent requests carry a duration, never an absolute timestamp:
-// the two clocks are independent and can be minutes apart, and a timestamp minted
-// on the server clock and consumed on the agent clock has the whole skew
-// subtracted from (or added to) the window. A skew larger than the budget makes
-// the request expire the instant it arrives, so every collection reports a
-// timeout that never happened. A duration is skew-immune — it costs only the push
-// latency, which the server absorbs by keeping its own reaping deadline.
-//
-// Anchoring at arrival rather than at now is what keeps handler scheduling delay
-// from being handed back as extra window, so the two instants are separate
-// arguments and both are needed: ok is false for a non-positive budget AND for a
-// window that already elapsed between arrival and now. Either way the window is
-// spent, so the receiver must not start and reports its terminal timed-out state.
-func BudgetWindow(budgetMs int, receivedAt, now time.Time) (time.Time, bool) {
-	if budgetMs <= 0 {
-		return time.Time{}, false
-	}
-	deadline := receivedAt.Add(time.Duration(budgetMs) * time.Millisecond)
-	if !now.Before(deadline) {
-		return time.Time{}, false
-	}
-	return deadline, true
-}
 
 // ProbeTarget is one monitoring target pushed to the agent.
 type ProbeTarget struct {
