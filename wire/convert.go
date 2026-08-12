@@ -920,6 +920,9 @@ func desiredStateToProto(d config.DesiredState) *pb.DesiredState {
 					NatTransport:     t.Params.NATTransport,
 					StunServer2:      t.Params.STUNServer2,
 					Interface:        t.Params.Interface,
+					SizeSweep:        t.Params.SizeSweep,
+					PayloadSizes:     int32SliceToProto(t.Params.PayloadSizes),
+					FlowFanout:       int32(t.Params.FlowFanout),
 				},
 			}
 		}
@@ -1112,6 +1115,9 @@ func desiredStateFromProto(d *pb.DesiredState) config.DesiredState {
 					NATTransport:     t.Params.NatTransport,
 					STUNServer2:      t.Params.StunServer2,
 					Interface:        t.Params.Interface,
+					SizeSweep:        t.Params.SizeSweep,
+					PayloadSizes:     int32SliceFromProto(t.Params.PayloadSizes),
+					FlowFanout:       int(t.Params.FlowFanout),
 				}
 			}
 			out.ProbeTargets[i] = pt
@@ -1542,6 +1548,31 @@ func frameFromProto(f *pb.Frame) Frame {
 	case *pb.Frame_SnapshotRequest:
 		sr := snapshotRequestFromProto(m.SnapshotRequest)
 		out.SnapshotRequest = &sr
+	}
+	return out
+}
+
+// int32SliceToProto maps a Go []int to the protobuf []int32, returning nil for
+// an empty slice so an unset field round-trips as absent rather than [].
+func int32SliceToProto(in []int) []int32 {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]int32, len(in))
+	for i, v := range in {
+		out[i] = int32(v)
+	}
+	return out
+}
+
+// int32SliceFromProto maps a protobuf []int32 back to a Go []int, nil for empty.
+func int32SliceFromProto(in []int32) []int {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]int, len(in))
+	for i, v := range in {
+		out[i] = int(v)
 	}
 	return out
 }

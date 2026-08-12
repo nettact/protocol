@@ -3917,8 +3917,15 @@ type ProbeParams struct {
 	NatTransport     string            `protobuf:"bytes,23,opt,name=nat_transport,json=natTransport,proto3" json:"nat_transport,omitempty"`
 	StunServer2      string            `protobuf:"bytes,24,opt,name=stun_server2,json=stunServer2,proto3" json:"stun_server2,omitempty"`
 	Interface        string            `protobuf:"bytes,25,opt,name=interface,proto3" json:"interface,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Size sweep (icmp/gateway): probe each cycle at several payload sizes so
+	// size-correlated loss (physical layer) is separable from congestion.
+	SizeSweep    bool    `protobuf:"varint,26,opt,name=size_sweep,json=sizeSweep,proto3" json:"size_sweep,omitempty"`
+	PayloadSizes []int32 `protobuf:"varint,27,rep,packed,name=payload_sizes,json=payloadSizes,proto3" json:"payload_sizes,omitempty"` // swept ICMP payload bytes; empty = default sweep
+	// Flow fan-out (tcp): probe with N pinned source ports per cycle so a
+	// deterministic bad ECMP/LAG hash subset is distinguishable from uniform loss.
+	FlowFanout    int32 `protobuf:"varint,28,opt,name=flow_fanout,json=flowFanout,proto3" json:"flow_fanout,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ProbeParams) Reset() {
@@ -4110,6 +4117,27 @@ func (x *ProbeParams) GetInterface() string {
 		return x.Interface
 	}
 	return ""
+}
+
+func (x *ProbeParams) GetSizeSweep() bool {
+	if x != nil {
+		return x.SizeSweep
+	}
+	return false
+}
+
+func (x *ProbeParams) GetPayloadSizes() []int32 {
+	if x != nil {
+		return x.PayloadSizes
+	}
+	return nil
+}
+
+func (x *ProbeParams) GetFlowFanout() int32 {
+	if x != nil {
+		return x.FlowFanout
+	}
+	return 0
 }
 
 // Intervals mirrors config.Intervals.
@@ -5615,7 +5643,7 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x0ewg_local_addrs\x18\x10 \x01(\tR\fwgLocalAddrs\x12\x15\n" +
 	"\x06wg_dns\x18\x11 \x01(\tR\x05wgDns\x12\x15\n" +
 	"\x06wg_mtu\x18\x12 \x01(\x05R\x05wgMtu\x120\n" +
-	"\x14wg_keepalive_seconds\x18\x13 \x01(\x05R\x12wgKeepaliveSeconds\"\xa2\a\n" +
+	"\x14wg_keepalive_seconds\x18\x13 \x01(\x05R\x12wgKeepaliveSeconds\"\x87\b\n" +
 	"\vProbeParams\x12)\n" +
 	"\x10interval_seconds\x18\x01 \x01(\x05R\x0fintervalSeconds\x12\x1d\n" +
 	"\n" +
@@ -5644,7 +5672,12 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x11resolver_protocol\x18\x16 \x01(\tR\x10resolverProtocol\x12#\n" +
 	"\rnat_transport\x18\x17 \x01(\tR\fnatTransport\x12!\n" +
 	"\fstun_server2\x18\x18 \x01(\tR\vstunServer2\x12\x1c\n" +
-	"\tinterface\x18\x19 \x01(\tR\tinterface\x1a:\n" +
+	"\tinterface\x18\x19 \x01(\tR\tinterface\x12\x1d\n" +
+	"\n" +
+	"size_sweep\x18\x1a \x01(\bR\tsizeSweep\x12#\n" +
+	"\rpayload_sizes\x18\x1b \x03(\x05R\fpayloadSizes\x12\x1f\n" +
+	"\vflow_fanout\x18\x1c \x01(\x05R\n" +
+	"flowFanout\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x04\x10\x05J\x04\b\a\x10\bR\aretriesR\x0fexpected_status\"W\n" +

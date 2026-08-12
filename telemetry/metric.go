@@ -63,6 +63,18 @@ const (
 	// ProbeReason* code (UnitCode); ProbeReasonNone when the target answered. Emitted
 	// by both the public-ping and gateway-ping collectors via appendICMPMetrics.
 	ICMPErrorClass MetricKind = "probe.icmp.error_class"
+	// ICMPSizeSweep classifies whether loss rises with ICMP payload size, emitted
+	// every cycle when the target's size sweep is on (ProbeParams.SizeSweep).
+	// Unit=code; codes:
+	//   0 = flat — loss not size-correlated (the congestion/queuing signature)
+	//   1 = size-correlated — large payloads lose far more than small ones (the
+	//       physical-layer fingerprint: optics / CRC / FEC / ASIC / policer)
+	//   2 = insufficient evidence — too few echoes at the compared sizes to judge
+	// The compared sizes and per-size loss ride as labels (SizeSmallLabel,
+	// SizeLargeLabel, LossSmallLabel, LossLargeLabel, CountSmallLabel,
+	// CountLargeLabel) so the server can render the evidence without re-deriving
+	// it and the console can chart the two loss figures side by side.
+	ICMPSizeSweep MetricKind = "probe.icmp.size_sweep"
 
 	DNSResolve MetricKind = "probe.dns.resolve_ms"
 	DNSOK      MetricKind = "probe.dns.ok"
@@ -87,6 +99,17 @@ const (
 	TCPConnectMs  MetricKind = "probe.tcp.connect_ms"  // pure TCP connect time (success only)
 	TCPTLSms      MetricKind = "probe.tcp.tls_ms"      // TLS handshake time (only when TLS enabled and connect succeeded)
 	TCPErrorClass MetricKind = "probe.tcp.error_class" // ProbeReason* code (UnitCode); classifies the connect/TLS failure
+	// TCPFlowFanout classifies a TCP target probed with several pinned source
+	// ports (ProbeParams.FlowFanout >= 2), emitted every cycle. Unit=code; codes:
+	//   0 = single flow — fan-out off, or unsupported here (e.g. proxied target)
+	//   1 = uniform — failures/latency spread across flows (congestion signature)
+	//   2 = member-level — a deterministic subset of flows fails while the rest
+	//       stay clean, stable across cycles (ECMP/LAG member fault signature)
+	//   3 = all flows failed — the target is unreachable, not merely degraded
+	//   4 = insufficient evidence — too few flows or too short a history to judge
+	// Flow counts ride as labels (FlowFanoutFlowsLabel, FlowFanoutBadStableLabel,
+	// FlowFanoutBadNewLabel, FlowFanoutOKLabel).
+	TCPFlowFanout MetricKind = "probe.tcp.flow_fanout"
 
 	// NAT / STUN behavior discovery (LayerWAN). Categorical results are encoded as
 	// stable numeric codes in Value (Unit=UnitCode), ordered so a higher code is a
@@ -268,6 +291,26 @@ const (
 	NATServerLabel = "server"
 	// NATTransportLabel is the STUN transport on probe.nat.*: udp | tcp | tls | dtls.
 	NATTransportLabel = "transport"
+
+	// SizeSmallLabel / SizeLargeLabel are the two payload sizes a probe.icmp.size_sweep
+	// sample compared (bytes); LossSmallLabel / LossLargeLabel the loss percent at each
+	// ("%.1f"); CountSmallLabel / CountLargeLabel the echoes sent at each. The comparison
+	// is the smallest vs the largest swept size.
+	SizeSmallLabel  = "size_small"
+	SizeLargeLabel  = "size_large"
+	LossSmallLabel  = "loss_small"
+	LossLargeLabel  = "loss_large"
+	CountSmallLabel = "count_small"
+	CountLargeLabel = "count_large"
+
+	// FlowFanout*Label are the per-flow counts on a probe.tcp.flow_fanout sample:
+	// the total flows attempted, the flows bad this cycle AND the previous one
+	// (the deterministic / reproducible set), the flows bad this cycle but clean
+	// last cycle (flapping), and the flows clean in both.
+	FlowFanoutFlowsLabel    = "flows"
+	FlowFanoutBadStableLabel = "bad_stable"
+	FlowFanoutBadNewLabel    = "bad_new"
+	FlowFanoutOKLabel        = "ok"
 )
 
 // MetricAllowedForProbeKind reports whether a metric kind can be produced by a

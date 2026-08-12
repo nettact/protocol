@@ -83,11 +83,42 @@ func EffectiveInterval(kind string, p ProbeParams) time.Duration {
 // PacketCount when set (>0), else the default burst. It is shared by the ICMP
 // collectors and CycleDeadline so the per-cycle timing and the reported deadline
 // can never disagree.
+//
+// A size sweep (ProbeParams.SizeSweep) multiplies the count by the number of
+// swept sizes: the cycle sends PingCount-per-size echoes, round-robin across
+// sizes, so each size's loss is as statistically meaningful as a normal cycle's
+// and the per-size comparison the sweep exists for can actually be drawn. Both
+// the agent's cycle length and the server's freshness / round-completeness
+// checks read this one function, so the longer cycle is never misread as stale.
 func PingCount(p ProbeParams) int {
-	if p.PacketCount > 0 {
-		return p.PacketCount
+	count := p.PacketCount
+	if count <= 0 {
+		count = DefaultPingCount
 	}
-	return DefaultPingCount
+	if p.SizeSweep {
+		if n := len(SweepSizes(p)); n > 0 {
+			count *= n
+		}
+	}
+	return count
+}
+
+// DefaultSweepSizes is the built-in payload set a size-sweeping cycle probes
+// when a target turns on SizeSweep without listing its own PayloadSizes. The
+// two ends straddle typical internet and LAN MTUs without exceeding them: 64 is
+// the smallest common probe payload, 1400 the largest that passes an MTU-1500
+// path unfragmented, and 512 splits the difference — so a PMTU/fragmentation
+// issue is never mistaken for the CRC/optics loss the sweep is meant to find.
+var DefaultSweepSizes = []int{64, 512, 1400}
+
+// SweepSizes returns the payload sizes a size-sweeping cycle probes: the
+// target's PayloadSizes when set, else the built-in default sweep. The slice is
+// returned as-is and never mutated; callers that need a stable copy must copy.
+func SweepSizes(p ProbeParams) []int {
+	if len(p.PayloadSizes) > 0 {
+		return p.PayloadSizes
+	}
+	return DefaultSweepSizes
 }
 
 // PingEchoTimeout is the per-echo timeout for an ICMP cycle: the configured

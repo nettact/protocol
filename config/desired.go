@@ -164,6 +164,17 @@ type ProbeParams struct {
 	PacketSize      int `json:"packet_size,omitempty"`       // ICMP echo payload bytes
 	PacketCount     int `json:"packet_count,omitempty"`      // total echoes per cycle; 0 = collector default
 	GlobalTimeoutMs int `json:"global_timeout_ms,omitempty"` // overall deadline across all echoes in one cycle
+	// SizeSweep probes each cycle at several ICMP echo payload sizes instead of
+	// one fixed PacketSize, so the server can separate size-correlated loss
+	// (physical-layer degradation: optics / CRC / FEC / ASIC / policer) from
+	// congestion, where loss is flat across sizes. PayloadSizes lists the swept
+	// sizes; empty means the built-in default sweep (see config.SweepSizes). When
+	// enabled the cycle sends PingCount(params) echoes PER size, round-robin
+	// across sizes, so the total (count × len(sizes)) flows through PingCount —
+	// the same single source the server's freshness and round-completeness checks
+	// read, so the longer cycle is never mistaken for a stale or truncated one.
+	SizeSweep    bool  `json:"size_sweep,omitempty"`
+	PayloadSizes []int `json:"payload_sizes,omitempty"` // swept ICMP payload bytes; empty = default sweep
 
 	// DNS.
 	RecordType       string `json:"record_type,omitempty"`       // A | AAAA | CNAME | MX | TXT | NS (default A/AAAA)
@@ -185,6 +196,13 @@ type ProbeParams struct {
 	// TCP.
 	Port int  `json:"port,omitempty"` // TCP port to connect to (also the STUN port for kind=nat; default 3478)
 	TLS  bool `json:"tls,omitempty"`  // perform a TLS handshake after connect
+	// FlowFanout probes the target with FlowFanout distinct pinned source ports
+	// each cycle instead of one ephemeral-port connection, so a deterministic bad
+	// subset of ECMP/LAG-hashed flows — the same five-tuple hits the same member
+	// every cycle, hence reproducible — is distinguishable from uniform loss.
+	// 0/1 means the single-flow behavior. Direct-dial targets only: a proxied
+	// target's local endpoint belongs to the proxy tunnel and cannot be pinned.
+	FlowFanout int `json:"flow_fanout,omitempty"` // TCP source-port fan-out count; 0 = off
 
 	// NAT (STUN behavior discovery, RFC 5780 / RFC 4787).
 	NATTransport string `json:"nat_transport,omitempty"` // "" | udp | tcp | tls | dtls (default udp); only udp does the filtering test + classic type
