@@ -106,21 +106,23 @@ func PingCount(p ProbeParams) int {
 // DefaultSweepSizes is the built-in payload set a size-sweeping cycle probes
 // when a target turns on SizeSweep without listing its own PayloadSizes. The
 // two ends straddle typical internet and LAN MTUs without exceeding them — and,
-// critically, without exceeding the smallest egress MTU a tunneled target can
-// impose. 64 is the smallest common probe payload; 1372 is the largest ICMP
-// payload that fits a 1420-byte WireGuard tunnel unfragmented in BOTH address
-// families (1372 + 28 IPv4 / + 48 IPv6 = 1420), so a tunneled sweep's biggest
-// bucket cannot fragment and manufacture the size-correlated loss the sweep is
-// built to detect; 512 splits the difference. A PMTU/fragmentation issue is
-// therefore never mistaken for the CRC/optics loss the sweep means to find.
-var DefaultSweepSizes = []int{64, 512, 1372}
+// critically, without exceeding the SMALLEST egress MTU a tunneled target can
+// impose. 64 is the smallest common probe payload; 1232 is the largest ICMP
+// payload that fits a 1280-byte tunnel (the smallest supported WireGuard MTU,
+// and the IPv6 minimum) unfragmented in BOTH address families (1232 + 48 IPv6 /
+// + 28 IPv4 = 1280), so a tunneled sweep's biggest bucket cannot fragment and
+// manufacture the size-correlated loss the sweep is built to detect; 512 splits
+// the difference. A PMTU/fragmentation issue is therefore never mistaken for the
+// CRC/optics loss the sweep means to find.
+var DefaultSweepSizes = []int{64, 512, 1232}
 
 // MaxSweepPayloadSize is the largest payload a size sweep may use. A sweep size
-// above it fragments on a 1420-MTU tunnel (see DefaultSweepSizes), producing
-// exactly the size-correlated loss the sweep classifies as physical-layer
-// degradation — the false diagnosis the feature exists to avoid. Both the
-// default sweep and the server's per-target validation are capped here.
-const MaxSweepPayloadSize = 1372
+// above it fragments on the smallest supported tunnel MTU (1280, the IPv6
+// minimum — see DefaultSweepSizes), producing exactly the size-correlated loss
+// the sweep classifies as physical-layer degradation — the false diagnosis the
+// feature exists to avoid. Both the default sweep and the server's per-target
+// validation are capped here.
+const MaxSweepPayloadSize = 1232
 
 // SweepSizes returns the payload sizes a size-sweeping cycle probes: the
 // target's PayloadSizes when set, else the built-in default sweep. The slice is
