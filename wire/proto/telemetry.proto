@@ -35,6 +35,17 @@ message Hello {
   string platform = 3;
   string agent_version = 4;
   PermissionReport permissions = 7;
+  // Schema 8: the protocol-feature capabilities this agent speaks (wire.Cap*
+  // constants), plus the enrollment epoch of the credential it presents. The
+  // old flat capability list (field 5, reserved) predated PermissionReport and
+  // is a different axis: that one described probe permissions, this one names
+  // versioned protocol state machines. An unknown name must be ignored by the
+  // receiver, and no control frame may be sent for an undeclared capability.
+  repeated string caps = 8;
+  // The server-generated credential generation the agent believes it is on.
+  // Zero means the agent does not know it (enrolled before schema 8); a
+  // schema-8 server must not run the floor barrier for a zero-epoch Hello.
+  uint64 enrollment_epoch = 9;
 }
 
 // PermissionReport mirrors permission.PermissionReport — the agent's
@@ -113,7 +124,84 @@ message Frame {
     TelemetryAck ack = 4;
     DesiredState desired_state = 5;
     SnapshotRequest snapshot_request = 6;
+    // Schema 8 control frames (12-16): the pre-claim sequence-floor barrier
+    // and the controlled credential/epoch rotation state machine. They ride
+    // the Frame envelope rather than TelemetryAck because TelemetryAck is
+    // strictly "exactly one confirmation per in-flight packet" — folding a
+    // floor or a rotation into it would make unsolicited and per-packet
+    // semantics indistinguishable.
+    SequenceFloor sequence_floor = 12;
+    SequenceFloorApplied sequence_floor_applied = 13;
+    EpochRotationChallenge epoch_rotation_challenge = 14;
+    EpochRotationRequest epoch_rotation_request = 15;
+    EpochRotationResult epoch_rotation_result = 16;
+    EpochRotationChallengeRequest epoch_rotation_challenge_request = 17;
   }
+}
+
+// SequenceFloor is the server->agent pre-claim barrier (schema 8, capability
+// sequence_floor_v1). Before the agent may claim its first sequence for this
+// credential/epoch, the server pushes the epoch and the highest sequence it
+// has durably accepted, plus a session id the agent may use in diagnostics.
+// The agent must durably fast-forward its allocator past sequence_floor and
+// reply SequenceFloorApplied before sending its first Packet; a packet before
+// the applied reply is a protocol error.
+message SequenceFloor {
+  uint64 enrollment_epoch = 1;
+  uint64 sequence_floor = 2;
+  string session_id = 3;
+}
+
+// SequenceFloorApplied is the agent->server reply to SequenceFloor: the floor
+// is durably applied and the WAL drain is open. It is a control response, NOT
+// a packet ack — the server must not treat it as telemetry admission.
+message SequenceFloorApplied {
+  uint64 enrollment_epoch = 1;
+  uint64 sequence_floor = 2;
+}
+
+// EpochRotationChallenge is the server->agent opener of the controlled
+// credential/epoch rotation. The challenge is a server-generated one-time
+// binding of agent, old epoch, expiry and server origin; the agent proves
+// possession of the enrolled ed25519 key by signing it. Reasons are an open
+// enum (sequence_conflict, epoch_mismatch, ...) and unknown values must be
+// tolerated.
+message EpochRotationChallenge {
+  string challenge = 1;
+  string reason = 2;
+  google.protobuf.Timestamp expires_at = 3;
+}
+
+// EpochRotationRequest is the agent->server possession proof answering a
+// challenge. Signature is ed25519 over the challenge bytes with the key the
+// agent enrolled with. The server rotates the credential/epoch in one
+// transaction (new token, new epoch, old credential revoked, old sessions
+// fenced) and replies EpochRotationResult.
+message EpochRotationRequest {
+  string challenge = 1;
+  uint64 old_epoch = 2;
+  bytes signature = 3;
+}
+
+// EpochRotationResult is the server->agent terminal of a rotation. Status is
+// an open string enum (ok | denied | retry); unknown values are tolerated and
+// treated as a denial by the agent. AgentToken is shown exactly once, like
+// enrollment.
+message EpochRotationResult {
+  string status = 1;
+  uint64 new_epoch = 2;
+  string agent_token = 3;
+  string reason = 4;
+}
+
+// EpochRotationChallengeRequest is the agent->server opener of an
+// agent-initiated rotation: the agent detected it cannot safely proceed on
+// its current epoch (e.g. its in-flight WAL claim sits at or below the
+// server's sequence floor and must not be renumbered in place). The server
+// answers EpochRotationChallenge. Reason is an open string enum
+// (claim_below_floor, ...) and unknown values must be tolerated.
+message EpochRotationChallengeRequest {
+  string reason = 1;
 }
 
 // Packet mirrors telemetry.Packet — one batched, idempotent upload. Field 10

@@ -46,9 +46,10 @@ import "fmt"
 // nothing ever read it back; the live "what config has the agent applied"
 // signal is the MonitorStatus frame's config-version echo. The removal is what
 // makes it breaking: a 5 agent still stamps the field on every packet and a 6
-// server has no slot for it — protobuf would skip it silently, but the JSON
-// codec's strict decode would not, and a silent skip is exactly the ambiguity
-// an exact-match handshake exists to refuse.
+// server has no slot for it — both codecs would skip it silently (encoding/json
+// ignores unknown fields, and protobuf skips unknown field numbers), and a
+// silent skip is exactly the ambiguity an exact-match handshake exists to
+// refuse.
 //
 // 7 did to the incident scene what 5 did to traceroute. Two more frame variants
 // went away (incident_snapshot_request, incident_snapshot — Frame fields 8 and
@@ -59,7 +60,21 @@ import "fmt"
 // packets it otherwise parses, while a 6 agent would answer on a frame the 7
 // server no longer accepts. Either way the symptom is an evidence feature that
 // silently produces nothing, in exactly the outages it exists for.
-const SchemaVersion = 7
+//
+// 8 added the protocol's first negotiation-and-recovery state machines:
+// capability negotiation, the pre-claim sequence-floor barrier, and the
+// controlled credential/epoch rotation. Hello carries the wire capabilities
+// the agent speaks and the enrollment epoch of the credential it presents;
+// five new control frames (sequence_floor, sequence_floor_applied,
+// epoch_rotation_challenge, epoch_rotation_request, epoch_rotation_result)
+// ride the Frame envelope. What makes it breaking is the state machine a peer
+// must run, not a wire-shape removal: a 7 server would skip the new frames as
+// unknown fields — the floor barrier would never establish and the agent would
+// claim sequences the server cannot safely fence against a reset allocator —
+// and a 7 agent declares no capabilities and cannot perform the rotation an 8
+// server depends on for conflict recovery. Both directions fail loudly at the
+// handshake instead of limping along half-negotiated.
+const SchemaVersion = 8
 
 // ValidateSchema reports whether v is a schema version this build understands.
 // The server calls this at ingress, and the agent on the reply, so a mismatched
@@ -68,12 +83,16 @@ const SchemaVersion = 7
 // # Why this is an exact match and not a range
 //
 // It used to accept 1..SchemaVersion, which is the shape a system with deployed
-// agents needs. This one has none, and the project keeps no compatibility paths
-// (AGENTS.md) — so a range here would not buy tolerance, it would buy silence:
-// a peer speaking 2 would be admitted and every field 3 moved would be dropped
-// on the floor with nothing anywhere saying so. That is the failure mode the
-// version exists to prevent, and it is worse than a refused connection, which at
-// least names the half of the install that needs upgrading.
+// agents needs. Self-hosted builds have none: every agent and server binary in
+// one install speaks the same schema, so a range here would not buy tolerance,
+// it would buy silence: a peer speaking 2 would be admitted and every field 3
+// moved would be dropped on the floor with nothing anywhere saying so. That is
+// the failure mode the version exists to prevent, and it is worse than a
+// refused connection, which at least names the half of the install that needs
+// upgrading. Deployments that must accept several schema versions side by side
+// (a cloud gateway behind a rolling agent fleet) do so through an explicit
+// per-version adapter registry — this function stays the exact "native schema
+// of this build" check, and a range is never the mechanism.
 func ValidateSchema(v int) error {
 	if v != SchemaVersion {
 		return fmt.Errorf("unsupported schema_version %d (this build speaks %d; upgrade the other side)", v, SchemaVersion)

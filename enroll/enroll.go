@@ -36,4 +36,12 @@ type EnrollResponse struct {
 	AgentToken    string    `json:"agent_token"`
 	ServerTime    time.Time `json:"server_time"`
 	ConfigVersion int       `json:"config_version"`
+	// EnrollmentEpoch is the server-generated credential generation this token
+	// belongs to (schema 8). The agent must persist it with the credential and
+	// present it in every Hello. It advances on every credential replacement of
+	// an existing agent — both the controlled wire rotation
+	// (EpochRotationResult) and a reinstall re-enrollment, which otherwise
+	// would restart the WAL allocator on the same (agent, epoch, sequence)
+	// identity and collide with the durable receipt ledger.
+	EnrollmentEpoch uint64 `json:"enrollment_epoch"`
 }

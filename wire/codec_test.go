@@ -728,6 +728,8 @@ func TestFrameRoundTrip(t *testing.T) {
 			Source:     "environment",
 			PolicyHash: "abc123",
 		},
+		Capabilities:    []string{CapSequenceFloorV1},
+		EnrollmentEpoch: 2,
 	}
 	ms := MonitorStatus{
 		ConfigVersion: 8, PolicyHash: "abc123", UploadIntervalSeconds: 5,
@@ -745,6 +747,24 @@ func TestFrameRoundTrip(t *testing.T) {
 		"ack":              {Ack: &ack},
 		"desired_state":    {DesiredState: &ds},
 		"snapshot_request": {SnapshotRequest: &sr},
+		"sequence_floor": {SequenceFloor: &SequenceFloor{
+			EnrollmentEpoch: 2, SequenceFloor: 33711, SessionID: "sess-1",
+		}},
+		"sequence_floor_applied": {SequenceFloorApplied: &SequenceFloorApplied{
+			EnrollmentEpoch: 2, SequenceFloor: 33711,
+		}},
+		"epoch_rotation_challenge": {EpochRotationChallenge: &EpochRotationChallenge{
+			Challenge: "challenge-1", Reason: "sequence_conflict", ExpiresAt: time.Date(2026, 8, 13, 10, 0, 0, 0, time.UTC),
+		}},
+		"epoch_rotation_request": {EpochRotationRequest: &EpochRotationRequest{
+			Challenge: "challenge-1", OldEpoch: 1, Signature: []byte{0x01, 0x02, 0x03},
+		}},
+		"epoch_rotation_result": {EpochRotationResult: &EpochRotationResult{
+			Status: RotationOK, NewEpoch: 2, AgentToken: "tok-1",
+		}},
+		"epoch_rotation_challenge_request": {EpochRotationChallengeRequest: &EpochRotationChallengeRequest{
+			Reason: "claim_below_floor",
+		}},
 	}
 	for name, in := range frames {
 		for _, ct := range []string{ContentTypeJSON, ContentTypeProtobuf} {

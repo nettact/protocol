@@ -1477,11 +1477,13 @@ func traceResultFromProto(r *pb.TraceResult) telemetry.TraceResult {
 
 func helloToProto(h Hello) *pb.Hello {
 	return &pb.Hello{
-		SchemaVersion: int32(h.SchemaVersion),
-		Hostname:      h.Hostname,
-		Platform:      h.Platform,
-		AgentVersion:  h.AgentVersion,
-		Permissions:   permissionReportToProto(h.Permissions),
+		SchemaVersion:   int32(h.SchemaVersion),
+		Hostname:        h.Hostname,
+		Platform:        h.Platform,
+		AgentVersion:    h.AgentVersion,
+		Permissions:     permissionReportToProto(h.Permissions),
+		Caps:            h.Capabilities,
+		EnrollmentEpoch: h.EnrollmentEpoch,
 	}
 }
 
@@ -1490,11 +1492,13 @@ func helloFromProto(h *pb.Hello) Hello {
 		return Hello{}
 	}
 	return Hello{
-		SchemaVersion: int(h.SchemaVersion),
-		Hostname:      h.Hostname,
-		Platform:      h.Platform,
-		AgentVersion:  h.AgentVersion,
-		Permissions:   permissionReportFromProto(h.Permissions),
+		SchemaVersion:   int(h.SchemaVersion),
+		Hostname:        h.Hostname,
+		Platform:        h.Platform,
+		AgentVersion:    h.AgentVersion,
+		Permissions:     permissionReportFromProto(h.Permissions),
+		Capabilities:    h.Caps,
+		EnrollmentEpoch: h.EnrollmentEpoch,
 	}
 }
 
@@ -1517,6 +1521,18 @@ func frameToProto(f Frame) *pb.Frame {
 		out.Msg = &pb.Frame_DesiredState{DesiredState: desiredStateToProto(*f.DesiredState)}
 	case f.SnapshotRequest != nil:
 		out.Msg = &pb.Frame_SnapshotRequest{SnapshotRequest: snapshotRequestToProto(*f.SnapshotRequest)}
+	case f.SequenceFloorApplied != nil:
+		out.Msg = &pb.Frame_SequenceFloorApplied{SequenceFloorApplied: sequenceFloorAppliedToProto(*f.SequenceFloorApplied)}
+	case f.EpochRotationRequest != nil:
+		out.Msg = &pb.Frame_EpochRotationRequest{EpochRotationRequest: epochRotationRequestToProto(*f.EpochRotationRequest)}
+	case f.EpochRotationChallengeRequest != nil:
+		out.Msg = &pb.Frame_EpochRotationChallengeRequest{EpochRotationChallengeRequest: epochRotationChallengeRequestToProto(*f.EpochRotationChallengeRequest)}
+	case f.SequenceFloor != nil:
+		out.Msg = &pb.Frame_SequenceFloor{SequenceFloor: sequenceFloorToProto(*f.SequenceFloor)}
+	case f.EpochRotationChallenge != nil:
+		out.Msg = &pb.Frame_EpochRotationChallenge{EpochRotationChallenge: epochRotationChallengeToProto(*f.EpochRotationChallenge)}
+	case f.EpochRotationResult != nil:
+		out.Msg = &pb.Frame_EpochRotationResult{EpochRotationResult: epochRotationResultToProto(*f.EpochRotationResult)}
 	}
 	return out
 }
@@ -1548,8 +1564,138 @@ func frameFromProto(f *pb.Frame) Frame {
 	case *pb.Frame_SnapshotRequest:
 		sr := snapshotRequestFromProto(m.SnapshotRequest)
 		out.SnapshotRequest = &sr
+	case *pb.Frame_SequenceFloorApplied:
+		v := sequenceFloorAppliedFromProto(m.SequenceFloorApplied)
+		out.SequenceFloorApplied = &v
+	case *pb.Frame_EpochRotationRequest:
+		v := epochRotationRequestFromProto(m.EpochRotationRequest)
+		out.EpochRotationRequest = &v
+	case *pb.Frame_EpochRotationChallengeRequest:
+		v := epochRotationChallengeRequestFromProto(m.EpochRotationChallengeRequest)
+		out.EpochRotationChallengeRequest = &v
+	case *pb.Frame_SequenceFloor:
+		v := sequenceFloorFromProto(m.SequenceFloor)
+		out.SequenceFloor = &v
+	case *pb.Frame_EpochRotationChallenge:
+		v := epochRotationChallengeFromProto(m.EpochRotationChallenge)
+		out.EpochRotationChallenge = &v
+	case *pb.Frame_EpochRotationResult:
+		v := epochRotationResultFromProto(m.EpochRotationResult)
+		out.EpochRotationResult = &v
 	}
 	return out
+}
+
+// sequenceFloorToProto / sequenceFloorFromProto map the schema-8 pre-claim
+// barrier frames. The session id is diagnostic provenance, not identity.
+func sequenceFloorToProto(s SequenceFloor) *pb.SequenceFloor {
+	return &pb.SequenceFloor{
+		EnrollmentEpoch: s.EnrollmentEpoch,
+		SequenceFloor:   s.SequenceFloor,
+		SessionId:       s.SessionID,
+	}
+}
+
+func sequenceFloorFromProto(s *pb.SequenceFloor) SequenceFloor {
+	if s == nil {
+		return SequenceFloor{}
+	}
+	return SequenceFloor{
+		EnrollmentEpoch: s.EnrollmentEpoch,
+		SequenceFloor:   s.SequenceFloor,
+		SessionID:       s.SessionId,
+	}
+}
+
+func sequenceFloorAppliedToProto(s SequenceFloorApplied) *pb.SequenceFloorApplied {
+	return &pb.SequenceFloorApplied{
+		EnrollmentEpoch: s.EnrollmentEpoch,
+		SequenceFloor:   s.SequenceFloor,
+	}
+}
+
+func sequenceFloorAppliedFromProto(s *pb.SequenceFloorApplied) SequenceFloorApplied {
+	if s == nil {
+		return SequenceFloorApplied{}
+	}
+	return SequenceFloorApplied{
+		EnrollmentEpoch: s.EnrollmentEpoch,
+		SequenceFloor:   s.SequenceFloor,
+	}
+}
+
+func epochRotationChallengeToProto(e EpochRotationChallenge) *pb.EpochRotationChallenge {
+	return &pb.EpochRotationChallenge{
+		Challenge: e.Challenge,
+		Reason:    e.Reason,
+		ExpiresAt: tsToProto(e.ExpiresAt),
+	}
+}
+
+func epochRotationChallengeFromProto(e *pb.EpochRotationChallenge) EpochRotationChallenge {
+	if e == nil {
+		return EpochRotationChallenge{}
+	}
+	return EpochRotationChallenge{
+		Challenge: e.Challenge,
+		Reason:    e.Reason,
+		ExpiresAt: tsFromProto(e.ExpiresAt),
+	}
+}
+
+func epochRotationRequestToProto(e EpochRotationRequest) *pb.EpochRotationRequest {
+	return &pb.EpochRotationRequest{
+		Challenge: e.Challenge,
+		OldEpoch:  e.OldEpoch,
+		Signature: e.Signature,
+	}
+}
+
+func epochRotationRequestFromProto(e *pb.EpochRotationRequest) EpochRotationRequest {
+	if e == nil {
+		return EpochRotationRequest{}
+	}
+	return EpochRotationRequest{
+		Challenge: e.Challenge,
+		OldEpoch:  e.OldEpoch,
+		Signature: e.Signature,
+	}
+}
+
+func epochRotationResultToProto(e EpochRotationResult) *pb.EpochRotationResult {
+	return &pb.EpochRotationResult{
+		Status:     e.Status,
+		NewEpoch:   e.NewEpoch,
+		AgentToken: e.AgentToken,
+		Reason:     e.Reason,
+	}
+}
+
+func epochRotationResultFromProto(e *pb.EpochRotationResult) EpochRotationResult {
+	if e == nil {
+		return EpochRotationResult{}
+	}
+	return EpochRotationResult{
+		Status:     e.Status,
+		NewEpoch:   e.NewEpoch,
+		AgentToken: e.AgentToken,
+		Reason:     e.Reason,
+	}
+}
+
+func epochRotationChallengeRequestToProto(e EpochRotationChallengeRequest) *pb.EpochRotationChallengeRequest {
+	return &pb.EpochRotationChallengeRequest{
+		Reason: e.Reason,
+	}
+}
+
+func epochRotationChallengeRequestFromProto(e *pb.EpochRotationChallengeRequest) EpochRotationChallengeRequest {
+	if e == nil {
+		return EpochRotationChallengeRequest{}
+	}
+	return EpochRotationChallengeRequest{
+		Reason: e.Reason,
+	}
 }
 
 // int32SliceToProto maps a Go []int to the protobuf []int32, returning nil for

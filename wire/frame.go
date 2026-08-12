@@ -17,12 +17,21 @@ import (
 // refreshed on every (re)connect. (It used to carry a reported config
 // watermark too; the server pushes DesiredState unconditionally on connect, so
 // the watermark informed nothing and was removed in schema 6.)
+//
+// Schema 8 added Capabilities and EnrollmentEpoch. Capabilities declares the
+// protocol state machines this agent speaks (see CapSequenceFloorV1); a server
+// must never send control frames for an undeclared capability. EnrollmentEpoch
+// is the server-generated credential generation the agent believes it is on;
+// zero means unknown (enrolled before schema 8), and a schema-8 server must
+// not run the floor barrier for a zero-epoch Hello.
 type Hello struct {
-	SchemaVersion int                         `json:"schema_version"`
-	Hostname      string                      `json:"hostname"`
-	Platform      string                      `json:"platform"`
-	AgentVersion  string                      `json:"agent_version"`
-	Permissions   permission.PermissionReport `json:"permissions"`
+	SchemaVersion   int                         `json:"schema_version"`
+	Hostname        string                      `json:"hostname"`
+	Platform        string                      `json:"platform"`
+	AgentVersion    string                      `json:"agent_version"`
+	Permissions     permission.PermissionReport `json:"permissions"`
+	Capabilities    []string                    `json:"capabilities,omitempty"`
+	EnrollmentEpoch uint64                      `json:"enrollment_epoch,omitempty"`
 }
 
 // MonitorStatus is the agent's full-state report of how it evaluated every
@@ -78,10 +87,19 @@ type Frame struct {
 	Packet        *telemetry.Packet       `json:"packet,omitempty"`
 	HostSnapshot  *telemetry.HostSnapshot `json:"host_snapshot,omitempty"`
 	MonitorStatus *MonitorStatus          `json:"monitor_status,omitempty"`
+	// schema 8 control frames: the sequence-floor barrier
+	SequenceFloorApplied          *SequenceFloorApplied          `json:"sequence_floor_applied,omitempty"`
+	EpochRotationRequest          *EpochRotationRequest          `json:"epoch_rotation_request,omitempty"`
+	EpochRotationChallengeRequest *EpochRotationChallengeRequest `json:"epoch_rotation_challenge_request,omitempty"`
 	// server -> agent
 	Ack             *Ack                    `json:"ack,omitempty"`
 	DesiredState    *config.DesiredState    `json:"desired_state,omitempty"`
 	SnapshotRequest *config.SnapshotRequest `json:"snapshot_request,omitempty"`
+	// schema 8 control frames: the sequence-floor barrier and the controlled
+	// credential/epoch rotation
+	SequenceFloor          *SequenceFloor          `json:"sequence_floor,omitempty"`
+	EpochRotationChallenge *EpochRotationChallenge `json:"epoch_rotation_challenge,omitempty"`
+	EpochRotationResult    *EpochRotationResult    `json:"epoch_rotation_result,omitempty"`
 }
 
 // ErrFrameVariant reports a frame with zero or more than one payload set.
@@ -92,7 +110,9 @@ func (f Frame) variants() int {
 	n := 0
 	for _, set := range []bool{
 		f.Hello != nil, f.Packet != nil, f.HostSnapshot != nil, f.MonitorStatus != nil,
+		f.SequenceFloorApplied != nil, f.EpochRotationRequest != nil, f.EpochRotationChallengeRequest != nil,
 		f.Ack != nil, f.DesiredState != nil, f.SnapshotRequest != nil,
+		f.SequenceFloor != nil, f.EpochRotationChallenge != nil, f.EpochRotationResult != nil,
 	} {
 		if set {
 			n++
