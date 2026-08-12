@@ -713,8 +713,8 @@ message ProbeParams {
   // size-correlated loss (physical layer) is separable from congestion.
   bool size_sweep = 26;
   repeated int32 payload_sizes = 27; // swept ICMP payload bytes; empty = default sweep
-  // Flow fan-out (tcp): probe with N pinned source ports per cycle so a
-  // deterministic bad ECMP/LAG hash subset is distinguishable from uniform loss.
+  // Flow fan-out (tcp/http): probe through N pinned source ports per cycle.
+  // TCP diagnoses stable path subsets; HTTP repeats the full GET/HEAD check.
   int32 flow_fanout = 28;
 }
 

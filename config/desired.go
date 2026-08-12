@@ -196,13 +196,12 @@ type ProbeParams struct {
 	// TCP.
 	Port int  `json:"port,omitempty"` // TCP port to connect to (also the STUN port for kind=nat; default 3478)
 	TLS  bool `json:"tls,omitempty"`  // perform a TLS handshake after connect
-	// FlowFanout probes the target with FlowFanout distinct pinned source ports
-	// each cycle instead of one ephemeral-port connection, so a deterministic bad
-	// subset of ECMP/LAG-hashed flows — the same five-tuple hits the same member
-	// every cycle, hence reproducible — is distinguishable from uniform loss.
-	// 0/1 means the single-flow behavior. Direct-dial targets only: a proxied
-	// target's local endpoint belongs to the proxy tunnel and cannot be pinned.
-	FlowFanout int `json:"flow_fanout,omitempty"` // TCP source-port fan-out count; 0 = off
+	// FlowFanout probes a TCP or HTTP target through distinct pinned source ports
+	// each cycle. TCP can expose a stable bad ECMP/LAG hash subset; HTTP repeats the
+	// complete GET/HEAD acceptance check to expose stable service-branch differences.
+	// 0/1 means normal single-flow behavior. Direct targets only; HTTP fan-out also
+	// requires redirects to be disabled so every branch keeps one destination.
+	FlowFanout int `json:"flow_fanout,omitempty"` // TCP/HTTP source-port fan-out count; 0 = off
 
 	// NAT (STUN behavior discovery, RFC 5780 / RFC 4787).
 	NATTransport string `json:"nat_transport,omitempty"` // "" | udp | tcp | tls | dtls (default udp); only udp does the filtering test + classic type

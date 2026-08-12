@@ -11,6 +11,8 @@ func TestMetricAllowedForProbeKind(t *testing.T) {
 		// Each probe kind accepts only its own family.
 		{"icmp", string(ICMPLoss), true},
 		{"icmp", string(DNSOK), false},
+		{"http", string(HTTPFlowFanout), true},
+		{"tcp", string(HTTPFlowFanout), false},
 		{"dns", string(DNSOK), true},
 		{"dns", string(HTTPOK), false},
 		{"http", string(HTTPOK), true},

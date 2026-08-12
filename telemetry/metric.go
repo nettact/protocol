@@ -89,6 +89,10 @@ const (
 	// request that fails the acceptance check as HTTPStatus/HTTPKeyword. ProbeReasonNone
 	// only when the probe fully passed. Emitted every cycle.
 	HTTPErrorClass MetricKind = "probe.http.error_class"
+	// HTTPFlowFanout classifies complete HTTP checks made through deterministic
+	// source ports. Code 2 means a repeatable branch inconsistency; unlike TCP it
+	// is service-layer evidence and does not by itself identify an ECMP/LAG member.
+	HTTPFlowFanout MetricKind = "probe.http.flow_fanout"
 
 	// TCP probe results (single connect per cycle). The dial is split into distinct
 	// timed segments so a slow-DNS vs slow-connect vs slow-TLS problem is separable,
@@ -303,11 +307,11 @@ const (
 	CountSmallLabel = "count_small"
 	CountLargeLabel = "count_large"
 
-	// FlowFanout*Label are the per-flow counts on a probe.tcp.flow_fanout sample:
+	// FlowFanout*Label are the per-flow counts on TCP/HTTP flow_fanout samples:
 	// the total flows attempted, the flows bad this cycle AND the previous one
 	// (the deterministic / reproducible set), the flows bad this cycle but clean
 	// last cycle (flapping), and the flows clean in both.
-	FlowFanoutFlowsLabel    = "flows"
+	FlowFanoutFlowsLabel     = "flows"
 	FlowFanoutBadStableLabel = "bad_stable"
 	FlowFanoutBadNewLabel    = "bad_new"
 	FlowFanoutOKLabel        = "ok"
