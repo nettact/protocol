@@ -82,8 +82,54 @@ const (
 	// ProbeReasonNone on success. Emitted every cycle.
 	DNSErrorClass MetricKind = "probe.dns.error_class"
 	HTTPStatus    MetricKind = "probe.http.status"
-	HTTPLat       MetricKind = "probe.http.latency_ms"
-	HTTPOK        MetricKind = "probe.http.ok"
+	// HTTPLat is the legacy duration from starting Client.Do until the final
+	// response headers arrive. Keep emitting it for compatibility with
+	// existing series and alert conditions; HTTPTTFBMs is the precisely traced
+	// replacement and HTTPTotalMs includes the configured response validation.
+	HTTPLat MetricKind = "probe.http.latency_ms"
+	HTTPOK  MetricKind = "probe.http.ok"
+
+	// The HTTP timing metrics below are emitted only after a final response is
+	// available and the configured acceptance checks have completed. A transport
+	// failure emits none of them, even when an earlier phase completed; error_class
+	// carries that outcome instead. For a normal request, phase durations accumulate
+	// every observed successful occurrence across its redirect chain. For a fan-out
+	// probe, durations are means over the successful branches, except DNS which is
+	// the one shared lookup performed before the branches start. A phase that did not
+	// occur, or whose duration cannot be attributed reliably, is omitted rather than
+	// represented by a synthetic zero.
+	//
+	// HTTPTotalMs is the end-to-end probe duration in milliseconds, from starting
+	// the HTTP request through redirects and the response work required by the
+	// configured acceptance checks. It ends after status validation and, when a
+	// keyword check is configured, after the bounded response body has been read.
+	HTTPTotalMs MetricKind = "probe.http.total_ms"
+	// HTTPTTFBMs is the duration in milliseconds from starting the HTTP request
+	// until the first byte of the final response headers. It includes any DNS,
+	// connect, TLS, request-write, server-processing, and redirect time before that
+	// byte. It is omitted when no first byte is observed.
+	HTTPTTFBMs MetricKind = "probe.http.ttfb_ms"
+	// HTTPConnectMs is the accumulated pure TCP connect time in milliseconds for
+	// connections actually established while completing the request. DNS lookup
+	// and TLS handshake time are excluded. It is omitted when no TCP connection is
+	// opened, including a request served entirely by a reused connection. It is
+	// also omitted for proxied requests because a client-side trace sees the proxy
+	// connection and cannot attribute a pure target-connect duration honestly.
+	HTTPConnectMs MetricKind = "probe.http.connect_ms"
+	// HTTPDNSMs is the accumulated local name-resolution time in milliseconds for
+	// lookups the HTTP transport actually performs while completing the request.
+	// A cached lookup's observed duration is valid. It is omitted for literal-IP
+	// targets, connection reuse, and proxy-side resolution.
+	HTTPDNSMs MetricKind = "probe.http.dns_ms"
+	// HTTPTLSMs is the accumulated TLS handshake time in milliseconds for TLS
+	// handshakes actually completed while completing the request. It is omitted
+	// for plain HTTP and when every applicable connection is reused.
+	HTTPTLSMs MetricKind = "probe.http.tls_ms"
+	// HTTPConnectionReused reports whether the final response used a pooled
+	// connection (UnitBool: 1 reused, 0 newly opened). It is emitted whenever a
+	// final HTTP response is available and interprets the optional phase metrics:
+	// reuse commonly means DNS, connect, and TLS observations are absent.
+	HTTPConnectionReused MetricKind = "probe.http.connection_reused"
 	// HTTPErrorClass classifies the probe failure into a ProbeReason* code (UnitCode):
 	// a transport failure (DNS/refused/timeout/TLS/…) by error type, a completed
 	// request that fails the acceptance check as HTTPStatus/HTTPKeyword. ProbeReasonNone

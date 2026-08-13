@@ -16,6 +16,12 @@ func TestMetricAllowedForProbeKind(t *testing.T) {
 		{"dns", string(DNSOK), true},
 		{"dns", string(HTTPOK), false},
 		{"http", string(HTTPOK), true},
+		{"http", string(HTTPTotalMs), true},
+		{"http", string(HTTPTTFBMs), true},
+		{"http", string(HTTPConnectMs), true},
+		{"http", string(HTTPDNSMs), true},
+		{"http", string(HTTPTLSMs), true},
+		{"http", string(HTTPConnectionReused), true},
 		{"http", string(HTTPErrorClass), true},
 		{"http", string(DNSResolve), false},
 		{"tcp", string(TCPConnectMs), true},
@@ -46,6 +52,26 @@ func TestMetricAllowedForProbeKind(t *testing.T) {
 	for _, c := range cases {
 		if got := MetricAllowedForProbeKind(c.probeKind, c.metricKind); got != c.want {
 			t.Errorf("MetricAllowedForProbeKind(%q, %q) = %v, want %v", c.probeKind, c.metricKind, got, c.want)
+		}
+	}
+}
+
+func TestHTTPMetricKindNames(t *testing.T) {
+	cases := []struct {
+		kind MetricKind
+		want string
+	}{
+		{HTTPTotalMs, "probe.http.total_ms"},
+		{HTTPTTFBMs, "probe.http.ttfb_ms"},
+		{HTTPConnectMs, "probe.http.connect_ms"},
+		{HTTPDNSMs, "probe.http.dns_ms"},
+		{HTTPTLSMs, "probe.http.tls_ms"},
+		{HTTPConnectionReused, "probe.http.connection_reused"},
+	}
+
+	for _, c := range cases {
+		if got := string(c.kind); got != c.want {
+			t.Errorf("HTTP metric kind = %q, want %q", got, c.want)
 		}
 	}
 }
