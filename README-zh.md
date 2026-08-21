@@ -104,6 +104,8 @@ WebSocket 连接可协商 `nettact.v1.protobuf` 或 `nettact.v1.json` 子协议�
 
 升级 NetTact 时，应使用彼此匹配的 Agent、Server 和 Desktop 正式版本。若自行集成此库，请在发送数据时填入当前 `SchemaVersion`，并在接收数据时调用 `protocol.ValidateSchema`。
 
+服务端组件可以通过显式的 per-version adapter 注册表（每个 schema 一个 adapter，按精确成员资格选取）同时受理相邻 schema 版本；`ValidateSchema` 本身保持本构建原生 schema 的精确匹配，绝不放宽为范围。
+
 ## 重新生成 Protobuf
 
 普通使用者不需要安装 Protobuf 工具链，生成结果已经提交在 `wire/pb/`。修改协议源码时才需要重新生成：

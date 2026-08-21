@@ -104,6 +104,8 @@ WebSocket connections can negotiate the `nettact.v1.protobuf` or `nettact.v1.jso
 
 Use mutually compatible official releases of the Agent, Server, and Desktop. Custom integrations should set the current `SchemaVersion` on outgoing data and call `protocol.ValidateSchema` on incoming data.
 
+Server components may serve an adjacent schema version alongside the current one through an explicit per-version adapter registry (one adapter per schema, selected by exact membership); `ValidateSchema` itself stays the exact native-schema check and is never relaxed into a range.
+
 ## Regenerating Protobuf
 
 Regular consumers do not need the Protobuf toolchain because generated code is committed under `wire/pb/`. Regeneration is required only when the protocol source changes:
