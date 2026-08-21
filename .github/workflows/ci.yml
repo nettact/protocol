@@ -1,0 +1,82 @@
+name: ci
+
+# The source gate for this module: the generated protobuf code must match the
+# .proto it was generated from, and the Go packages must vet, build, and test.
+#
+# The generated code is COMMITTED, which is what makes the no-drift check
+# necessary rather than merely tidy. Consumers build against the checked-in
+# .pb.go and never run the generator themselves, so an edit to the .proto that
+# is not accompanied by its regenerated output is invisible: the schema
+# document and the code that implements it disagree, and every reader who
+# checks one of them comes away confident about a contract the other does not
+# keep. Regenerating here and diffing is the only thing that keeps the two
+# honest, and it has to run on every change rather than at release time,
+# because by release time the mismatched pair has already been depended on.
+on:
+  push:
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: go.sum
+
+      - uses: bufbuild/buf-setup-action@v1
+
+      # buf.gen.yaml invokes protoc-gen-go as a LOCAL plugin, so buf alone is
+      # not enough — the setup action installs the former and not the latter,
+      # and a missing plugin fails the generate step outright.
+      #
+      # The version is read from this module's own requirement rather than
+      # written here as a literal, and that is load-bearing. The generator
+      # stamps its version into a comment at the top of every file it writes,
+      # so generating with a different version than the committed output was
+      # produced with makes the diff check fail on the stamp line alone. A
+      # literal pin in this file would be a second place to remember, and the
+      # day the two disagree the failure arrives as a drift report against a
+      # .proto nobody touched — the most misleading form this check could take.
+      # Deriving it means the runtime dependency and the generator can only
+      # ever move together.
+      - name: install the code generator at the version this module pins
+        run: |
+          version="$(go list -m -f '{{.Version}}' google.golang.org/protobuf)"
+          echo "protoc-gen-go ${version} (from go.mod)"
+          go install "google.golang.org/protobuf/cmd/protoc-gen-go@${version}"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: lint the schema
+        working-directory: wire
+        run: buf lint
+
+      - name: regenerate and assert the committed code is in sync
+        run: |
+          cd wire && buf generate
+          # -N (intent-to-add) before diffing, because `git diff` does not look
+          # at untracked files and the most important case produces exactly
+          # those. Adding a .proto, or deleting a .pb.go that should have been
+          # regenerated, makes buf write output git has never seen; a bare
+          # `git diff` reports no change and the check passes while the very
+          # file it exists to require is missing from the commit. Registering
+          # the paths first turns "absent from the index" into a diff, so the
+          # new-file case fails the way the modified-file case already did.
+          cd .. && git add -A -N -- wire/pb wire/proto
+          git diff --exit-code -- wire/pb wire/proto || {
+            echo "::error::the committed generated code does not match the .proto — run 'buf generate' in wire/ and commit the result"
+            exit 1
+          }
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test
+        run: go test ./...
