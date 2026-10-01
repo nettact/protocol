@@ -276,12 +276,21 @@ type TraceResult struct {
 	Hops        []TraceHop `json:"hops,omitempty"`
 }
 
-// Traceroute trigger rules (TraceResult.TriggerReason). One value today; it is a
-// named open enum rather than a bare boolean because "the agent ran a trace" and
-// "the agent ran a trace BECAUSE the target failed three rounds running" are
-// different statements, and only the second one is worth showing an operator.
+// Traceroute trigger rules (TraceResult.TriggerReason). It is a named open enum
+// rather than a bare boolean because "the agent ran a trace" and "the agent ran a
+// trace BECAUSE the target failed three rounds running" are different
+// statements, and only the second kind is worth showing an operator.
+//
+// TraceTriggerServerDisconnect is the agent's session to the server it reports
+// to ending in a network failure: the trace walks toward that server's own
+// address, and FirstFailedAt carries the moment the session was lost. Such a
+// report diagnoses the agent-connectivity fault, never a monitored target — even
+// one that happens to share the server's address — so a receiver files it by the
+// agent and that edge rather than by destination. A receiver that predates the
+// value stores it as an unattached report.
 const (
 	TraceTriggerConsecutiveFailures = "consecutive_failures"
+	TraceTriggerServerDisconnect    = "server_disconnect"
 )
 
 // What a trace report diagnoses (TraceResult.SubjectKind). The monitored target
