@@ -136,7 +136,7 @@ type ProbeTarget struct {
 	// The agent stamps it onto every Metric the probe emits so the server keys
 	// series per monitor — two monitors on the same target string stay distinct.
 	MonitorID string      `json:"monitor_id,omitempty"`
-	Kind      string      `json:"kind"`           // "icmp" | "dns" | "http" | "tcp" | "nat" | "gateway" (host is server-side only)
+	Kind      string      `json:"kind"`           // "icmp" | "dns" | "http" | "tcp" | "nat" | "gateway" | "trace" (host is server-side only)
 	Name      string      `json:"name,omitempty"` // human-friendly display name; optional
 	Target    string      `json:"target"`         // "1.1.1.1", "example.com", "https://…"
 	Params    ProbeParams `json:"params"`         // per-protocol probe settings (zero = collector defaults)
@@ -209,6 +209,16 @@ type ProbeParams struct {
 
 	// Gateway.
 	Interface string `json:"interface,omitempty"` // NIC to resolve the gateway from, matched against IfaceInfo.ID or Name; "" = default interface
+
+	// Trace (periodic route monitoring). A trace monitor runs one bounded
+	// traceroute per interval and reports it as a TraceResult stamped with the
+	// monitor id; TimeoutMs bounds one probe attempt and GlobalTimeoutMs the
+	// whole sweep. Port is the destination port in TCP mode (default
+	// DefaultTraceTCPPort). Only sent to an agent that declared the
+	// probe-trace capability in its Hello; an older agent never sees the kind.
+	TraceMode      string `json:"trace_mode,omitempty"`       // TraceModeICMP | TraceModeTCP (default icmp)
+	MaxHops        int    `json:"max_hops,omitempty"`         // TTL ceiling; 0 = DefaultTraceMaxHops
+	AttemptsPerHop int    `json:"attempts_per_hop,omitempty"` // probes per TTL; 0 = DefaultTraceAttemptsPerHop
 }
 
 // Intervals controls the agent scheduler tiers (seconds).

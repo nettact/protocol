@@ -804,6 +804,10 @@ message ProbeParams {
   // Flow fan-out (tcp/http): probe through N pinned source ports per cycle.
   // TCP diagnoses stable path subsets; HTTP repeats the full GET/HEAD check.
   int32 flow_fanout = 28;
+  // Trace (periodic route monitor): sweep mode and bounds; port reuses field 16.
+  string trace_mode = 29;
+  int32 max_hops = 30;
+  int32 attempts_per_hop = 31;
 }
 
 // Intervals mirrors config.Intervals.
@@ -956,6 +960,11 @@ message TraceResult {
   // stored hops to what was really asked for rather than to a guess.
   int32 max_hops = 24;
   int32 attempts_per_hop = 25;
+
+  // Set only on a periodic route-monitor sweep (trigger_reason "scheduled"):
+  // the producing monitor and its material generation, echoed like a Metric's.
+  string monitor_id = 26;
+  int32 config_serial = 27;
 }
 
 // TraceHop mirrors telemetry.TraceHop.

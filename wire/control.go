@@ -10,6 +10,13 @@ import "time"
 // frame for a capability the peer did not declare.
 const CapSequenceFloorV1 = "sequence_floor_v1"
 
+// CapProbeTraceV1 declares that the agent runs probe targets of kind "trace"
+// (periodic route monitoring) and reports them as TraceResults stamped with
+// MonitorID/ConfigSerial. A server must not push a "trace" target to an agent
+// that did not declare it: an older agent finds no permission requirement for
+// the unknown kind, reports the monitor active, and then never runs it.
+const CapProbeTraceV1 = "probe_trace_v1"
+
 // HasCapability reports whether caps contains name. Duplicate entries are
 // tolerated (set semantics); the empty list declares nothing.
 func HasCapability(caps []string, name string) bool {

@@ -31,6 +31,11 @@ const (
 	ProbeTCP            ID = "probe.tcp"
 	ProbeNAT            ID = "probe.nat"
 	NetworkGatewayProbe ID = "network.gateway.probe"
+	// ProbeTraceroute runs periodic traceroute monitors (kind "trace"). It is
+	// distinct from the diagnostic.traceroute.* pair: those authorize an
+	// occasional sweep when a monitor is already failing, this one a standing
+	// sweep every interval for as long as the monitor exists.
+	ProbeTraceroute ID = "probe.traceroute"
 )
 
 // Local network data permissions.
@@ -106,7 +111,7 @@ const (
 // is the single source of truth for All().
 var canonicalOrder = []ID{
 	ProbeICMP, ProbeDNS, ProbeHTTP, ProbeHTTPExtended, ProbeTCP, ProbeNAT,
-	NetworkGatewayProbe,
+	NetworkGatewayProbe, ProbeTraceroute,
 	NetIfaceStatusRead, NetIfaceAddressRead,
 	NetWiFiStatusRead, NetWiFiSSIDRead,
 	NetNeighborRead, NetNeighborHostRead,
@@ -461,6 +466,8 @@ func RequiredForTarget(t config.ProbeTarget) []ID {
 		return []ID{ProbeNAT}
 	case "gateway":
 		return []ID{NetworkGatewayProbe}
+	case "trace":
+		return []ID{ProbeTraceroute}
 	default:
 		return nil
 	}

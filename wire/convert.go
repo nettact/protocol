@@ -923,6 +923,9 @@ func desiredStateToProto(d config.DesiredState) *pb.DesiredState {
 					SizeSweep:        t.Params.SizeSweep,
 					PayloadSizes:     int32SliceToProto(t.Params.PayloadSizes),
 					FlowFanout:       int32(t.Params.FlowFanout),
+					TraceMode:        t.Params.TraceMode,
+					MaxHops:          int32(t.Params.MaxHops),
+					AttemptsPerHop:   int32(t.Params.AttemptsPerHop),
 				},
 			}
 		}
@@ -1118,6 +1121,9 @@ func desiredStateFromProto(d *pb.DesiredState) config.DesiredState {
 					SizeSweep:        t.Params.SizeSweep,
 					PayloadSizes:     int32SliceFromProto(t.Params.PayloadSizes),
 					FlowFanout:       int(t.Params.FlowFanout),
+					TraceMode:        t.Params.TraceMode,
+					MaxHops:          int(t.Params.MaxHops),
+					AttemptsPerHop:   int(t.Params.AttemptsPerHop),
 				}
 			}
 			out.ProbeTargets[i] = pt
@@ -1395,6 +1401,9 @@ func traceResultToProto(r telemetry.TraceResult) *pb.TraceResult {
 
 		MaxHops:        int32(r.MaxHops),
 		AttemptsPerHop: int32(r.AttemptsPerHop),
+
+		MonitorId:    r.MonitorID,
+		ConfigSerial: int32(r.ConfigSerial),
 	}
 	if len(r.Hops) > 0 {
 		out.Hops = make([]*pb.TraceHop, len(r.Hops))
@@ -1451,6 +1460,9 @@ func traceResultFromProto(r *pb.TraceResult) telemetry.TraceResult {
 
 		MaxHops:        int(r.MaxHops),
 		AttemptsPerHop: int(r.AttemptsPerHop),
+
+		MonitorID:    r.MonitorId,
+		ConfigSerial: int(r.ConfigSerial),
 	}
 	if len(r.Hops) > 0 {
 		out.Hops = make([]telemetry.TraceHop, len(r.Hops))

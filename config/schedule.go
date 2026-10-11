@@ -21,6 +21,23 @@ const (
 	DefaultHTTPInterval    = 30 * time.Second
 	DefaultTCPInterval     = 30 * time.Second
 	DefaultNATInterval     = 30 * time.Minute
+	// DefaultTraceInterval is the route-monitor cadence. A route rarely
+	// changes and one sweep is up to MaxHops×AttemptsPerHop probes, so the
+	// default is minutes, not seconds; MinTraceInterval is the floor a server
+	// validates and an agent enforces regardless of what it is pushed.
+	DefaultTraceInterval = 10 * time.Minute
+	MinTraceInterval     = 5 * time.Minute
+)
+
+// Trace monitor sweep shape (ProbeParams Trace* fields at zero).
+const (
+	DefaultTraceMaxHops        = 30
+	DefaultTraceAttemptsPerHop = 3
+	DefaultTraceTCPPort        = 443
+	// DefaultTraceCycleDeadline bounds one periodic sweep when a target sets no
+	// GlobalTimeoutMs. Shorter than the incident-diagnosis budget: a route
+	// sample that needs minutes is better reported partial than late.
+	DefaultTraceCycleDeadline = 2 * time.Minute
 )
 
 // ICMP cycle shape. One cycle sends DefaultPingCount echoes by default, each
@@ -74,6 +91,8 @@ func EffectiveInterval(kind string, p ProbeParams) time.Duration {
 		return DefaultNATInterval
 	case "gateway":
 		return DefaultGatewayInterval
+	case "trace":
+		return DefaultTraceInterval
 	default: // icmp (and any unknown kind falls back to the base tier)
 		return DefaultICMPInterval
 	}
@@ -194,6 +213,11 @@ func CycleDeadline(kind string, p ProbeParams) time.Duration {
 			return time.Duration(p.GlobalTimeoutMs) * time.Millisecond
 		}
 		return DefaultNATCycleDeadline
+	case "trace":
+		if p.GlobalTimeoutMs > 0 {
+			return time.Duration(p.GlobalTimeoutMs) * time.Millisecond
+		}
+		return DefaultTraceCycleDeadline
 	default:
 		return 0
 	}

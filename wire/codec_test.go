@@ -156,6 +156,21 @@ func sampleTraceResults(ts time.Time) []telemetry.TraceResult {
 			Status: telemetry.TraceStatusPartial, Reason: "deadline_exceeded",
 			StartedAt: ts.Add(-40 * time.Second), CompletedAt: ts.Add(-10 * time.Second),
 		},
+		{
+			// A periodic route-monitor sweep: carries the monitor identity and
+			// generation a diagnosis report leaves empty.
+			ReportID: "trace_3", Mode: config.TraceModeTCP,
+			DestKey: "host:example.org", DestHost: "example.org", Port: 443, DestinationIP: "93.184.216.34",
+			SubjectKind: telemetry.TraceSubjectTarget, PathScope: telemetry.TracePathDirect,
+			TriggerReason: telemetry.TraceTriggerScheduled,
+			MonitorID:     "probe_route1", ConfigSerial: 7,
+			MaxHops: 30, AttemptsPerHop: 3,
+			Status: telemetry.TraceStatusSucceeded, Reached: true, ReachedTTL: 1,
+			StartedAt: ts.Add(-3 * time.Second), CompletedAt: ts,
+			Hops: []telemetry.TraceHop{
+				{TTL: 1, Attempts: []telemetry.TraceAttempt{{ResponderAddr: "93.184.216.34", RTTMs: 12.5}}},
+			},
+		},
 	}
 }
 
@@ -385,6 +400,7 @@ func sampleDesiredState() config.DesiredState {
 			{Kind: "nat", Name: "NAT type", Target: "stun.example.com", Params: config.ProbeParams{Port: 3478, NATTransport: "udp", STUNServer2: "stun2.example.com:3478", TimeoutMs: 3000}},
 			{MonitorID: "probe_gw1", Kind: "gateway", Name: "LAN gateway", Target: "gateway", Params: config.ProbeParams{Interface: "以太网", PacketCount: 3, TimeoutMs: 2000}},
 			{MonitorID: "probe_tun1", Kind: "icmp", Name: "Tunnelled ping", Target: "10.7.0.1", Params: config.ProbeParams{PacketCount: 3}, ProxyID: "prx_wg"},
+			{MonitorID: "probe_route1", Kind: "trace", Name: "Route to example.org", Target: "example.org", Params: config.ProbeParams{IntervalSeconds: 600, TimeoutMs: 1500, GlobalTimeoutMs: 90000, TraceMode: config.TraceModeTCP, Port: 443, MaxHops: 24, AttemptsPerHop: 2}, ConfigSerial: 7},
 		},
 		Intervals: config.Intervals{BaseSeconds: 10, RegularSeconds: 60},
 		// One spec per shape: a credentialed relay and a tunnel, so every ProxySpec

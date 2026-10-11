@@ -4425,9 +4425,13 @@ type ProbeParams struct {
 	PayloadSizes []int32 `protobuf:"varint,27,rep,packed,name=payload_sizes,json=payloadSizes,proto3" json:"payload_sizes,omitempty"` // swept ICMP payload bytes; empty = default sweep
 	// Flow fan-out (tcp/http): probe through N pinned source ports per cycle.
 	// TCP diagnoses stable path subsets; HTTP repeats the full GET/HEAD check.
-	FlowFanout    int32 `protobuf:"varint,28,opt,name=flow_fanout,json=flowFanout,proto3" json:"flow_fanout,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	FlowFanout int32 `protobuf:"varint,28,opt,name=flow_fanout,json=flowFanout,proto3" json:"flow_fanout,omitempty"`
+	// Trace (periodic route monitor): sweep mode and bounds; port reuses field 16.
+	TraceMode      string `protobuf:"bytes,29,opt,name=trace_mode,json=traceMode,proto3" json:"trace_mode,omitempty"`
+	MaxHops        int32  `protobuf:"varint,30,opt,name=max_hops,json=maxHops,proto3" json:"max_hops,omitempty"`
+	AttemptsPerHop int32  `protobuf:"varint,31,opt,name=attempts_per_hop,json=attemptsPerHop,proto3" json:"attempts_per_hop,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ProbeParams) Reset() {
@@ -4638,6 +4642,27 @@ func (x *ProbeParams) GetPayloadSizes() []int32 {
 func (x *ProbeParams) GetFlowFanout() int32 {
 	if x != nil {
 		return x.FlowFanout
+	}
+	return 0
+}
+
+func (x *ProbeParams) GetTraceMode() string {
+	if x != nil {
+		return x.TraceMode
+	}
+	return ""
+}
+
+func (x *ProbeParams) GetMaxHops() int32 {
+	if x != nil {
+		return x.MaxHops
+	}
+	return 0
+}
+
+func (x *ProbeParams) GetAttemptsPerHop() int32 {
+	if x != nil {
+		return x.AttemptsPerHop
 	}
 	return 0
 }
@@ -5427,8 +5452,12 @@ type TraceResult struct {
 	// stored hops to what was really asked for rather than to a guess.
 	MaxHops        int32 `protobuf:"varint,24,opt,name=max_hops,json=maxHops,proto3" json:"max_hops,omitempty"`
 	AttemptsPerHop int32 `protobuf:"varint,25,opt,name=attempts_per_hop,json=attemptsPerHop,proto3" json:"attempts_per_hop,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Set only on a periodic route-monitor sweep (trigger_reason "scheduled"):
+	// the producing monitor and its material generation, echoed like a Metric's.
+	MonitorId     string `protobuf:"bytes,26,opt,name=monitor_id,json=monitorId,proto3" json:"monitor_id,omitempty"`
+	ConfigSerial  int32  `protobuf:"varint,27,opt,name=config_serial,json=configSerial,proto3" json:"config_serial,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TraceResult) Reset() {
@@ -5632,6 +5661,20 @@ func (x *TraceResult) GetMaxHops() int32 {
 func (x *TraceResult) GetAttemptsPerHop() int32 {
 	if x != nil {
 		return x.AttemptsPerHop
+	}
+	return 0
+}
+
+func (x *TraceResult) GetMonitorId() string {
+	if x != nil {
+		return x.MonitorId
+	}
+	return ""
+}
+
+func (x *TraceResult) GetConfigSerial() int32 {
+	if x != nil {
+		return x.ConfigSerial
 	}
 	return 0
 }
@@ -6178,7 +6221,7 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x0ewg_local_addrs\x18\x10 \x01(\tR\fwgLocalAddrs\x12\x15\n" +
 	"\x06wg_dns\x18\x11 \x01(\tR\x05wgDns\x12\x15\n" +
 	"\x06wg_mtu\x18\x12 \x01(\x05R\x05wgMtu\x120\n" +
-	"\x14wg_keepalive_seconds\x18\x13 \x01(\x05R\x12wgKeepaliveSeconds\"\x87\b\n" +
+	"\x14wg_keepalive_seconds\x18\x13 \x01(\x05R\x12wgKeepaliveSeconds\"\xeb\b\n" +
 	"\vProbeParams\x12)\n" +
 	"\x10interval_seconds\x18\x01 \x01(\x05R\x0fintervalSeconds\x12\x1d\n" +
 	"\n" +
@@ -6212,7 +6255,11 @@ const file_telemetry_proto_rawDesc = "" +
 	"size_sweep\x18\x1a \x01(\bR\tsizeSweep\x12#\n" +
 	"\rpayload_sizes\x18\x1b \x03(\x05R\fpayloadSizes\x12\x1f\n" +
 	"\vflow_fanout\x18\x1c \x01(\x05R\n" +
-	"flowFanout\x1a:\n" +
+	"flowFanout\x12\x1d\n" +
+	"\n" +
+	"trace_mode\x18\x1d \x01(\tR\ttraceMode\x12\x19\n" +
+	"\bmax_hops\x18\x1e \x01(\x05R\amaxHops\x12(\n" +
+	"\x10attempts_per_hop\x18\x1f \x01(\x05R\x0eattemptsPerHop\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x04\x10\x05J\x04\b\a\x10\bR\aretriesR\x0fexpected_status\"W\n" +
@@ -6281,7 +6328,7 @@ const file_telemetry_proto_rawDesc = "" +
 	"\fresolved_ips\x18\x04 \x03(\tR\vresolvedIps\x12\x1c\n" +
 	"\tendpoints\x18\x05 \x03(\tR\tendpoints\x12\x1f\n" +
 	"\verror_class\x18\x06 \x01(\tR\n" +
-	"errorClass\"\xad\a\n" +
+	"errorClass\"\xf1\a\n" +
 	"\vTraceResult\x12\x1b\n" +
 	"\treport_id\x18\x01 \x01(\tR\breportId\x12\x12\n" +
 	"\x04mode\x18\x02 \x01(\tR\x04mode\x12\x16\n" +
@@ -6311,7 +6358,10 @@ const file_telemetry_proto_rawDesc = "" +
 	"\x0etrigger_streak\x18\x16 \x01(\x05R\rtriggerStreak\x12B\n" +
 	"\x0ffirst_failed_at\x18\x17 \x01(\v2\x1a.google.protobuf.TimestampR\rfirstFailedAt\x12\x19\n" +
 	"\bmax_hops\x18\x18 \x01(\x05R\amaxHops\x12(\n" +
-	"\x10attempts_per_hop\x18\x19 \x01(\x05R\x0eattemptsPerHop\"W\n" +
+	"\x10attempts_per_hop\x18\x19 \x01(\x05R\x0eattemptsPerHop\x12\x1d\n" +
+	"\n" +
+	"monitor_id\x18\x1a \x01(\tR\tmonitorId\x12#\n" +
+	"\rconfig_serial\x18\x1b \x01(\x05R\fconfigSerial\"W\n" +
 	"\bTraceHop\x12\x10\n" +
 	"\x03ttl\x18\x01 \x01(\x05R\x03ttl\x129\n" +
 	"\battempts\x18\x02 \x03(\v2\x1d.nettact.wire.v1.TraceAttemptR\battempts\"\x82\x01\n" +

@@ -274,6 +274,16 @@ type TraceResult struct {
 	StartedAt   time.Time  `json:"started_at,omitempty"`
 	CompletedAt time.Time  `json:"completed_at,omitempty"`
 	Hops        []TraceHop `json:"hops,omitempty"`
+
+	// ---- periodic route monitor ----
+
+	// MonitorID and ConfigSerial are set only on a TraceTriggerScheduled
+	// report: the trace monitor that produced it and that target's material
+	// generation, echoed exactly as Metric.MonitorID/ConfigSerial are, so a
+	// receiver files the report under the monitor's route history and drops a
+	// stale-generation sweep. Both empty means a diagnosis report.
+	MonitorID    string `json:"monitor_id,omitempty"`
+	ConfigSerial int    `json:"config_serial,omitempty"`
 }
 
 // Traceroute trigger rules (TraceResult.TriggerReason). It is a named open enum
@@ -291,6 +301,10 @@ type TraceResult struct {
 const (
 	TraceTriggerConsecutiveFailures = "consecutive_failures"
 	TraceTriggerServerDisconnect    = "server_disconnect"
+	// TraceTriggerScheduled is a trace monitor's periodic sweep (kind "trace"),
+	// not a diagnosis: it carries MonitorID/ConfigSerial, is never claimed as
+	// fault evidence, and feeds the monitor's route history instead.
+	TraceTriggerScheduled = "scheduled"
 )
 
 // What a trace report diagnoses (TraceResult.SubjectKind). The monitored target
